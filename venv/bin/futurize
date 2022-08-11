@@ -1,4 +1,6 @@
-#!/home/thais-caldeira/dash/dash-sample-apps/apps/dash-oil-gas-ternary/venv/bin/python
+#!/bin/sh
+'''exec' "/home/jovi/Área de Trabalho/Testes/ccinsight/venv/bin/python" "$0" "$@"
+' '''
 # -*- coding: utf-8 -*-
 import re
 import sys

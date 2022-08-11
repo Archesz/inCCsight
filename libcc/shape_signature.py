@@ -1,5 +1,5 @@
 import sklearn
-print(sklearn.__version__)
+# print(sklearn.__version__)
 
 def shapeSignImports():
     
@@ -8,7 +8,7 @@ def shapeSignImports():
     from libcc import aux_fnc
     import numpy as np
     import joblib
-
+    
     DIR_SAVE = './libcc/saves/'
 
     # Importing parameters
@@ -17,6 +17,7 @@ def shapeSignImports():
     res_chs = parms_refs['res_chs']
  
     # Importing 
+    
     d_train = joblib.load('{}arr_models_ind.joblib'.format(DIR_SAVE))
     clf = joblib.load('{}ensemble_model.joblib'.format(DIR_SAVE))
     val_norm = parms_refs['val_norm']

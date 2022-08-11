@@ -22,7 +22,7 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 logging.captureWarnings(True)
 
-import inputfuncs
+import inputfuncs # aqui já foi
 import ccprocess
 import libcc
 
@@ -31,7 +31,6 @@ import parcelfuncs
 
 import webbrowser
 from threading import Timer
-
 import dash
 import dash_table
 import dash_core_components as dcc
@@ -40,8 +39,7 @@ import dash_bootstrap_components as dbc
 import dash_daq as daq
 from dash.dependencies import Input, Output, State, ALL, MATCH
 from dash.exceptions import PreventUpdate
-
-from dash_extensions import Download
+from dash_extensions import Download 
 from dash_extensions.snippets import send_data_frame
 
 import plotly.io as pio
@@ -49,6 +47,8 @@ import plotly.figure_factory as ff
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+
+print('importado tudo')
 
 class Error(Exception):
     pass

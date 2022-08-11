@@ -1,8 +1,8 @@
 import numpy as np
 import nibabel as nib
 import os
+import glob # até aqui ok
 import libcc
-import glob
 
 
 import warnings

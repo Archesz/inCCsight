@@ -10,7 +10,7 @@ alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PA
 # Unset irrelevant variables.
 deactivate nondestructive
 
-setenv VIRTUAL_ENV '/home/thais-caldeira/dash/dash-sample-apps/apps/dash-oil-gas-ternary/venv'
+setenv VIRTUAL_ENV '/home/jovi/Área de Trabalho/Testes/ccinsight/venv'
 
 set _OLD_VIRTUAL_PATH="$PATH:q"
 setenv PATH "$VIRTUAL_ENV:q/bin:$PATH:q"
@@ -18,7 +18,7 @@ setenv PATH "$VIRTUAL_ENV:q/bin:$PATH:q"
 
 
 if ('' != "") then
-    set env_name = ''
+    set env_name = '() '
 else
     set env_name = '('"$VIRTUAL_ENV:t:q"') '
 endif
