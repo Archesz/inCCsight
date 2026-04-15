@@ -1,0 +1,138 @@
+// Group stripe accent colors
+$colors: #636EFA, #EF553B, #00CC96, #AB63FA, #FFA15A, #19D3F3;
+$names: color-0, color-1, color-2, color-3, color-4, color-5;
+
+.folder-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e4ef;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    position: relative;
+    overflow: hidden;
+
+    .group-stripe {
+        width: 4px;
+        height: 100%;
+        border-radius: 4px;
+        flex-shrink: 0;
+        align-self: stretch;
+    }
+
+    // Color variants
+    @for $i from 1 through length($colors) {
+        $name: nth($names, $i);
+        $color: nth($colors, $i);
+
+        &.#{$name} {
+            border-left: 4px solid $color;
+            .group-stripe { background-color: $color; }
+            .group-name-input:focus { border-color: $color; }
+            .folder-picker-btn.has-path { border-color: $color; color: $color; }
+        }
+    }
+
+    .group-name-input {
+        width: 180px;
+        flex-shrink: 0;
+        height: 34px;
+        border-radius: 6px;
+        border: 1px solid #ccd0e0;
+        padding: 0 10px;
+        font-size: 13px;
+        font-weight: 600;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .folder-picker-btn {
+        flex: 1;
+        min-width: 0;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-radius: 6px;
+        border: 1px solid #ccd0e0;
+        background: white;
+        cursor: pointer;
+        font-size: 13px;
+        color: #888;
+        transition: all 0.2s;
+        overflow: hidden;
+
+        &:hover { background: #f5f7ff; border-color: var(--primaryColor); }
+
+        &.has-path { color: #333; }
+
+        .folder-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .path-text-input {
+            flex: 1;
+            min-width: 0;
+            height: 100%;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 13px;
+            color: #333;
+            font-family: monospace;
+
+            &::placeholder { color: #aaa; font-family: sans-serif; }
+        }
+
+        .folder-label-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: inherit;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .folder-label {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: left;
+        }
+
+        .check-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            color: var(--green, #2ecc71);
+        }
+    }
+
+    .remove-btn {
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: #aaa;
+        border-radius: 50%;
+        font-size: 16px;
+        transition: all 0.2s;
+
+        &:hover { background: #fee; color: #e74c3c; }
+    }
+}

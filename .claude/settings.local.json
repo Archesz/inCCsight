@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('version','?'\\)\\)\")",
+      "Bash(npm install:*)",
+      "Bash(powershell -Command \"if \\(Test-Path node_modules\\) { Remove-Item node_modules -Recurse -Force }; if \\(Test-Path package-lock.json\\) { Remove-Item package-lock.json -Force }; Write-Host 'Limpo'\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File scripts/install-electron.ps1)",
+      "Bash(node scripts/launch-electron.js)",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"require\\('express'\\); require\\('cors'\\); console.log\\('express + cors OK'\\)\")",
+      "Bash(node -e \"require\\('./server.js'\\)\")",
+      "Bash(curl -s http://localhost:3001/api/ping)",
+      "Bash(kill %1)",
+      "Bash(powershell -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue\\).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Host 'Porta 3001 liberada'\")",
+      "Bash(python3 -c \"import json; data = json.load\\(open\\('C:/Users/jv866/inCCsight/src/data/mydata.json'\\)\\); print\\('Number of subjects:', len\\(data\\)\\); print\\('\\\\nFirst 2 subjects \\(keys only\\):'\\); [print\\(f'Subject {i}: {list\\(data[i].keys\\(\\)\\)}'\\) for i in range\\(min\\(2, len\\(data\\)\\)\\)]\")",
+      "Bash(python3)"
+    ]
+  }
+}
