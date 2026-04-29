@@ -5,10 +5,12 @@ import { TbPlus } from 'react-icons/tb'
 import Question from '../Question/Question'
 
 // ── Métodos disponíveis no pipeline ───────────────────────────────────────
+// ROQS e Watershed compartilham o mesmo script (roqs/main.py); selecionar
+// qualquer um deles ativa o pipeline 2D completo.
 const METHODS = [
-    { id: 'all',  label: 'Todos',     skipCnn: false, skipRoqs: false, desc: 'ROQS 2D + CNN 3D' },
-    { id: 'roqs', label: 'ROQS (2D)', skipCnn: true,  skipRoqs: false, desc: 'Apenas segmentação 2D' },
-    { id: 'cnn',  label: 'CNN (3D)',  skipCnn: false, skipRoqs: true,  desc: 'Apenas volumétrico 3D' },
+    { id: 'roqs',      label: 'ROQS (2D)',      desc: 'Segmentação ROQS 2D clássica' },
+    { id: 'watershed', label: 'Watershed (2D)', desc: 'Segmentação por watershed (roda junto com ROQS)' },
+    { id: 'cnn',       label: 'CNN (3D)',        desc: 'Segmentação volumétrica 3D (requer PyTorch)' },
 ]
 
 const questions = [
@@ -27,7 +29,8 @@ function View({ type }) {
     const [folderGroups, setFolderGroups] = useState([
         { id: 1, path: '', groupName: 'Group 1' }
     ])
-    const [selectedMethod, setSelectedMethod] = useState('all')
+    // conjunto de métodos selecionados (multi-select)
+    const [selectedMethods, setSelectedMethods] = useState(new Set(['roqs', 'watershed', 'cnn']))
     const [filter, setFilter] = useState('')
 
     // ── Helpers de UI ──────────────────────────────────────────────────────
@@ -126,7 +129,9 @@ function View({ type }) {
         const groupsMap = {}
         valid.forEach(g => { groupsMap[g.path.trim()] = g.groupName.trim() || `Group ${g.id}` })
 
-        const { skipCnn, skipRoqs } = METHODS.find(m => m.id === selectedMethod)
+        // ROQS e Watershed usam o mesmo script; basta um deles para rodar o pipeline 2D
+        const skipRoqs = !selectedMethods.has('roqs') && !selectedMethods.has('watershed')
+        const skipCnn  = !selectedMethods.has('cnn')
 
         streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs })
     }
@@ -162,20 +167,34 @@ function View({ type }) {
                     </button>
                 </div>
 
-                {/* Seletor de métodos */}
+                {/* Seletor de métodos — multi-select */}
                 <div className='method-selector'>
                     <span className='method-label'>Métodos de segmentação</span>
                     <div className='method-pills'>
-                        {METHODS.map(m => (
-                            <button
-                                key={m.id}
-                                className={`method-pill${selectedMethod === m.id ? ' active' : ''}`}
-                                onClick={() => setSelectedMethod(m.id)}
-                                title={m.desc}
-                            >
-                                {m.label}
-                            </button>
-                        ))}
+                        {METHODS.map(m => {
+                            const checked = selectedMethods.has(m.id)
+                            return (
+                                <label
+                                    key={m.id}
+                                    className={`method-pill${checked ? ' active' : ''}`}
+                                    title={m.desc}
+                                >
+                                    <input
+                                        type='checkbox'
+                                        checked={checked}
+                                        onChange={() => {
+                                            setSelectedMethods(prev => {
+                                                const next = new Set(prev)
+                                                next.has(m.id) ? next.delete(m.id) : next.add(m.id)
+                                                return next
+                                            })
+                                        }}
+                                        style={{ marginRight: 6 }}
+                                    />
+                                    {m.label}
+                                </label>
+                            )
+                        })}
                     </div>
                 </div>
 

@@ -462,30 +462,72 @@
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    padding: 40px;
-    
-    .area-table{
-        margin-top: 20px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
+    padding: 32px 40px 60px;
+    gap: 0;
+
+    /* ── Cabeçalho de seção ── */
+    .section-header {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #888;
+        margin: 36px 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e0e3ef;
+
+        &:first-child { margin-top: 0; }
     }
 
-    .area-boxplot{
-        margin-top: 60px;
-        margin-left: 40px;
+    /* ── Tabelas ── */
+    .area-table{
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        gap: 24px;
+        align-items: flex-start;
+
+        .table-col {
+            flex: 1;
+            min-width: 0;
+        }
+    }
+
+    /* ── Boxplots ── */
+    .area-boxplot{
+        display: flex;
+        flex-direction: row;
+        gap: 0;
+        align-items: flex-start;
+        overflow-x: auto;
+
+        .boxplot-col {
+            flex: 1;
+            min-width: 0;
+        }
+    }
+
+    /* ── Scatter ── */
+    .area-scatter {
         width: 100%;
     }
 
+    /* ── Midline + Radar ── */
     .area-midline{
-        box-sizing: border-box;
-        padding-top: 30px;
-        margin-left: 40px;
-        border-top: 1px solid #aeaeae;
         display: flex;
         flex-direction: row;
+        gap: 32px;
+        align-items: flex-start;
+        width: 100%;
+
+        .midline-col {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .radar-col {
+            flex: 1;
+            min-width: 0;
+        }
     }
 
     .area-volumetric{

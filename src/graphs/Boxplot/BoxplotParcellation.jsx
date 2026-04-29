@@ -4,13 +4,25 @@ import './BoxplotParcellation.scss'
 
 function getScalarValues(subjects, method, parc_method, scalar, part) {
     const name = `${parc_method}_${scalar}_${part}`
-    return subjects.map(subject => subject[method][name])
+    return subjects.map(s => {
+        const d = s[method]
+        return d && d[name] != null ? Number(d[name]) : null
+    }).filter(v => v !== null)
+}
+
+function hasData(subjects, key) {
+    return subjects.some(s => {
+        const d = s[key]
+        if (!d) return false
+        return Object.values(d).some(v => v != null && v !== '' && Number(v) !== 0)
+    })
 }
 
 function BoxplotParcellation(props) {
     const [methodParcellation, setMethodParcellation] = useState("Witelson")
     const [scalarParcellation, setScalarParcellation] = useState("FA")
-    const ids = props.data.map(s => s["Id"])
+    const ids     = props.data.map(s => s["Id"])
+    const hasCNN  = hasData(props.data, "CNN_parcellation")
 
     return (
         <div className='boxplot-container'>
@@ -24,6 +36,10 @@ function BoxplotParcellation(props) {
                         ids={ids}
                         watershed={getScalarValues(props.data, "Watershed_parcellation", methodParcellation, scalarParcellation, part)}
                         roqs={getScalarValues(props.data, "ROQS_parcellation", methodParcellation, scalarParcellation, part)}
+                        cnn={hasCNN
+                            ? getScalarValues(props.data, "CNN_parcellation", methodParcellation, scalarParcellation, part)
+                            : undefined
+                        }
                         width="300"
                     />
                 ))}

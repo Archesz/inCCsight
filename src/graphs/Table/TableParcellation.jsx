@@ -4,17 +4,29 @@ import './TableParcellation.scss'
 import InfoTool from '../../components/InfoTool/InfoTool'
 
 const SEG_METHOD_OPTIONS = [
-    { label: "ROQS",            key: "ROQS_parcellation"       },
-    { label: "Watershed-Based", key: "Watershed_parcellation"  },
+    { label: "ROQS",            key: "ROQS_parcellation"      },
+    { label: "Watershed-Based", key: "Watershed_parcellation" },
+    { label: "CNN-Based",       key: "CNN_parcellation"       },
 ]
+
+function hasSegmData(subjects, key) {
+    return subjects.some(s => {
+        const d = s[key]
+        if (!d) return false
+        return Object.values(d).some(v => v != null && v !== '' && Number(v) !== 0)
+    })
+}
 
 const PARC_METHODS   = ["Witelson", "Hofer", "Chao", "Cover", "Freesurfer"]
 const SCALARS        = ["FA", "RD", "AD", "MD"]
 const PARTS          = ["P1", "P2", "P3", "P4", "P5"]
 
 function getMeanValues(subjects, method, parc_method, scalar, part) {
-    const name = `${parc_method}_${scalar}_${part}`
-    const values = subjects.map(s => s[method][name])
+    const name   = `${parc_method}_${scalar}_${part}`
+    const values = subjects
+        .filter(s => s[method] && s[method][name] != null)
+        .map(s => Number(s[method][name]))
+    if (values.length === 0) return (0).toFixed(6)
     return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(6)
 }
 
@@ -82,7 +94,9 @@ function ExpandableParcTable({ allSubjects, color }) {
                         <div className='select-group'>
                             <label className={color}>Seg. Method: </label>
                             <select value={segMethod} onChange={e => setSegMethod(e.target.value)}>
-                                {SEG_METHOD_OPTIONS.map(m => (
+                                {SEG_METHOD_OPTIONS.filter(m =>
+                                    m.key !== 'CNN_parcellation' || hasSegmData(allSubjects, 'CNN_parcellation')
+                                ).map(m => (
                                     <option key={m.key} value={m.key}>{m.label}</option>
                                 ))}
                             </select>
@@ -146,22 +160,28 @@ function TableParcellation(props) {
         : allSubjects.filter(s => s["Id"] === selectedId)
     const parts = ["P1", "P2", "P3", "P4", "P5"]
 
-    let cols = [["ROQS", "Watershed-Based"]]
+    const hasCNN = hasSegmData(allSubjects, "CNN_parcellation")
+
+    const rowLabels  = hasCNN ? ["ROQS", "Watershed-Based", "CNN-Based"] : ["ROQS", "Watershed-Based"]
+    const rowMethods = hasCNN
+        ? ["ROQS_parcellation", "Watershed_parcellation", "CNN_parcellation"]
+        : ["ROQS_parcellation", "Watershed_parcellation"]
+
+    let cols = [rowLabels]
     for (const part of parts) {
-        const colValues = [
-            getMeanValues(subjects, "ROQS_parcellation", methodParcellation, scalar, part),
-            getMeanValues(subjects, "Watershed_parcellation", methodParcellation, scalar, part)
-        ]
+        const colValues = rowMethods.map(m =>
+            getMeanValues(subjects, m, methodParcellation, scalar, part)
+        )
         cols.push(colValues)
     }
 
     const cellColors = [
-        ['#f0f0f0', '#f0f0f0'],
+        rowLabels.map(() => '#f0f0f0'),
         ...cols.slice(1).map(colValues => getColumnColors(colValues))
     ]
 
     const layout = {
-        height: 130,
+        height: hasCNN ? 160 : 130,
         margin: { t: 10, b: 0, l: 10, r: 10 },
         paper_bgcolor: props.bg_color,
         autosize: true,

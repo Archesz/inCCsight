@@ -93,7 +93,8 @@ class Subject:
                  watershed_parcellation, ROQS_parcellation,
                  santarosa_scalars, img_path="",
                  roqs_qc_flag=None, roqs_qc_prob=None,
-                 water_qc_flag=None, water_qc_prob=None):
+                 water_qc_flag=None, water_qc_prob=None,
+                 cnn_parcellation=None, cnn_midlines=None):
         self.name = self._adjust_name(str(name))
         self.watershed_scalar       = watershed_scalar
         self.ROQS_scalars           = ROQS_scalars
@@ -103,6 +104,8 @@ class Subject:
         self.ROQS_thickness         = list(ROQS_thickness)
         self.watershed_parcellation = watershed_parcellation
         self.ROQS_parcellation      = ROQS_parcellation
+        self.cnn_parcellation       = cnn_parcellation if cnn_parcellation is not None else {}
+        self.cnn_midlines           = cnn_midlines if cnn_midlines is not None else {}
         self.santarosa_scalars      = santarosa_scalars
         self.img_path               = str(img_path) if img_path else ""
         self.roqs_qc_flag  = roqs_qc_flag
@@ -148,7 +151,9 @@ class Subject:
             "Watershed_thickness": self.watershed_thickness,
             "ROQS_thickness":      self.ROQS_thickness,
             "Watershed_parcellation": dict(self.watershed_parcellation),
-            "ROQS_parcellation":   dict(self.ROQS_parcellation),
+            "ROQS_parcellation":      dict(self.ROQS_parcellation),
+            "CNN_parcellation":       dict(self.cnn_parcellation),
+            "CNN_midlines":           dict(self.cnn_midlines),
         }
 
 
@@ -200,6 +205,21 @@ watershed_thickness = _read_csv("Watershed_dict_thickness.csv")
 
 ROQS_parcellation      = _read_csv("ROQS_parcellation_statistics.csv")
 watershed_parcellation = _read_csv("Watershed_parcellation_statistics.csv")
+cnn_parcellation_df    = _read_csv("CNN_parcellation_statistics.csv", required=False)
+cnn_midlines_raw       = _read_csv("CNN_scalar_midlines.csv", required=False)
+cnn_midlines_df        = dataFrameStringToList(cnn_midlines_raw) if not cnn_midlines_raw.empty else pd.DataFrame()
+
+# Lookups por nome do sujeito (vazios se CNN não foi rodado)
+_cnn_parc_by_name: dict = {}
+if not cnn_parcellation_df.empty and "Name" in cnn_parcellation_df.columns:
+    for _, row in cnn_parcellation_df.iterrows():
+        _cnn_parc_by_name[str(row["Name"])] = row.to_dict()
+
+_cnn_mid_by_name: dict = {}
+if not cnn_midlines_df.empty:
+    idx_col = cnn_midlines_df.index if cnn_midlines_df.index.dtype == object else None
+    for i, row in cnn_midlines_df.iterrows():
+        _cnn_mid_by_name[str(i)] = row.to_dict()
 
 names      = list(ROQS_parcellation["Name"])
 n_santa    = len(santarosa_scalar)
@@ -225,6 +245,8 @@ for i, name in enumerate(names):
         roqs_qc_prob=roqs_qc_probs[i] if i < len(roqs_qc_probs) else None,
         water_qc_flag=water_qc_flags[i] if i < len(water_qc_flags) else None,
         water_qc_prob=water_qc_probs[i] if i < len(water_qc_probs) else None,
+        cnn_parcellation=_cnn_parc_by_name.get(str(name), {}),
+        cnn_midlines=_cnn_mid_by_name.get(str(name), {}),
     )
     subjects_list.append(sub.to_dict())
 

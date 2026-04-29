@@ -32,22 +32,11 @@ function SegmentationPlot({ imgPath }) {
     const src = `/api/file?path=${encodeURIComponent(imgPath)}`
 
     return (
-        <Plot
-            data={[{
-                type:          'image',
-                source:        src,
-                hovertemplate: 'x: %{x}  y: %{y}<extra></extra>',
-            }]}
-            layout={{
-                margin:       { l: 0, r: 0, t: 0, b: 0 },
-                xaxis:        { visible: false, showgrid: false },
-                yaxis:        { visible: false, showgrid: false },
-                paper_bgcolor:'transparent',
-                plot_bgcolor: 'transparent',
-            }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: '100%', height: '100%' }}
-            useResizeHandler
+        <img
+            src={src}
+            alt='Segmentação midsagital'
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            onError={e => { e.target.style.display = 'none' }}
         />
     )
 }
@@ -161,21 +150,46 @@ function View(props) {
                 </div>
 
                 <div className='area-view'>
+
+                    {/* ── Tabelas ─────────────────────────────────────────── */}
+                    <div className='section-header'>Estatísticas de Segmentação e Parcelamento</div>
                     <div className='area-table'>
-                        <TableSegmentation data={data} type="2D"/>
-                        <TableParcellation data={data} type="2D"/>
+                        <div className='table-col'>
+                            <TableSegmentation data={data} type="2D"/>
+                        </div>
+                        <div className='table-col'>
+                            <TableParcellation data={data} type="2D"/>
+                        </div>
                     </div>
+
+                    {/* ── Boxplots lado a lado ─────────────────────────────── */}
+                    <div className='section-header'>Distribuições</div>
                     <div className='area-boxplot'>
-                        <BoxplotSegmentation data={data} />
-                        <BoxplotParcellation data={data} />
+                        <div className='boxplot-col'>
+                            <BoxplotSegmentation data={data} />
+                        </div>
+                        <div className='boxplot-col'>
+                            <BoxplotParcellation data={data} />
+                        </div>
                     </div>
+
+                    {/* ── Scatter ─────────────────────────────────────────── */}
+                    <div className='section-header'>Correlação entre Escalares</div>
                     <div className='area-scatter'>
                         <Scatter data={data}/>
                     </div>
+
+                    {/* ── Midline + Radar ──────────────────────────────────── */}
+                    <div className='section-header'>Midline e Análise Radar</div>
                     <div className='area-midline'>
-                        <Midline data={data}/>
-                        <Radar data={data}/>
+                        <div className='midline-col'>
+                            <Midline data={data}/>
+                        </div>
+                        <div className='radar-col'>
+                            <Radar data={data}/>
+                        </div>
                     </div>
+
                 </div>
             </div>
         )

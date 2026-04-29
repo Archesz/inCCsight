@@ -11,24 +11,17 @@ import gets
 import pandas as pd
 import time
 
-def adjust_dict_parcellations_statistics(data, subject_data, data_path):
-    methods = list(data.keys())
-    subjects = list(data[methods[0]].keys())
-    methods_parc = list(data[methods[0]][subjects[0]])
-    parts = list(data[methods[0]][subjects[0]][methods_parc[0]])
-    scalars = list(data[methods[0]][subjects[0]][methods_parc[0]][parts[0]])
-    
-    for method in methods:
-        subject_list = []
-        for subject in subjects:
-            for method_p in methods_parc:
-                for part in parts:
-                    for scalar in scalars:
-                        subject_data[f"{method_p}_{scalar}_{part}"] = data[method][subject][method_p][part][scalar]
-            subject_list.append(subject_data)
-        
-        df_sub = pd.DataFrame(subject_list)
-        df_sub.to_csv(f"{data_path}/inCCsight/cnn_based.csv", sep=";")
+def _build_parc_row(sub, parcellation_dict):
+    """Constrói a linha de parcellation para o sujeito no mesmo formato do ROQS."""
+    row = {'Name': sub}
+    for method_p in ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']:
+        for part in ['P1', 'P2', 'P3', 'P4', 'P5']:
+            for scalar in ['FA', 'FA StdDev', 'MD', 'MD StdDev', 'RD', 'RD StdDev', 'AD', 'AD StdDev']:
+                try:
+                    row[f'{method_p}_{scalar}_{part}'] = parcellation_dict[method_p][part][scalar]
+                except Exception:
+                    row[f'{method_p}_{scalar}_{part}'] = 0.0
+    return row
 
 def test_predict(model, data_paths):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,6 +46,8 @@ def test_predict(model, data_paths):
 		meanADList = []
 		stdADList = []
 		parcellationsList = {"CNN": {}}
+		cnn_parcellationStatsList = []
+		cnn_midlinesList = []
 		times = []
 
 		
@@ -109,6 +104,7 @@ def test_predict(model, data_paths):
 				values = gm.getParcellation(midsagittal, FA)
 				parcellation_dict = gm.parcellations_dfs_dicts(scalar_maps, values)
 				parcellationsList["CNN"][sub] = parcellation_dict
+				cnn_parcellationStatsList.append(_build_parc_row(sub, parcellation_dict))
 
 				midvolume = np.zeros(FA_v.shape)
 
@@ -118,6 +114,18 @@ def test_predict(model, data_paths):
 				dipy.io.peaks.save_nifti(os.path.join(data_path, "inCCsight/cnnBased_FA_V2.nii.gz"), FA_v, T3, hdr = None )
 
 				scalar_statistics = gets.getScalars(midsagittal, FA, MD, RD, AD)
+
+				try:
+					cnn_midlines = {
+						'FA': str([float(v) for v in gets.getFAmidline(midsagittal, FA, n_points=200)]),
+						'MD': str([float(v) for v in gets.getFAmidline(midsagittal, MD, n_points=200)]),
+						'RD': str([float(v) for v in gets.getFAmidline(midsagittal, RD, n_points=200)]),
+						'AD': str([float(v) for v in gets.getFAmidline(midsagittal, AD, n_points=200)]),
+					}
+				except Exception:
+					cnn_midlines = {'FA': '[]', 'MD': '[]', 'RD': '[]', 'AD': '[]'}
+				cnn_midlinesList.append(cnn_midlines)
+
 				names.append(sub)
 				meanFAList.append(scalar_statistics[0])
 				stdFAList.append(scalar_statistics[1])
@@ -138,24 +146,8 @@ def test_predict(model, data_paths):
 				meanAD = scalar_statistics[6]
 				stdAD = scalar_statistics[7]
 				
-				sub_data = {}
-
-				names_maps = list(["name", "meanFA", "stdFA", "meanMD", "stdMD", "meanRD", "stdRD", "meanAD", "stdAD"])
-				scalars_values = list([scalar_statistics[0], scalar_statistics[1], scalar_statistics[2], scalar_statistics[3], scalar_statistics[4], scalar_statistics[5], scalar_statistics[6], scalar_statistics[7]])
-				
-				subjects = []
-
-				for subj in subjects:
-					for i in range(0, len(names_maps)):
-						sub_data[names_maps[i]] = scalars_values[i]
-
 				end = time.time()
-	
-				time_total = round(end - start, 2)
-	
-				times.append(time_total)
-
-				adjust_dict_parcellations_statistics(parcellationsList, sub_data, data_path)
+				times.append(round(end - start, 2))
 
 			except Exception as _e:
 				import traceback
@@ -163,13 +155,18 @@ def test_predict(model, data_paths):
 				traceback.print_exc()
 				continue
 
-		subjects = {"Names": names, "FA": meanFAList, "FA StdDev": stdFAList, "MD": meanMDList, "MD StdDev": stdMDList, 
-              		"RD": meanRDList, "RD StdDev": stdRDList, "AD": meanADList, "AD StdDev": stdADList, 
+		subjects = {"Names": names, "FA": meanFAList, "FA StdDev": stdFAList, "MD": meanMDList, "MD StdDev": stdMDList,
+              		"RD": meanRDList, "RD StdDev": stdRDList, "AD": meanADList, "AD StdDev": stdADList,
 					"Time": times}
-		
-		# adjust_dict_parcellations_statistics(parcellationsList)
+
 		df = pd.DataFrame(subjects)
 		df.to_csv("./data/cnn_based.csv", sep=";")
 		df.to_csv("../csvs/cnn_based.csv", sep=";")
+
+		if cnn_parcellationStatsList:
+			pd.DataFrame(cnn_parcellationStatsList).to_csv("../csvs/CNN_parcellation_statistics.csv", sep=";")
+
+		if cnn_midlinesList:
+			pd.DataFrame(cnn_midlinesList, index=names).to_csv("../csvs/CNN_scalar_midlines.csv", sep=";")
 
 	return vol_data, test_outputs, pos_process, vol_data_affine
