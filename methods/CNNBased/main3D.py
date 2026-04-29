@@ -21,16 +21,29 @@ model = LightningMRICCv2.load_from_checkpoint(pre_trained_model_path).eval().cpu
 
 folder_mri = args.parents
 
+
+def is_subject_folder(path):
+    """Retorna True se a pasta contém arquivos DTI diretamente."""
+    for ext in ('.nii.gz', '.nii'):
+        if os.path.isfile(os.path.join(path, f'dti_L1{ext}')):
+            return True
+    return False
+
+
 for folder in folder_mri:
     rename_files(folder)
 
 all_subjects = []
 
 for folder in folder_mri:
-    subjects = glob.glob(os.path.join(folder, "*"))
-    for subject in subjects:
-#        if not os.path.exists(os.path.join(subject, "cnnBased.nii.gz")) and os.path.exists(os.path.join(subject, "cnnBased_midsagittal.nii.gz")) and os.path.exists(os.path.join(subject, "cnnBased_FA_V2.nii.gz")):
-        all_subjects.append(subject)
+    if is_subject_folder(folder):
+        # A própria pasta é um sujeito
+        all_subjects.append(folder)
+    else:
+        # Pasta pai: coleta subpastas como sujeitos
+        for subject in glob.glob(os.path.join(folder, "*")):
+            if os.path.isdir(subject):
+                all_subjects.append(subject)
 
 
 start_time = time.time()

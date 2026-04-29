@@ -54,8 +54,9 @@ def test_predict(model, data_paths):
 		for data_path in data_paths:
 			try:
 				start = time.time()
-				code = os.path.basename(data_path)
-				sub = f'Subject_{code}'
+				# Usa o nome da pasta diretamente para coincidir com o ROQS.
+				# 'Subject_' nao deve ser prefixado pois a pasta ja se chama 'Subject_XXXX'.
+				sub = os.path.basename(data_path)
 
 				print(f"executando sujeito {data_path}", flush=True)
 

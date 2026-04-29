@@ -17,12 +17,15 @@ const python      = process.platform === 'win32' ? 'python' : 'python3'
 
 // ── Utilitário: stream SSE de um processo Python ───────────────────────────
 function spawnSSE(res, args, cwd) {
-  res.setHeader('Content-Type',  'text/event-stream')
-  res.setHeader('Cache-Control', 'no-cache')
-  res.setHeader('Connection',    'keep-alive')
+  res.setHeader('Content-Type',      'text/event-stream')
+  res.setHeader('Cache-Control',     'no-cache')
+  res.setHeader('Connection',        'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')   // desativa buffer em proxies (nginx/CRA)
   res.flushHeaders()
 
-  const proc = spawn(python, args, { cwd, env: process.env })
+  // PYTHONUNBUFFERED=1 + flag -u garantem output em tempo real mesmo via pipe
+  const env  = { ...process.env, PYTHONUNBUFFERED: '1' }
+  const proc = spawn(python, ['-u', ...args], { cwd, env })
 
   const send = data => res.write(`data: ${JSON.stringify(data)}\n\n`)
 
@@ -80,6 +83,17 @@ app.get('/api/file', (req, res) => {
 app.get('/api/exists', (req, res) => {
   const filePath = req.query.path
   res.json({ exists: Boolean(filePath && fs.existsSync(filePath)) })
+})
+
+// ── POST /api/check-paths — verifica se pastas existem no disco ───────────
+app.post('/api/check-paths', (req, res) => {
+  const { paths = [] } = req.body
+  const results = paths.map(p => {
+    let exists = false
+    try { exists = Boolean(p && fs.existsSync(p) && fs.statSync(p).isDirectory()) } catch (_) {}
+    return { path: p, exists }
+  })
+  res.json(results)
 })
 
 // ── GET /api/ping ──────────────────────────────────────────────────────────

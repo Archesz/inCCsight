@@ -24,12 +24,14 @@ function dirname(filePath) {
     return parts.join('/')
 }
 
+const API = 'http://localhost:3001'
+
 // ── Componente de imagem de segmentação ────────────────────────────────────
 function SegmentationPlot({ imgPath }) {
     if (!imgPath) return <span className='msg-image'>Imagem não disponível</span>
 
     // Serve a imagem via API local (evita CORS e leitura direta de disco)
-    const src = `/api/file?path=${encodeURIComponent(imgPath)}`
+    const src = `${API}/api/file?path=${encodeURIComponent(imgPath)}`
 
     return (
         <img
@@ -54,7 +56,7 @@ function useCNNSubjects(data) {
                 if (!imgPath) continue
                 const cnnPath = dirname(imgPath) + '/cnnBased.nii.gz'
                 try {
-                    const res  = await fetch(`/api/exists?path=${encodeURIComponent(cnnPath)}`)
+                    const res  = await fetch(`${API}/api/exists?path=${encodeURIComponent(cnnPath)}`)
                     const json = await res.json()
                     if (json.exists) results.push({ id: subject['Id'], cnnPath })
                 } catch (_) {}

@@ -57,44 +57,33 @@ def is_subject_folder(path):
 
 def resolve_subjects(folders):
     """
-    Dada uma lista de caminhos, retorna a lista de pastas-pai para passar
-    ao pipeline (respeitando sujeito único vs pasta pai).
+    Valida cada caminho e retorna a lista limpa para passar ao pipeline.
+    Ambos os scripts (roqs/main.py e CNNBased/main3D.py) sabem detectar se
+    o caminho é uma pasta-pai ou uma pasta de sujeito único.
     """
-    parent_folders = []
-    single_subjects = []
-
+    valid = []
     for folder in folders:
         folder = os.path.abspath(folder)
         if not os.path.isdir(folder):
-            print(f"[AVISO] Pasta não encontrada, ignorando: {folder}")
+            print(f"[AVISO] Pasta não encontrada, ignorando: {folder}", flush=True)
             continue
-
-        if is_subject_folder(folder):
-            # Sujeito único: precisamos passar a pasta-pai para os scripts
-            # que fazem glob.glob(folder + "/*")
-            parent = os.path.dirname(folder)
-            if parent not in parent_folders:
-                parent_folders.append(parent)
-            single_subjects.append(folder)
-        else:
-            if folder not in parent_folders:
-                parent_folders.append(folder)
-
-    return parent_folders
+        if folder not in valid:
+            valid.append(folder)
+    return valid
 
 
 def run_step(name, cmd, cwd):
-    print(f"\n{'─'*60}")
-    print(f"  [{name}]")
-    print(f"  $ {' '.join(cmd)}")
-    print(f"{'─'*60}")
+    print(f"\n{'─'*60}", flush=True)
+    print(f"  [{name}]", flush=True)
+    print(f"  $ {' '.join(cmd)}", flush=True)
+    print(f"{'─'*60}", flush=True)
     t0 = time.time()
     result = subprocess.run(cmd, cwd=cwd)
     elapsed = time.time() - t0
     if result.returncode != 0:
-        print(f"\n[ERRO] {name} terminou com código {result.returncode}")
+        print(f"\n[ERRO] {name} terminou com código {result.returncode}", flush=True)
         return False
-    print(f"\n[OK] {name} concluído em {elapsed:.1f}s")
+    print(f"\n[OK] {name} concluído em {elapsed:.1f}s", flush=True)
     return True
 
 
@@ -121,19 +110,19 @@ args = parser.parse_args()
 
 # ── Resolução de pastas ───────────────────────────────────────────────────────
 
-print("\n" + "=" * 60)
-print("  inCCsight — Pipeline de segmentação do corpo caloso")
-print("=" * 60)
+print("\n" + "=" * 60, flush=True)
+print("  inCCsight — Pipeline de segmentação do corpo caloso", flush=True)
+print("=" * 60, flush=True)
 
 parent_folders = resolve_subjects(args.path)
 
 if not parent_folders:
-    print("[ERRO] Nenhuma pasta válida encontrada.")
+    print("[ERRO] Nenhuma pasta válida encontrada.", flush=True)
     sys.exit(1)
 
-print(f"\n  Pastas a processar ({len(parent_folders)}):")
+print(f"\n  Pastas a processar ({len(parent_folders)}):", flush=True)
 for f in parent_folders:
-    print(f"    • {f}")
+    print(f"    • {f}", flush=True)
 
 # ── Etapa 1 — ROQS ────────────────────────────────────────────────────────────
 
@@ -144,7 +133,7 @@ if not args.skip_roqs:
         cwd=ROQS_DIR
     )
     if not ok:
-        print("\n[AVISO] ROQS falhou. Continuando mesmo assim...")
+        print("\n[AVISO] ROQS falhou. Continuando mesmo assim...", flush=True)
 
 # ── Etapa 2 — CNN ─────────────────────────────────────────────────────────────
 
@@ -155,9 +144,9 @@ if not args.skip_cnn:
         cwd=CNN_DIR
     )
     if not ok:
-        print("\n[AVISO] CNN falhou. Continuando mesmo assim...")
+        print("\n[AVISO] CNN falhou. Continuando mesmo assim...", flush=True)
 else:
-    print("\n[--] CNN ignorada (--skip-cnn)")
+    print("\n[--] CNN ignorada (--skip-cnn)", flush=True)
 
 # ── Etapa 3 — Conversão JSON ──────────────────────────────────────────────────
 
@@ -168,14 +157,14 @@ if not args.skip_json:
         cwd=CSVS_DIR
     )
     if not ok:
-        print("\n[ERRO] Falha na conversão para JSON.")
+        print("\n[ERRO] Falha na conversão para JSON.", flush=True)
         sys.exit(1)
 else:
-    print("\n[--] Conversão JSON ignorada (--skip-json)")
+    print("\n[--] Conversão JSON ignorada (--skip-json)", flush=True)
 
 # ── Fim ───────────────────────────────────────────────────────────────────────
 
-print("\n" + "=" * 60)
-print("  Pipeline concluído.")
-print(f"  JSON gerado em: {os.path.join(BASE_DIR, '..', 'src', 'data', 'mydata.json')}")
-print("=" * 60 + "\n")
+print("\n" + "=" * 60, flush=True)
+print("  Pipeline concluído.", flush=True)
+print(f"  JSON gerado em: {os.path.join(BASE_DIR, '..', 'src', 'data', 'mydata.json')}", flush=True)
+print("=" * 60 + "\n", flush=True)

@@ -205,9 +205,17 @@ watershed_thickness = _read_csv("Watershed_dict_thickness.csv")
 
 ROQS_parcellation      = _read_csv("ROQS_parcellation_statistics.csv")
 watershed_parcellation = _read_csv("Watershed_parcellation_statistics.csv")
-cnn_parcellation_df    = _read_csv("CNN_parcellation_statistics.csv", required=False)
-cnn_midlines_raw       = _read_csv("CNN_scalar_midlines.csv", required=False)
-cnn_midlines_df        = dataFrameStringToList(cnn_midlines_raw) if not cnn_midlines_raw.empty else pd.DataFrame()
+cnn_parcellation_df = _read_csv("CNN_parcellation_statistics.csv", required=False)
+
+# CNN midlines: lê com index_col=0 para preservar os nomes dos sujeitos como índice.
+# _read_csv usa _safe_drop_index, que descartaria a coluna "Unnamed: 0" (o índice salvo),
+# fazendo o lookup por nome falhar — por isso lemos diretamente aqui.
+_CNN_MID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "CNN_scalar_midlines.csv")
+try:
+    _cnn_mid_raw = pd.read_csv(_CNN_MID_FILE, sep=";", index_col=0)
+    cnn_midlines_df = dataFrameStringToList(_cnn_mid_raw)
+except FileNotFoundError:
+    cnn_midlines_df = pd.DataFrame()
 
 # Lookups por nome do sujeito (vazios se CNN não foi rodado)
 _cnn_parc_by_name: dict = {}
@@ -217,7 +225,7 @@ if not cnn_parcellation_df.empty and "Name" in cnn_parcellation_df.columns:
 
 _cnn_mid_by_name: dict = {}
 if not cnn_midlines_df.empty:
-    idx_col = cnn_midlines_df.index if cnn_midlines_df.index.dtype == object else None
+    # Após index_col=0, o índice do DataFrame contém os nomes dos sujeitos
     for i, row in cnn_midlines_df.iterrows():
         _cnn_mid_by_name[str(i)] = row.to_dict()
 

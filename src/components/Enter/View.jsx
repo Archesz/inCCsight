@@ -4,6 +4,10 @@ import FolderSelector from '../FolderSelector/FolderSelector'
 import { TbPlus } from 'react-icons/tb'
 import Question from '../Question/Question'
 
+// Chama a API diretamente na porta do servidor Express,
+// sem passar pelo proxy do CRA (que pode bufferizar SSE).
+const API = 'http://localhost:3001'
+
 // ── Métodos disponíveis no pipeline ───────────────────────────────────────
 // ROQS e Watershed compartilham o mesmo script (roqs/main.py); selecionar
 // qualquer um deles ativa o pipeline 2D completo.
@@ -54,22 +58,24 @@ function View({ type }) {
 
     // ── SSE streaming ──────────────────────────────────────────────────────
 
-    async function streamPipeline(url, body) {
+    async function streamPipeline(endpoint, body) {
         showLoading()
         try {
-            const response = await fetch(url, {
+            const response = await fetch(`${API}${endpoint}`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    body ? JSON.stringify(body) : undefined,
             })
 
-            if (!response.ok) throw new Error(
-                `Servidor retornou ${response.status}. Certifique-se de que "npm run server" está rodando.`
-            )
+            if (!response.ok) {
+                const text = await response.text().catch(() => '')
+                throw new Error(`Servidor retornou ${response.status}.\n${text}`)
+            }
 
             const reader  = response.body.getReader()
             const decoder = new TextDecoder()
-            let buffer = ''
+            let buffer    = ''
+            let navigated = false
 
             while (true) {
                 const { done, value } = await reader.read()
@@ -84,12 +90,13 @@ function View({ type }) {
                     try {
                         const msg = JSON.parse(line.slice(6))
                         if (msg.text) appendLog(msg.text)
-                        if (msg.done) {
+                        if (msg.done && !navigated) {
+                            navigated = true
                             if (msg.code === 0) {
                                 navigate('/Home')
                             } else {
                                 hideLoading()
-                                alert('Pipeline encerrou com erros. Verifique o log acima.')
+                                appendLog('\n✖ Pipeline encerrou com erros. Verifique o log acima.\n')
                             }
                         }
                     } catch (_) {}
@@ -118,14 +125,46 @@ function View({ type }) {
 
     // ── Ações do pipeline ───────────────────────────────────────────────────
 
-    function startAnalyzes() {
+    async function startAnalyzes() {
         const valid = folderGroups.filter(g => g.path.trim())
         if (valid.length === 0) {
             alert('Informe pelo menos um caminho de pasta antes de executar a análise.')
             return
         }
 
-        const paths     = valid.map(g => g.path.trim())
+        // 1. Verifica se o servidor Express está rodando
+        try {
+            const ping = await fetch(`${API}/api/ping`, { signal: AbortSignal.timeout(3000) })
+            if (!ping.ok) throw new Error()
+        } catch {
+            alert(
+                'Servidor não encontrado na porta 3001.\n\n' +
+                'Certifique-se de que está rodando com:\n  npm run dev\nou:\n  npm run server'
+            )
+            return
+        }
+
+        // 2. Verifica se os caminhos existem no disco
+        const paths = valid.map(g => g.path.trim())
+        try {
+            const checkRes = await fetch(`${API}/api/check-paths`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ paths }),
+            })
+            const checks  = await checkRes.json()
+            const missing = checks.filter(c => !c.exists).map(c => c.path)
+            if (missing.length > 0) {
+                alert(
+                    `As seguintes pastas não foram encontradas no disco:\n\n${missing.join('\n')}\n\n` +
+                    'Verifique se o caminho está correto e se a pasta existe.'
+                )
+                return
+            }
+        } catch {
+            // Se a verificação falhar, prossegue (não bloqueia)
+        }
+
         const groupsMap = {}
         valid.forEach(g => { groupsMap[g.path.trim()] = g.groupName.trim() || `Group ${g.id}` })
 
@@ -136,7 +175,18 @@ function View({ type }) {
         streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs })
     }
 
-    function loadLast() {
+    async function loadLast() {
+        // Verifica servidor antes de tentar carregar
+        try {
+            const ping = await fetch(`${API}/api/ping`, { signal: AbortSignal.timeout(3000) })
+            if (!ping.ok) throw new Error()
+        } catch {
+            alert(
+                'Servidor não encontrado na porta 3001.\n\n' +
+                'Certifique-se de que está rodando com:\n  npm run dev\nou:\n  npm run server'
+            )
+            return
+        }
         streamPipeline('/api/load-last', null)
     }
 

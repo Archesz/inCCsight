@@ -34,7 +34,7 @@ function Home() {
     const [error,           setError]           = useState(null)
 
     useEffect(() => {
-        fetch('/api/mydata')
+        fetch('http://localhost:3001/api/mydata')
             .then(r => {
                 if (!r.ok) throw new Error('Execute uma análise primeiro para gerar os dados.')
                 return r.json()
