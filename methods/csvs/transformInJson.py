@@ -1,65 +1,93 @@
-# Bibliotecas
+"""
+transformInJson.py — Convert segmentation CSV outputs to mydata.json.
+
+Reads all CSV files produced by the ROQS, Watershed and CNN pipelines,
+merges them into a list of subject dictionaries, and writes the result to
+data/mydata.json at the project root.
+
+A _metadata block is always embedded in the output, recording the software
+version, run timestamp, active model checkpoint and key package versions.
+This ensures every output file is traceable and reproducible.
+
+Usage:
+    python transformInJson.py
+"""
+
 import ast
+import datetime
+import importlib.metadata
 import json
 import math
 import os
 import re
+
 import numpy as np
 import pandas as pd
 
-# ── Leitura do mapeamento de grupos ───────────────────────────────────────────
 
-_GROUPS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'groups.json')
-_groups_map: dict = {}
-if os.path.exists(_GROUPS_FILE):
+# ── Locate project directories ────────────────────────────────────────────────
+
+_HERE        = os.path.dirname(os.path.abspath(__file__))          # methods/csvs/
+_METHODS_DIR = os.path.dirname(_HERE)                              # methods/
+_PROJECT_DIR = os.path.dirname(_METHODS_DIR)                       # project root
+_CNN_DIR     = os.path.join(_METHODS_DIR, "CNNBased")
+_OUTPUT_DIR  = os.path.join(_PROJECT_DIR, "data")
+_OUTPUT_FILE = os.path.join(_OUTPUT_DIR, "mydata.json")
+
+_GROUPS_FILE = os.path.join(_HERE, "groups.json")
+
+
+# ── Group mapping ─────────────────────────────────────────────────────────────
+
+def _load_groups_map() -> dict:
+    if not os.path.exists(_GROUPS_FILE):
+        return {}
     try:
-        with open(_GROUPS_FILE, 'r', encoding='utf-8') as _gf:
-            _groups_map = json.load(_gf)
-        print(f"[OK] groups.json carregado: {len(_groups_map)} grupo(s)")
-    except Exception as _ge:
-        print(f"[AVISO] Não foi possível ler groups.json: {_ge}")
+        with open(_GROUPS_FILE, "r", encoding="utf-8") as f:
+            groups_map = json.load(f)
+        print(f"[OK] groups.json loaded: {len(groups_map)} group(s)", flush=True)
+        return groups_map
+    except Exception as exc:
+        print(f"[WARNING] Could not read groups.json: {exc}", flush=True)
+        return {}
 
 
-def _find_group(img_path: str) -> str:
-    """Determina o grupo de um sujeito a partir do seu img_path e do mapeamento de grupos."""
-    if not img_path or not _groups_map:
-        return ''
-    # img_path = /pasta/grupo/Subject_001/inCCsight/midsagittal_roqs.png
+def _find_group(img_path: str, groups_map: dict) -> str:
+    """Determine a subject's group from its img_path and the groups map."""
+    if not img_path or not groups_map:
+        return ""
     subject_dir = os.path.normpath(os.path.dirname(os.path.dirname(img_path)))
     parent_dir  = os.path.normpath(os.path.dirname(subject_dir))
-    for folder, group in _groups_map.items():
+    for folder, group in groups_map.items():
         normed = os.path.normpath(folder)
-        if normed == subject_dir or normed == parent_dir:
+        if normed in (subject_dir, parent_dir):
             return group
-    return ''
+    return ""
 
 
-# ── Parsing de células com listas codificadas como string ────────────────────
+# ── List parsing ──────────────────────────────────────────────────────────────
 
 def _parse_list_cell(val):
-    """Converte uma célula CSV que contém uma string de lista Python em list."""
+    """Convert a CSV cell that contains a Python list string into a list."""
     if not isinstance(val, str):
         return val
     try:
         return ast.literal_eval(val)
     except (ValueError, SyntaxError):
-        # Fallback: limpa repr numpy (np.float64(...)) e parseia como JSON
         try:
-            cleaned = re.sub(r'np\.float\d+\(([^)]+)\)', r'\1', val)
+            cleaned = re.sub(r"np\.float\d+\(([^)]+)\)", r"\1", val)
             return json.loads(cleaned.replace("'", '"'))
         except Exception:
             return []
 
 
-def dataFrameStringToList(df):
-    """Aplica _parse_list_cell em todas as colunas usando apply (vetorizado)."""
+def _df_parse_lists(df: pd.DataFrame) -> pd.DataFrame:
     return df.apply(lambda col: col.map(_parse_list_cell))
 
 
-# ── NaN check eficiente ───────────────────────────────────────────────────────
+# ── NaN detection ─────────────────────────────────────────────────────────────
 
-def _has_nan(subject):
-    """Retorna True se o sujeito contém algum NaN nos campos numéricos."""
+def _has_nan(subject: dict) -> bool:
     for val in subject.values():
         if isinstance(val, dict):
             for v2 in val.values():
@@ -84,48 +112,63 @@ def _has_nan(subject):
     return False
 
 
-# ── Classe Subject ────────────────────────────────────────────────────────────
+# ── Subject class ─────────────────────────────────────────────────────────────
 
 class Subject:
-    def __init__(self, name, watershed_scalar, ROQS_scalars,
-                 watershed_midlines, ROQS_midlines,
-                 watershed_thickness, ROQS_thickness,
-                 watershed_parcellation, ROQS_parcellation,
-                 img_path="",
-                 roqs_qc_flag=None, roqs_qc_prob=None,
-                 water_qc_flag=None, water_qc_prob=None,
-                 cnn_parcellation=None, cnn_midlines=None,
-                 cnn_scalar=None):
-        self.name = self._adjust_name(str(name))
-        self.watershed_scalar       = watershed_scalar
-        self.ROQS_scalars           = ROQS_scalars
-        self.watershed_midlines     = watershed_midlines
-        self.ROQS_midlines          = ROQS_midlines
-        self.watershed_thickness    = list(watershed_thickness)
-        self.ROQS_thickness         = list(ROQS_thickness)
+    def __init__(
+        self,
+        name,
+        watershed_scalar,
+        roqs_scalar,
+        watershed_midlines,
+        roqs_midlines,
+        watershed_thickness,
+        roqs_thickness,
+        watershed_parcellation,
+        roqs_parcellation,
+        img_path="",
+        roqs_qc_flag=None,
+        roqs_qc_prob=None,
+        watershed_qc_flag=None,
+        watershed_qc_prob=None,
+        cnn_parcellation=None,
+        cnn_midlines=None,
+        cnn_scalar=None,
+        groups_map=None,
+    ):
+        self.name                  = self._normalize_name(str(name))
+        self.watershed_scalar      = watershed_scalar
+        self.roqs_scalar           = roqs_scalar
+        self.watershed_midlines    = watershed_midlines
+        self.roqs_midlines         = roqs_midlines
+        self.watershed_thickness   = list(watershed_thickness)
+        self.roqs_thickness        = list(roqs_thickness)
         self.watershed_parcellation = watershed_parcellation
-        self.ROQS_parcellation      = ROQS_parcellation
-        self.cnn_parcellation       = cnn_parcellation if cnn_parcellation is not None else {}
-        self.cnn_midlines           = cnn_midlines     if cnn_midlines     is not None else {}
-        self.cnn_scalar             = cnn_scalar       if cnn_scalar       is not None else {}
-        self.img_path               = str(img_path) if img_path else ""
-        self.roqs_qc_flag  = roqs_qc_flag
-        self.roqs_qc_prob  = roqs_qc_prob
-        self.water_qc_flag = water_qc_flag
-        self.water_qc_prob = water_qc_prob
-        self.group         = _find_group(self.img_path)
+        self.roqs_parcellation     = roqs_parcellation
+        self.cnn_parcellation      = cnn_parcellation or {}
+        self.cnn_midlines          = cnn_midlines or {}
+        self.cnn_scalar            = cnn_scalar or {}
+        self.img_path              = str(img_path) if img_path else ""
+        self.roqs_qc_flag          = roqs_qc_flag
+        self.roqs_qc_prob          = roqs_qc_prob
+        self.watershed_qc_flag     = watershed_qc_flag
+        self.watershed_qc_prob     = watershed_qc_prob
+        self.group                 = _find_group(self.img_path, groups_map or {})
 
-    def _adjust_name(self, name):
+    @staticmethod
+    def _normalize_name(name: str) -> str:
         if name.startswith("Subject_"):
             name = name[len("Subject_"):]
         return name.zfill(7)
 
-    def _safe_bool(self, val):
+    @staticmethod
+    def _safe_bool(val):
         if val is None or (isinstance(val, float) and math.isnan(val)):
             return None
         return bool(val)
 
-    def _safe_float(self, val):
+    @staticmethod
+    def _safe_float(val):
         if val is None or (isinstance(val, float) and math.isnan(val)):
             return None
         try:
@@ -133,154 +176,225 @@ class Subject:
         except (TypeError, ValueError):
             return None
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {
-            "Id": self.name,
-            "img_path": self.img_path,
-            "group": self.group,
+            "Id":                    self.name,
+            "img_path":              self.img_path,
+            "group":                 self.group,
             "qc": {
                 "ROQS":      {"flag": self._safe_bool(self.roqs_qc_flag),
                               "prob": self._safe_float(self.roqs_qc_prob)},
-                "Watershed": {"flag": self._safe_bool(self.water_qc_flag),
-                              "prob": self._safe_float(self.water_qc_prob)},
+                "Watershed": {"flag": self._safe_bool(self.watershed_qc_flag),
+                              "prob": self._safe_float(self.watershed_qc_prob)},
             },
-            "Watershed_scalar":    dict(self.watershed_scalar),
-            "ROQS_scalar":         dict(self.ROQS_scalars),
-            "CNN_scalar":          dict(self.cnn_scalar),
-            "Watershed_midlines":  dict(self.watershed_midlines),
-            "ROQS_midlines":       dict(self.ROQS_midlines),
-            "Watershed_thickness": self.watershed_thickness,
-            "ROQS_thickness":      self.ROQS_thickness,
+            "Watershed_scalar":       dict(self.watershed_scalar),
+            "ROQS_scalar":            dict(self.roqs_scalar),
+            "CNN_scalar":             dict(self.cnn_scalar),
+            "Watershed_midlines":     dict(self.watershed_midlines),
+            "ROQS_midlines":          dict(self.roqs_midlines),
+            "Watershed_thickness":    self.watershed_thickness,
+            "ROQS_thickness":         self.roqs_thickness,
             "Watershed_parcellation": dict(self.watershed_parcellation),
-            "ROQS_parcellation":      dict(self.ROQS_parcellation),
+            "ROQS_parcellation":      dict(self.roqs_parcellation),
             "CNN_parcellation":       dict(self.cnn_parcellation),
             "CNN_midlines":           dict(self.cnn_midlines),
         }
 
 
-# ── Utilitários de leitura ────────────────────────────────────────────────────
+# ── CSV helpers ───────────────────────────────────────────────────────────────
 
-def _safe_drop_index(df):
+def _drop_unnamed(df: pd.DataFrame) -> pd.DataFrame:
     unnamed = [c for c in df.columns if str(c).startswith("Unnamed")]
     return df.drop(columns=unnamed) if unnamed else df
 
 
-def _read_csv(filename, required=True):
+def _read_csv(filename: str, required: bool = True) -> pd.DataFrame:
     try:
-        return _safe_drop_index(pd.read_csv(filename, sep=";"))
+        return _drop_unnamed(pd.read_csv(filename, sep=";"))
     except FileNotFoundError:
         if required:
-            print(f"\n[ERRO] Arquivo não encontrado: {filename}")
-            print("       Execute a análise ROQS antes de converter para JSON.")
+            print(f"\n[ERROR] File not found: {filename}")
+            print("        Run the ROQS analysis before converting to JSON.")
             raise
         return pd.DataFrame()
 
 
-# ── Leitura dos CSVs ──────────────────────────────────────────────────────────
+# ── Metadata builder ──────────────────────────────────────────────────────────
 
-ROQS_scalar_raw  = _read_csv("ROQS_scalar_statistics.csv")
-# Extract img_path and QC columns before passing scalar data
-img_paths       = ROQS_scalar_raw["img_path"].tolist() if "img_path" in ROQS_scalar_raw.columns else []
-roqs_qc_flags   = ROQS_scalar_raw["qc_flag"].tolist() if "qc_flag" in ROQS_scalar_raw.columns else []
-roqs_qc_probs   = ROQS_scalar_raw["qc_prob"].tolist() if "qc_prob" in ROQS_scalar_raw.columns else []
-ROQS_scalar     = ROQS_scalar_raw.drop(columns=["img_path", "qc_flag", "qc_prob"], errors="ignore")
+def _build_metadata() -> dict:
+    """Collect run provenance information for scientific reproducibility."""
 
-watershed_scalar_raw = _read_csv("Watershed_scalar_statistics.csv")
-water_qc_flags  = watershed_scalar_raw["qc_flag"].tolist() if "qc_flag" in watershed_scalar_raw.columns else []
-water_qc_probs  = watershed_scalar_raw["qc_prob"].tolist() if "qc_prob" in watershed_scalar_raw.columns else []
-watershed_scalar = watershed_scalar_raw.drop(columns=["img_path", "qc_flag", "qc_prob"], errors="ignore")
+    # Software version from package.json at project root
+    version = "unknown"
+    pkg_json = os.path.join(_PROJECT_DIR, "package.json")
+    try:
+        with open(pkg_json, "r", encoding="utf-8") as f:
+            version = json.load(f).get("version", "unknown")
+    except Exception:
+        pass
 
-# CNN scalar: lê cnn_based.csv (gerado pelo predict3D.py) e constrói lookup por nome.
-# O arquivo tem colunas: Names, FA, FA StdDev, MD, MD StdDev, RD, RD StdDev, AD, AD StdDev, Time
-_CNN_BASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cnn_based.csv")
-_cnn_scalar_by_name: dict = {}
-try:
-    _cnn_base_raw = _safe_drop_index(pd.read_csv(_CNN_BASE_FILE, sep=";"))
-    if not _cnn_base_raw.empty and "Names" in _cnn_base_raw.columns:
-        for _, row in _cnn_base_raw.iterrows():
-            name_key = str(row["Names"])
-            # Guarda apenas os escalares (exclui Names e Time)
-            scalar_data = {k: v for k, v in row.items()
-                           if k not in ("Names", "Time") and pd.notna(v)}
-            _cnn_scalar_by_name[name_key] = scalar_data
-except FileNotFoundError:
-    pass
+    # Active CNN checkpoint
+    checkpoint = "unknown"
+    peso_dir = os.path.join(_CNN_DIR, "peso")
+    if os.path.isdir(peso_dir):
+        ckpts = [f for f in os.listdir(peso_dir) if f.endswith(".ckpt")]
+        if ckpts:
+            # Use the same one main3D.py selects
+            preferred = "3DExperimentV2_ManualMask_FAepoch=362-val_loss=0.13.ckpt"
+            checkpoint = preferred if preferred in ckpts else ckpts[0]
 
-# Midlines: parse string→list usando apply (bem mais rápido que loop manual)
-ROQS_midlines      = dataFrameStringToList(_read_csv("ROQS_scalar_midlines.csv"))
-watershed_midlines = dataFrameStringToList(_read_csv("Watershed_scalar_midlines.csv"))
+    # Key package versions
+    packages = {}
+    for pkg in ("torch", "monai", "dipy", "nibabel", "numpy",
+                "scikit-image", "scikit-learn", "scipy", "pandas",
+                "pytorch-lightning"):
+        try:
+            packages[pkg] = importlib.metadata.version(pkg)
+        except importlib.metadata.PackageNotFoundError:
+            packages[pkg] = "not installed"
 
-ROQS_thickness      = _read_csv("ROQS_dict_thickness.csv")
-watershed_thickness = _read_csv("Watershed_dict_thickness.csv")
+    return {
+        "inCCsight_version": version,
+        "run_timestamp":     datetime.datetime.utcnow().isoformat() + "Z",
+        "model_checkpoint":  checkpoint,
+        "python_packages":   packages,
+    }
 
-ROQS_parcellation      = _read_csv("ROQS_parcellation_statistics.csv")
-watershed_parcellation = _read_csv("Watershed_parcellation_statistics.csv")
-cnn_parcellation_df = _read_csv("CNN_parcellation_statistics.csv", required=False)
 
-# CNN midlines: lê com index_col=0 para preservar os nomes dos sujeitos como índice.
-# _read_csv usa _safe_drop_index, que descartaria a coluna "Unnamed: 0" (o índice salvo),
-# fazendo o lookup por nome falhar — por isso lemos diretamente aqui.
-_CNN_MID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "CNN_scalar_midlines.csv")
-try:
-    _cnn_mid_raw = pd.read_csv(_CNN_MID_FILE, sep=";", index_col=0)
-    cnn_midlines_df = dataFrameStringToList(_cnn_mid_raw)
-except FileNotFoundError:
-    cnn_midlines_df = pd.DataFrame()
+# ── Main ──────────────────────────────────────────────────────────────────────
 
-# Lookups por nome do sujeito (vazios se CNN não foi rodado)
-_cnn_parc_by_name: dict = {}
-if not cnn_parcellation_df.empty and "Name" in cnn_parcellation_df.columns:
-    for _, row in cnn_parcellation_df.iterrows():
-        _cnn_parc_by_name[str(row["Name"])] = row.to_dict()
+def main():
+    groups_map = _load_groups_map()
 
-_cnn_mid_by_name: dict = {}
-if not cnn_midlines_df.empty:
-    # Após index_col=0, o índice do DataFrame contém os nomes dos sujeitos
-    for i, row in cnn_midlines_df.iterrows():
-        _cnn_mid_by_name[str(i)] = row.to_dict()
-
-names = list(ROQS_parcellation["Name"])
-
-# ── Construção dos sujeitos ───────────────────────────────────────────────────
-
-subjects_list = []
-for i, name in enumerate(names):
-    sub = Subject(
-        name,
-        watershed_scalar.iloc[i],
-        ROQS_scalar.iloc[i],
-        watershed_midlines.iloc[i],
-        ROQS_midlines.iloc[i],
-        watershed_thickness.iloc[i],
-        ROQS_thickness.iloc[i],
-        watershed_parcellation.iloc[i],
-        ROQS_parcellation.iloc[i],
-        img_path=img_paths[i] if i < len(img_paths) else "",
-        roqs_qc_flag=roqs_qc_flags[i] if i < len(roqs_qc_flags) else None,
-        roqs_qc_prob=roqs_qc_probs[i] if i < len(roqs_qc_probs) else None,
-        water_qc_flag=water_qc_flags[i] if i < len(water_qc_flags) else None,
-        water_qc_prob=water_qc_probs[i] if i < len(water_qc_probs) else None,
-        cnn_parcellation=_cnn_parc_by_name.get(str(name), {}),
-        cnn_midlines=_cnn_mid_by_name.get(str(name), {}),
-        cnn_scalar=_cnn_scalar_by_name.get(str(name), {}),
+    # ── Read required CSVs ────────────────────────────────────────────────────
+    roqs_scalar_raw = _read_csv("ROQS_scalar_statistics.csv")
+    img_paths       = (roqs_scalar_raw["img_path"].tolist()
+                       if "img_path" in roqs_scalar_raw.columns else [])
+    roqs_qc_flags   = (roqs_scalar_raw["qc_flag"].tolist()
+                       if "qc_flag" in roqs_scalar_raw.columns else [])
+    roqs_qc_probs   = (roqs_scalar_raw["qc_prob"].tolist()
+                       if "qc_prob" in roqs_scalar_raw.columns else [])
+    roqs_scalar     = roqs_scalar_raw.drop(
+        columns=["img_path", "qc_flag", "qc_prob"], errors="ignore"
     )
-    subjects_list.append(sub.to_dict())
 
-# ── Remoção de sujeitos com NaN — com aviso explícito ────────────────────────
+    watershed_scalar_raw = _read_csv("Watershed_scalar_statistics.csv")
+    water_qc_flags  = (watershed_scalar_raw["qc_flag"].tolist()
+                       if "qc_flag" in watershed_scalar_raw.columns else [])
+    water_qc_probs  = (watershed_scalar_raw["qc_prob"].tolist()
+                       if "qc_prob" in watershed_scalar_raw.columns else [])
+    watershed_scalar = watershed_scalar_raw.drop(
+        columns=["img_path", "qc_flag", "qc_prob"], errors="ignore"
+    )
 
-clean, removed = [], []
-for s in subjects_list:
-    if _has_nan(s):
-        removed.append(s["Id"])
-    else:
-        clean.append(s)
-if removed:
-    print(f"[AVISO] {len(removed)} sujeito(s) removido(s) por conter NaN: {removed}", flush=True)
-subjects_list = clean
+    # CNN scalar lookup
+    _cnn_scalar_by_name: dict = {}
+    cnn_base_file = os.path.join(_HERE, "cnn_based.csv")
+    try:
+        cnn_base_raw = _drop_unnamed(pd.read_csv(cnn_base_file, sep=";"))
+        if not cnn_base_raw.empty and "Names" in cnn_base_raw.columns:
+            for _, row in cnn_base_raw.iterrows():
+                key = str(row["Names"])
+                _cnn_scalar_by_name[key] = {
+                    k: v for k, v in row.items()
+                    if k not in ("Names", "Time") and pd.notna(v)
+                }
+    except FileNotFoundError:
+        pass
 
-# ── Escrita do JSON ───────────────────────────────────────────────────────────
+    # Midlines
+    roqs_midlines      = _df_parse_lists(_read_csv("ROQS_scalar_midlines.csv"))
+    watershed_midlines = _df_parse_lists(_read_csv("Watershed_scalar_midlines.csv"))
 
-with open("../../src/data/mydata.json", "w") as f:
-    json.dump(subjects_list, f)
+    # Thickness
+    roqs_thickness      = _read_csv("ROQS_dict_thickness.csv")
+    watershed_thickness = _read_csv("Watershed_dict_thickness.csv")
 
-print(f"[OK] {len(subjects_list)} sujeito(s) exportado(s) para mydata.json")
+    # Parcellations
+    roqs_parcellation      = _read_csv("ROQS_parcellation_statistics.csv")
+    watershed_parcellation = _read_csv("Watershed_parcellation_statistics.csv")
+    cnn_parcellation_df    = _read_csv("CNN_parcellation_statistics.csv", required=False)
+
+    # CNN midlines (index_col=0 preserves subject names as index)
+    cnn_mid_file = os.path.join(_HERE, "CNN_scalar_midlines.csv")
+    try:
+        cnn_midlines_df = _df_parse_lists(
+            pd.read_csv(cnn_mid_file, sep=";", index_col=0)
+        )
+    except FileNotFoundError:
+        cnn_midlines_df = pd.DataFrame()
+
+    # Build name-keyed lookups
+    _cnn_parc_by_name: dict = {}
+    if not cnn_parcellation_df.empty and "Name" in cnn_parcellation_df.columns:
+        for _, row in cnn_parcellation_df.iterrows():
+            _cnn_parc_by_name[str(row["Name"])] = row.to_dict()
+
+    _cnn_mid_by_name: dict = {}
+    if not cnn_midlines_df.empty:
+        for idx, row in cnn_midlines_df.iterrows():
+            _cnn_mid_by_name[str(idx)] = row.to_dict()
+
+    names = list(roqs_parcellation["Name"])
+
+    # ── Build subjects ────────────────────────────────────────────────────────
+    subjects_list = []
+    for i, name in enumerate(names):
+        sub = Subject(
+            name,
+            watershed_scalar.iloc[i],
+            roqs_scalar.iloc[i],
+            watershed_midlines.iloc[i],
+            roqs_midlines.iloc[i],
+            watershed_thickness.iloc[i],
+            roqs_thickness.iloc[i],
+            watershed_parcellation.iloc[i],
+            roqs_parcellation.iloc[i],
+            img_path          = img_paths[i] if i < len(img_paths) else "",
+            roqs_qc_flag      = roqs_qc_flags[i] if i < len(roqs_qc_flags) else None,
+            roqs_qc_prob      = roqs_qc_probs[i] if i < len(roqs_qc_probs) else None,
+            watershed_qc_flag = water_qc_flags[i] if i < len(water_qc_flags) else None,
+            watershed_qc_prob = water_qc_probs[i] if i < len(water_qc_probs) else None,
+            cnn_parcellation  = _cnn_parc_by_name.get(str(name), {}),
+            cnn_midlines      = _cnn_mid_by_name.get(str(name), {}),
+            cnn_scalar        = _cnn_scalar_by_name.get(str(name), {}),
+            groups_map        = groups_map,
+        )
+        subjects_list.append(sub.to_dict())
+
+    # ── Remove subjects with NaN values ───────────────────────────────────────
+    clean, removed = [], []
+    for s in subjects_list:
+        if _has_nan(s):
+            removed.append(s["Id"])
+        else:
+            clean.append(s)
+    if removed:
+        print(
+            f"[WARNING] {len(removed)} subject(s) removed due to NaN values: {removed}",
+            flush=True,
+        )
+    subjects_list = clean
+
+    # ── Assemble output with metadata ─────────────────────────────────────────
+    metadata = _build_metadata()
+    output = {
+        "_metadata": metadata,
+        "subjects":  subjects_list,
+    }
+
+    # ── Write JSON ────────────────────────────────────────────────────────────
+    os.makedirs(_OUTPUT_DIR, exist_ok=True)
+    with open(_OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+
+    print(
+        f"[OK] {len(subjects_list)} subject(s) exported to {_OUTPUT_FILE}",
+        flush=True,
+    )
+    print(f"[OK] Run timestamp: {metadata['run_timestamp']}", flush=True)
+    print(f"[OK] Model checkpoint: {metadata['model_checkpoint']}", flush=True)
+
+
+if __name__ == "__main__":
+    main()

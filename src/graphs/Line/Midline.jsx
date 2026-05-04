@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Midline.scss'
 
@@ -223,4 +223,4 @@ function Midline(props) {
     )
 }
 
-export default Midline
+export default memo(Midline)

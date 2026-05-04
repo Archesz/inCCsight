@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { Dna } from 'react-loader-spinner'
 import './Enter.scss'
 import logo from '../../assets/inccsight.png'
 
@@ -8,10 +7,10 @@ import View from './View'
 import Loading from '../Loading/Loading'
 
 const NAV = [
-    { icon: TbHome2,          name: 'Input',    title: 'Selecionar dados'   },
-    { icon: TbQuestionCircle, name: 'Help',     title: 'Ajuda'              },
-    { icon: TbBrandGithub,    name: 'Github',   title: 'GitHub'             },
-    { icon: TbSettings,       name: 'Settings', title: 'Configurações'      },
+    { icon: TbHome2,          name: 'Input',    title: 'Select data'   },
+    { icon: TbQuestionCircle, name: 'Help',     title: 'Help'          },
+    { icon: TbBrandGithub,    name: 'Github',   title: 'GitHub'        },
+    { icon: TbSettings,       name: 'Settings', title: 'Settings'      },
 ]
 
 function Enter() {
@@ -22,6 +21,12 @@ function Enter() {
             {/* Loading overlay */}
             <div className='loading-screen' id='loading-screen'>
                 <Loading />
+                <div className='pipeline-progress-wrap' id='pipeline-progress-wrap'>
+                    <div className='pipeline-progress-bar'>
+                        <div className='pipeline-progress-fill' id='progress-bar-fill' style={{ width: '0%' }} />
+                    </div>
+                    <span className='pipeline-progress-label' id='progress-label'>Starting…</span>
+                </div>
                 <pre id='pipeline-log' className='pipeline-log' />
             </div>
 

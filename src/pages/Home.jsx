@@ -30,10 +30,12 @@ function Home() {
     useEffect(() => {
         fetch('http://localhost:3001/api/mydata')
             .then(r => {
-                if (!r.ok) throw new Error('Execute uma análise primeiro para gerar os dados.')
+                if (!r.ok) throw new Error('Run an analysis first to generate data.')
                 return r.json()
             })
-            .then(subjects => {
+            .then(json => {
+                // Support both legacy array format and new {_metadata, subjects} format
+                const subjects = Array.isArray(json) ? json : (json.subjects || [])
                 const groups = [...new Set(subjects.map(s => s.group || '').filter(Boolean))]
                 setAllSubjects(subjects)
                 setData(subjects)
@@ -44,7 +46,7 @@ function Home() {
             .catch(e => { setError(e.message); setLoading(false) })
     }, [])
 
-    // ── Seleção de sujeito ─────────────────────────────────────────────────
+    // ── Subject selection ──────────────────────────────────────────────────
     function selectSubject(id) {
         if (id === '__all__') {
             setSelectedId(null)
@@ -62,7 +64,7 @@ function Home() {
         selectSubject('__all__')
     }
 
-    // ── Filtro de sujeitos visíveis na sidebar ─────────────────────────────
+    // ── Subjects visible in sidebar ────────────────────────────────────────
     const visibleSubjects = allSubjects
         .filter(s => !groupFilter || s.group === groupFilter)
         .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true)
@@ -70,7 +72,7 @@ function Home() {
 
     const failCount = allSubjects.filter(s => s.qc?.ROQS?.flag === true).length
 
-    // ── Quando o filtro muda, atualizar data se não há sujeito selecionado ─
+    // ── Update data when filter changes ────────────────────────────────────
     useEffect(() => {
         if (!selectedId) {
             const filtered = allSubjects
@@ -80,18 +82,18 @@ function Home() {
         }
     }, [groupFilter, qcFilter, allSubjects, selectedId])
 
-    // ── Estados de carregamento e erro ─────────────────────────────────────
+    // ── Loading and error states ───────────────────────────────────────────
     if (loading) return (
         <div className='dash-loading'>
-            <span style={{ fontSize: '1.2rem', color: 'white' }}>Carregando dados...</span>
+            <span style={{ fontSize: '1.2rem', color: 'white' }}>Loading data...</span>
         </div>
     )
 
     if (error) return (
         <div className='dash-error'>
-            <span className='dash-error-msg'>⚠ Nenhum dado encontrado</span>
+            <span className='dash-error-msg'>⚠ No data found</span>
             <span className='dash-error-hint'>{error}</span>
-            <a href='/'>← Voltar para a tela inicial</a>
+            <a href='/'>← Back to home</a>
         </div>
     )
 
@@ -108,10 +110,10 @@ function Home() {
 
                 <div className='topbar-tabs'>
                     {[
-                        { id: '2D',      label: 'Segmentação 2D'  },
-                        { id: '3D',      label: 'Volumétrico 3D'  },
+                        { id: '2D',      label: '2D Segmentation'  },
+                        { id: '3D',      label: '3D Volumetric'    },
                         ...(allGroups.length >= 2
-                            ? [{ id: 'compare', label: 'Comparar Grupos', badge: allGroups.length }]
+                            ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
                             : []),
                     ].map(tab => (
                         <button
@@ -127,14 +129,14 @@ function Home() {
 
                 <div className='topbar-right'>
                     <div className='subject-count'>
-                        <strong>{data.length}</strong> sujeito{data.length !== 1 ? 's' : ''}
+                        <strong>{data.length}</strong> subject{data.length !== 1 ? 's' : ''}
                     </div>
 
                     {failCount > 0 && (
                         <button
                             className={`qc-fail-badge${qcFilter ? ' active' : ''}`}
                             onClick={() => setQcFilter(v => !v)}
-                            title='Filtrar sujeitos com QC FAIL'
+                            title='Filter subjects with QC FAIL'
                         >
                             <TbAlertTriangle />
                             {failCount} QC FAIL
@@ -144,7 +146,7 @@ function Home() {
                     <BsGear
                         className='gear-icon'
                         onClick={() => navigate('/')}
-                        title='Nova análise'
+                        title='New analysis'
                     />
                 </div>
             </div>
@@ -155,10 +157,10 @@ function Home() {
                 {/* ── Sidebar ─────────────────────────────────────────────── */}
                 <div className='dash-sidebar'>
                     <div className='sidebar-head'>
-                        <span className='sidebar-title'>Sujeitos</span>
+                        <span className='sidebar-title'>Subjects</span>
                         <input
                             className='sidebar-search'
-                            placeholder='Buscar ID...'
+                            placeholder='Search ID...'
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                         />
@@ -170,7 +172,7 @@ function Home() {
                                 className={`group-pill${groupFilter === '' ? ' active' : ''}`}
                                 onClick={() => { setGroupFilter(''); setSelectedId(null) }}
                             >
-                                Todos
+                                All
                             </button>
                             {allGroups.map((g, i) => (
                                 <button
@@ -186,12 +188,12 @@ function Home() {
                     )}
 
                     <div className='sidebar-list'>
-                        {/* Botão "Todos" */}
+                        {/* "All" button */}
                         <div
                             className={`sub-item sub-item--all${!selectedId ? ' sub-item--active' : ''}`}
                             onClick={() => selectSubject('__all__')}
                         >
-                            <span className='sub-name'>Todos ({visibleSubjects.length})</span>
+                            <span className='sub-name'>All ({visibleSubjects.length})</span>
                         </div>
 
                         {visibleSubjects.map((s, i) => {
@@ -216,7 +218,7 @@ function Home() {
                     <div className='sidebar-footer'>
                         <span>{allSubjects.length} total</span>
                         {allGroups.length > 0 && (
-                            <span>{allGroups.length} grupo{allGroups.length !== 1 ? 's' : ''}</span>
+                            <span>{allGroups.length} group{allGroups.length !== 1 ? 's' : ''}</span>
                         )}
                     </div>
                 </div>

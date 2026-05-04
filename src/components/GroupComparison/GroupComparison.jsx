@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState } from 'react'
 import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
 
@@ -66,10 +66,10 @@ function MeanTable({ allSubjects, allGroups, segMethod }) {
             <table className='gc-table'>
                 <thead>
                     <tr>
-                        <th>Grupo</th>
+                        <th>Group</th>
                         <th>N</th>
                         {SCALARS.map(s => (
-                            <th key={s}>{s} <span className='th-sub'>média ± dp</span></th>
+                            <th key={s}>{s} <span className='th-sub'>mean ± sd</span></th>
                         ))}
                     </tr>
                 </thead>
@@ -149,7 +149,7 @@ function GroupComparison({ allSubjects, allGroups }) {
     if (!hasGroups) {
         return (
             <div className='gc-empty'>
-                <span>Adicione ao menos <strong>2 grupos</strong> durante a análise para habilitar a comparação.</span>
+                <span>Add at least <strong>2 groups</strong> during analysis to enable comparison.</span>
             </div>
         )
     }
@@ -157,11 +157,11 @@ function GroupComparison({ allSubjects, allGroups }) {
     return (
         <div className='gc-container'>
 
-            {/* Controles */}
+            {/* Controls */}
             <div className='gc-controls'>
-                <span className='gc-title'>Comparação entre grupos</span>
+                <span className='gc-title'>Group Comparison</span>
                 <div className='gc-seg-picker'>
-                    <label>Método:</label>
+                    <label>Method:</label>
                     {METHODS_SEG.map(m => (
                         <button
                             key={m}
@@ -174,7 +174,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
-            {/* Boxplots por escalar */}
+            {/* Boxplots per scalar */}
             <div className='gc-boxplots'>
                 {SCALARS.map(sc => (
                     <div key={sc} className='gc-box-cell'>
@@ -188,7 +188,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                 ))}
             </div>
 
-            {/* Legenda de grupos */}
+            {/* Group legend */}
             <div className='gc-legend'>
                 {allGroups.map((g, i) => (
                     <span key={g} className='gc-legend-item'>
@@ -200,15 +200,15 @@ function GroupComparison({ allSubjects, allGroups }) {
 
             {/* Radar */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Perfil médio por grupo (radar)</span>
+                <span className='gc-section-title'>Mean profile per group (radar)</span>
                 <div className='gc-radar-wrap'>
                     <GroupRadar allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod} />
                 </div>
             </div>
 
-            {/* Tabela de médias */}
+            {/* Statistics table */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Estatísticas por grupo</span>
+                <span className='gc-section-title'>Statistics per group</span>
                 <MeanTable allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod} />
             </div>
 

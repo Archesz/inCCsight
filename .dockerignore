@@ -1,0 +1,31 @@
+node_modules
+build
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Python environments
+methods/venv
+methods/roqs/venv
+methods/CNNBased/venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+
+# Pipeline output (mounted as volumes)
+data/
+methods/csvs/*.csv
+methods/csvs/groups.json
+
+# Model checkpoint (mounted as volume)
+methods/CNNBased/peso/*.ckpt
+
+# Subject data
+subjects/
+
+# Docs & misc
+*.md
+coverage/
+.DS_Store

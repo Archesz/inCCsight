@@ -19,7 +19,9 @@
       "PowerShell($json = Get-Content \"C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\csvs\\\\mydata.json\" -Raw | ConvertFrom-Json; $json | Where-Object { $_.img_path -ne $null -and $_.img_path -ne \"\" } | Select-Object -First 1 | Select-Object Id, img_path, group, qc | ConvertTo-Json -Depth 3)",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npm run *)"
     ]
   }
 }

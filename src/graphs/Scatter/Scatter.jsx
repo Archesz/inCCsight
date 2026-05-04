@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Scatter.scss'
 
@@ -161,4 +161,4 @@ function Scatter(props) {
     )
 }
 
-export default Scatter
+export default memo(Scatter)

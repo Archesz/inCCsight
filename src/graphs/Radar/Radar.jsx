@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Radar.scss'
 
@@ -82,7 +82,7 @@ function CheckField({ label, checked, onChange }) {
 
 const THETA = [...PARTS, PARTS[0]]
 
-// ── Gráfico 1: fixar parcelamento → comparar segmentações ─────────────────
+// ── Chart 1: fix parcellation → compare segmentations ─────────────────────
 
 function RadarBySegmentation({ data }) {
     const [parcMethod, setParcMethod] = useState('Witelson')
@@ -110,7 +110,7 @@ function RadarBySegmentation({ data }) {
     }))
 
     const layout = {
-        title:  { text: 'Segmentações por Parcelamento', font: { size: 14 } },
+        title:  { text: 'Segmentations by Parcellation', font: { size: 14 } },
         legend: { orientation: 'h' },
         polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
         margin: { t: 48, l: 32, r: 32, b: 8 },
@@ -128,19 +128,19 @@ function RadarBySegmentation({ data }) {
             />
             <ControlRow>
                 <SelectField
-                    label='Parcelamento'
+                    label='Parcellation'
                     value={parcMethod}
                     onChange={setParcMethod}
                     options={PARC_METHS}
                 />
                 <SelectField
-                    label='Escalar'
+                    label='Scalar'
                     value={scalar}
                     onChange={setScalar}
                     options={SCALARS}
                 />
                 <CheckField
-                    label='Normalizar (0–1)'
+                    label='Normalise (0–1)'
                     checked={normalized}
                     onChange={setNormalized}
                 />
@@ -149,7 +149,7 @@ function RadarBySegmentation({ data }) {
     )
 }
 
-// ── Gráfico 2: fixar segmentação → comparar parcelamentos ─────────────────
+// ── Chart 2: fix segmentation → compare parcellations ─────────────────────
 
 function RadarByParcellation({ data }) {
     const hasCNN = hasData(data, 'CNN_parcellation')
@@ -182,7 +182,7 @@ function RadarByParcellation({ data }) {
     }))
 
     const layout = {
-        title:  { text: 'Parcelamentos por Segmentação', font: { size: 14 } },
+        title:  { text: 'Parcellations by Segmentation', font: { size: 14 } },
         legend: { orientation: 'h' },
         polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
         margin: { t: 48, l: 32, r: 32, b: 8 },
@@ -200,19 +200,19 @@ function RadarByParcellation({ data }) {
             />
             <ControlRow>
                 <SelectField
-                    label='Segmentação'
+                    label='Segmentation'
                     value={validKey}
                     onChange={v => setSegmKey(v)}
                     options={segmOptions}
                 />
                 <SelectField
-                    label='Escalar'
+                    label='Scalar'
                     value={scalar}
                     onChange={setScalar}
                     options={SCALARS}
                 />
                 <CheckField
-                    label='Normalizar (0–1)'
+                    label='Normalise (0–1)'
                     checked={normalized}
                     onChange={setNormalized}
                 />
@@ -232,4 +232,4 @@ function Radar(props) {
     )
 }
 
-export default Radar
+export default memo(Radar)

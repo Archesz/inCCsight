@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { memo } from 'react'
 import Boxplot from './Boxplot'
 import './BoxplotSegmentation.scss'
 
@@ -32,4 +32,4 @@ function BoxplotSegmentation(props) {
     )
 }
 
-export default BoxplotSegmentation
+export default memo(BoxplotSegmentation)

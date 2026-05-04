@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, memo } from 'react'
 import Boxplot from './Boxplot'
 import './BoxplotParcellation.scss'
 
@@ -44,7 +44,7 @@ function BoxplotParcellation(props) {
 
             <div className='options-row' style={{ marginTop: 12 }}>
                 <div className='select-group'>
-                    <label>Parcelamento</label>
+                    <label>Parcellation</label>
                     <select onChange={e => setMethodParcellation(e.target.value)}>
                         {["Witelson", "Hofer", "Chao", "Cover", "Freesurfer"].map(m => (
                             <option key={m} value={m}>{m}</option>
@@ -52,7 +52,7 @@ function BoxplotParcellation(props) {
                     </select>
                 </div>
                 <div className='select-group'>
-                    <label>Escalar</label>
+                    <label>Scalar</label>
                     <select onChange={e => setScalarParcellation(e.target.value)}>
                         {["FA", "RD", "AD", "MD"].map(s => (
                             <option key={s} value={s}>{s}</option>
@@ -64,4 +64,4 @@ function BoxplotParcellation(props) {
     )
 }
 
-export default BoxplotParcellation
+export default memo(BoxplotParcellation)

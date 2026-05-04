@@ -32,6 +32,7 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "server": "node server.js",
+    "start:prod": "NODE_ENV=production node server.js",
     "dev": "concurrently -k \"node server.js\" \"react-scripts start\""
   },
   "eslintConfig": {

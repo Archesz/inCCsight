@@ -14,27 +14,30 @@
 
 # misc
 .DS_Store
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# User subject data (mounted as Docker volume or local path)
+/subjects/
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# A pasta methods contém os métodos padrões da ferramenta.
+# Methods directory (analysis code — do not exclude)
 # /methods
 
-# Remover os ambientes virtuais (Futuramente corrigir)
+# Virtual environments
 /methods/CNNBased/venv
 /methods/roqs/venv
-
 /methods/venv
 
-# Dados gerados pelo pipeline (não versionar)
+# Pipeline-generated data (do not version)
 /methods/csvs/santarosa.csv
-/src/data/mydata.json
+/data/mydata.json
 /methods/csvs/cnn_based.csv
 /methods/csvs/CNN_parcellation_statistics.csv
 /methods/csvs/CNN_scalar_midlines.csv

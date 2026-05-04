@@ -88,6 +88,18 @@
     }
 }
 
+.ctrl-export {
+    border-color: #1e4d2f;
+    color: #4ade80;
+    letter-spacing: 0.2px;
+
+    &:hover {
+        background: rgba(74, 222, 128, 0.12);
+        border-color: #4ade80;
+        color: #86efac;
+    }
+}
+
 .ctrl-check {
     display: flex !important;
     flex-direction: row !important;

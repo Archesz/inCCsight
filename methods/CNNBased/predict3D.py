@@ -12,7 +12,7 @@ import pandas as pd
 import time
 
 def _build_parc_row(sub, parcellation_dict):
-    """Constrói a linha de parcellation para o sujeito no mesmo formato do ROQS."""
+    """Build a parcellation row for the subject in the same format as ROQS."""
     row = {'Name': sub}
     for method_p in ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']:
         for part in ['P1', 'P2', 'P3', 'P4', 'P5']:
@@ -54,11 +54,10 @@ def test_predict(model, data_paths):
 		for data_path in data_paths:
 			try:
 				start = time.time()
-				# Usa o nome da pasta diretamente para coincidir com o ROQS.
-				# 'Subject_' nao deve ser prefixado pois a pasta ja se chama 'Subject_XXXX'.
+				# Use the folder name directly to match the ROQS naming convention.
 				sub = os.path.basename(data_path)
 
-				print(f"executando sujeito {data_path}", flush=True)
+				print(f"[CNN] Processing subject: {data_path}", flush=True)
 
 				vol_path = os.path.join(data_path, vol_file)
 				vol_data = nib.load(vol_path).get_fdata().astype(np.float32)
@@ -180,7 +179,7 @@ def test_predict(model, data_paths):
 
 			except Exception as _e:
 				import traceback
-				print(f"\n[ERRO] Falha em {data_path}:")
+				print(f"\n[ERROR] Failed to process {data_path}:")
 				traceback.print_exc()
 				continue
 

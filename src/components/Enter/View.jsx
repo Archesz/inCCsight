@@ -4,12 +4,12 @@ import FolderSelector from '../FolderSelector/FolderSelector'
 import { TbPlus } from 'react-icons/tb'
 import Question from '../Question/Question'
 
-// Chama a API diretamente na porta do servidor Express,
-// sem passar pelo proxy do CRA (que pode bufferizar SSE).
+// Call the API directly on the Express server port,
+// bypassing the CRA proxy which may buffer SSE.
 const API = 'http://localhost:3001'
 
-// AbortSignal.timeout() não está disponível em Safari < 16.
-// Este helper cria um sinal de timeout compatível com todos os browsers.
+// AbortSignal.timeout() is not available in Safari < 16.
+// This helper creates a timeout signal compatible with all browsers.
 function abortAfter(ms) {
     const controller = new AbortController()
     const id = setTimeout(() => controller.abort(), ms)
@@ -17,21 +17,21 @@ function abortAfter(ms) {
     return controller.signal
 }
 
-// ── Métodos disponíveis no pipeline ───────────────────────────────────────
-// ROQS e Watershed compartilham o mesmo script (roqs/main.py); selecionar
-// qualquer um deles ativa o pipeline 2D completo.
+// ── Available pipeline methods ────────────────────────────────────────────────
+// ROQS and Watershed share the same script (roqs/main.py); selecting
+// either one activates the full 2D pipeline.
 const METHODS = [
-    { id: 'roqs',      label: 'ROQS (2D)',      desc: 'Segmentação ROQS 2D clássica' },
-    { id: 'watershed', label: 'Watershed (2D)', desc: 'Segmentação por watershed (roda junto com ROQS)' },
-    { id: 'cnn',       label: 'CNN (3D)',        desc: 'Segmentação volumétrica 3D (requer PyTorch)' },
+    { id: 'roqs',      label: 'ROQS (2D)',      desc: 'Classic 2D ROQS segmentation' },
+    { id: 'watershed', label: 'Watershed (2D)', desc: 'Watershed segmentation (runs together with ROQS)' },
+    { id: 'cnn',       label: 'CNN (3D)',        desc: 'Volumetric 3D segmentation (requires PyTorch)' },
 ]
 
 const questions = [
-    { question: 'Como inserir dados?',           response: 'Cole o caminho absoluto da pasta de cada grupo (ex: C:\\dados\\controle). Cada subpasta deve ser um sujeito com os arquivos DTI.' },
-    { question: 'Como adicionar mais grupos?',   response: 'Clique em "+ Adicionar grupo", dê um nome ao grupo e informe o caminho da pasta correspondente.' },
-    { question: 'Como comparar grupos?',         response: 'Após a análise, o dashboard exibe abas por grupo e uma aba "Comparar Grupos" com boxplots lado a lado.' },
-    { question: 'O que é ROQS e CNN?',           response: 'ROQS gera a segmentação 2D do corpo caloso. CNN gera a segmentação volumétrica 3D. "Todos" executa ambos.' },
-    { question: 'Quais arquivos são necessários?', response: 'Dados DTI no formato NIfTI (.nii / .nii.gz) com arquivos de autovetores/autovalores: dti_L1–3, dti_V1–3.' },
+    { question: 'How do I add data?',            response: 'Paste the absolute path to each group folder (e.g. C:\\data\\controls). Each sub-folder should be a subject containing DTI files.' },
+    { question: 'How do I add more groups?',     response: 'Click "+ Add group", give the group a name, and provide the corresponding folder path.' },
+    { question: 'How do I compare groups?',      response: 'After analysis, the dashboard shows per-group tabs and a "Compare Groups" tab with side-by-side boxplots.' },
+    { question: 'What are ROQS and CNN?',        response: 'ROQS produces 2D corpus callosum segmentation. CNN produces volumetric 3D segmentation. Selecting both runs the full pipeline.' },
+    { question: 'What files are required?',      response: 'DTI data in NIfTI format (.nii / .nii.gz) with eigenvector/eigenvalue files: dti_L1–3, dti_V1–3.' },
 ]
 
 let _nextId = 2
@@ -42,17 +42,22 @@ function View({ type }) {
     const [folderGroups, setFolderGroups] = useState([
         { id: 1, path: '', groupName: 'Group 1' }
     ])
-    // conjunto de métodos selecionados (multi-select)
+    // set of selected methods (multi-select)
     const [selectedMethods, setSelectedMethods] = useState(new Set(['roqs', 'watershed', 'cnn']))
     const [filter, setFilter] = useState('')
 
-    // ── Helpers de UI ──────────────────────────────────────────────────────
+    // ── DOM helpers ────────────────────────────────────────────────────────
 
     function showLoading() {
         const log    = document.querySelector('#pipeline-log')
         const screen = document.querySelector('#loading-screen')
         if (log)    log.textContent = ''
         if (screen) screen.style.display = 'flex'
+        // Reset progress bar
+        const fill  = document.querySelector('#progress-bar-fill')
+        const label = document.querySelector('#progress-label')
+        if (fill)  fill.style.width = '0%'
+        if (label) label.textContent = 'Starting…'
     }
 
     function hideLoading() {
@@ -69,6 +74,19 @@ function View({ type }) {
         if (log) { log.textContent += text; log.scrollTop = log.scrollHeight }
     }
 
+    function updateProgress(current, total, step) {
+        const fill  = document.querySelector('#progress-bar-fill')
+        const label = document.querySelector('#progress-label')
+        if (fill && total > 0) {
+            fill.style.width = `${Math.round((current / total) * 100)}%`
+        }
+        if (label) {
+            label.textContent = total > 0
+                ? `${step} (${current}/${total})`
+                : step
+        }
+    }
+
     // ── SSE streaming ──────────────────────────────────────────────────────
 
     async function streamPipeline(endpoint, body) {
@@ -82,7 +100,7 @@ function View({ type }) {
 
             if (!response.ok) {
                 const text = await response.text().catch(() => '')
-                throw new Error(`Servidor retornou ${response.status}.\n${text}`)
+                throw new Error(`Server returned ${response.status}.\n${text}`)
             }
 
             const reader  = response.body.getReader()
@@ -102,20 +120,30 @@ function View({ type }) {
                     if (!line.startsWith('data: ')) continue
                     try {
                         const msg = JSON.parse(line.slice(6))
-                        if (msg.text) appendLog(msg.text)
+                        if (msg.text) {
+                            // Parse PROGRESS:current:total:step_name lines
+                            const progMatch = msg.text.match(/PROGRESS:(\d+):(\d+):(.*)/)
+                            if (progMatch) {
+                                updateProgress(
+                                    parseInt(progMatch[1], 10),
+                                    parseInt(progMatch[2], 10),
+                                    progMatch[3].trim()
+                                )
+                            }
+                            appendLog(msg.text)
+                        }
                         if (msg.done && !navigated) {
                             navigated = true
                             if (msg.code === 0) {
                                 navigate('/Home')
                             } else {
-                                // Mantém o log visível para o usuário ler o erro
-                                appendLog('\n✖ Pipeline encerrou com erros. Verifique o log acima.\n')
+                                appendLog('\n✖ Pipeline finished with errors. Check the log above.\n')
                                 const screen = document.querySelector('#loading-screen')
                                 if (screen && !screen.querySelector('#close-pipeline-btn')) {
                                     const btn = document.createElement('button')
-                                    btn.id        = 'close-pipeline-btn'
-                                    btn.textContent = 'Fechar'
-                                    btn.onclick   = hideLoading
+                                    btn.id          = 'close-pipeline-btn'
+                                    btn.textContent = 'Close'
+                                    btn.onclick     = hideLoading
                                     screen.appendChild(btn)
                                 }
                             }
@@ -125,11 +153,11 @@ function View({ type }) {
             }
         } catch (err) {
             hideLoading()
-            alert(`Erro ao conectar com o servidor:\n${err.message}`)
+            alert(`Could not connect to server:\n${err.message}`)
         }
     }
 
-    // ── Gerenciamento de grupos ─────────────────────────────────────────────
+    // ── Group management ───────────────────────────────────────────────────
 
     function updateGroup(id, updates) {
         setFolderGroups(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g))
@@ -144,28 +172,28 @@ function View({ type }) {
         setFolderGroups(prev => prev.filter(g => g.id !== id))
     }
 
-    // ── Ações do pipeline ───────────────────────────────────────────────────
+    // ── Pipeline actions ───────────────────────────────────────────────────
 
     async function startAnalyzes() {
         const valid = folderGroups.filter(g => g.path.trim())
         if (valid.length === 0) {
-            alert('Informe pelo menos um caminho de pasta antes de executar a análise.')
+            alert('Enter at least one folder path before running the analysis.')
             return
         }
 
-        // 1. Verifica se o servidor Express está rodando
+        // 1. Check that the Express server is running
         try {
             const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
             if (!ping.ok) throw new Error()
         } catch {
             alert(
-                'Servidor não encontrado na porta 3001.\n\n' +
-                'Certifique-se de que está rodando com:\n  npm run dev\nou:\n  npm run server'
+                'Server not found on port 3001.\n\n' +
+                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
             )
             return
         }
 
-        // 2. Verifica se os caminhos existem no disco
+        // 2. Verify that the paths exist on disk
         const paths = valid.map(g => g.path.trim())
         try {
             const checkRes = await fetch(`${API}/api/check-paths`, {
@@ -177,19 +205,19 @@ function View({ type }) {
             const missing = checks.filter(c => !c.exists).map(c => c.path)
             if (missing.length > 0) {
                 alert(
-                    `As seguintes pastas não foram encontradas no disco:\n\n${missing.join('\n')}\n\n` +
-                    'Verifique se o caminho está correto e se a pasta existe.'
+                    `The following folders were not found on disk:\n\n${missing.join('\n')}\n\n` +
+                    'Check that the path is correct and the folder exists.'
                 )
                 return
             }
         } catch {
-            // Se a verificação falhar, prossegue (não bloqueia)
+            // If check fails, continue anyway (non-blocking)
         }
 
         const groupsMap = {}
         valid.forEach(g => { groupsMap[g.path.trim()] = g.groupName.trim() || `Group ${g.id}` })
 
-        // ROQS e Watershed usam o mesmo script; basta um deles para rodar o pipeline 2D
+        // ROQS and Watershed use the same script; either one enables the 2D pipeline
         const skipRoqs = !selectedMethods.has('roqs') && !selectedMethods.has('watershed')
         const skipCnn  = !selectedMethods.has('cnn')
 
@@ -197,14 +225,13 @@ function View({ type }) {
     }
 
     async function loadLast() {
-        // Verifica servidor antes de tentar carregar
         try {
             const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
             if (!ping.ok) throw new Error()
         } catch {
             alert(
-                'Servidor não encontrado na porta 3001.\n\n' +
-                'Certifique-se de que está rodando com:\n  npm run dev\nou:\n  npm run server'
+                'Server not found on port 3001.\n\n' +
+                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
             )
             return
         }
@@ -216,9 +243,9 @@ function View({ type }) {
     if (type === 'Input') {
         return (
             <>
-                <span className='enter-name'>Selecione as pastas a analisar — uma por grupo.</span>
+                <span className='enter-name'>Select the folders to analyse — one per group.</span>
 
-                {/* Lista de grupos */}
+                {/* Group list */}
                 <div className='folders-inputs'>
                     {folderGroups.map((g, idx) => (
                         <FolderSelector
@@ -234,13 +261,13 @@ function View({ type }) {
 
                     <button className='add-btn' onClick={addGroup}>
                         <TbPlus className='add-icon' />
-                        <span>Adicionar grupo</span>
+                        <span>Add group</span>
                     </button>
                 </div>
 
-                {/* Seletor de métodos — multi-select */}
+                {/* Method selector — multi-select */}
                 <div className='method-selector'>
-                    <span className='method-label'>Métodos de segmentação</span>
+                    <span className='method-label'>Segmentation methods</span>
                     <div className='method-pills'>
                         {METHODS.map(m => {
                             const checked = selectedMethods.has(m.id)
@@ -269,18 +296,18 @@ function View({ type }) {
                     </div>
                 </div>
 
-                {/* Botões de ação */}
+                {/* Action buttons */}
                 <div className='row-btns'>
                     <div className='secondary-btns'>
                         <div className='btn-history' onClick={loadLast}>
-                            <span>Última análise</span>
+                            <span>Last analysis</span>
                         </div>
                         <div className='btn-demo' onClick={() => navigate('/Home')}>
-                            <span>Dados de teste</span>
+                            <span>Demo data</span>
                         </div>
                     </div>
                     <button className='btn-start' onClick={startAnalyzes}>
-                        Executar análise
+                        Run analysis
                     </button>
                 </div>
             </>
@@ -295,10 +322,10 @@ function View({ type }) {
         return (
             <div className='enter-question'>
                 <div className='search-field'>
-                    <span className='enter-name'>Perguntas frequentes sobre a ferramenta.</span>
+                    <span className='enter-name'>Frequently asked questions about the tool.</span>
                     <input
                         className='search-input'
-                        placeholder='Pesquisar dúvidas...'
+                        placeholder='Search questions...'
                         value={filter}
                         onChange={e => setFilter(e.target.value)}
                     />
@@ -312,7 +339,7 @@ function View({ type }) {
         )
     }
 
-    return <div className='news-container'><span>Em breve</span></div>
+    return <div className='news-container'><span>Coming soon</span></div>
 }
 
 export default View

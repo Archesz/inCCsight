@@ -20,7 +20,7 @@ const SEG_KEYS  = [
     { key: 'CNN_scalar',       label: 'CNN'        },
 ]
 
-// ── Utilitários ────────────────────────────────────────────────────────────────
+// ── Utilities ─────────────────────────────────────────────────────────────────
 function dirname(p) {
     return p.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
 }
@@ -38,7 +38,7 @@ function fmt(v, decimals = 6) {
     return Number(v).toFixed(decimals)
 }
 
-// ── Utilitário: caminho da imagem por método ──────────────────────────────────
+// ── Image path per method ─────────────────────────────────────────────────────
 function imgPathForMethod(subject, method) {
     if (!subject.img_path) return null
     const dir = dirname(subject.img_path)
@@ -51,7 +51,7 @@ function imgPathForMethod(subject, method) {
 const PARC_METHODS = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
 const PARC_PARTS   = ['P1', 'P2', 'P3', 'P4', 'P5']
 
-// ── Banner do sujeito selecionado ──────────────────────────────────────────────
+// ── Subject banner ────────────────────────────────────────────────────────────
 function SubjectBanner({ subject, onDeselect }) {
     const [imgMethod,  setImgMethod]  = useState('ROQS')
     const [imgErrors,  setImgErrors]  = useState({})
@@ -73,7 +73,7 @@ function SubjectBanner({ subject, onDeselect }) {
     return (
         <div className='subject-banner'>
 
-            {/* ── Painel esquerdo: imagem + abas de método ──────────────── */}
+            {/* ── Left panel: image + method tabs ──────────────────────── */}
             <div className='sb-left'>
                 <div className='sb-img-tabs'>
                     {['ROQS', 'Watershed', 'CNN'].map(m => (
@@ -91,31 +91,31 @@ function SubjectBanner({ subject, onDeselect }) {
                     {imgPath && !imgFailed
                         ? <img
                             src={`${API}/api/file?path=${encodeURIComponent(imgPath)}`}
-                            alt={`Segmentação ${imgMethod}`}
+                            alt={`${imgMethod} segmentation`}
                             onError={() => setImgErrors(prev => ({ ...prev, [imgMethod]: true }))}
                           />
                         : <span className='sb-no-img'>
-                            {imgMethod === 'CNN' ? 'CNN: sem imagem 2D' : 'Imagem não disponível'}
+                            {imgMethod === 'CNN' ? 'CNN: no 2D image' : 'Image not available'}
                           </span>
                     }
                 </div>
             </div>
 
-            {/* ── Painel direito: dados ─────────────────────────────────── */}
+            {/* ── Right panel: data ──────────────────────────────────── */}
             <div className='sb-info'>
 
-                {/* Cabeçalho */}
+                {/* Header */}
                 <div className='sb-header'>
-                    <span className='sb-id'>Sujeito {subject['Id']}</span>
+                    <span className='sb-id'>Subject {subject['Id']}</span>
                     {subject.group && <span className='sb-group'>{subject.group}</span>}
-                    <button className='sb-close' onClick={onDeselect} title='Voltar para todos'>×</button>
+                    <button className='sb-close' onClick={onDeselect} title='Back to all'>×</button>
                 </div>
 
                 {subjectPath && (
                     <div className='sb-path' title={subjectPath}>{subjectPath}</div>
                 )}
 
-                {/* QC — só exibe quando há dado real */}
+                {/* QC — only shown when real data is present */}
                 {(qc.ROQS?.flag != null || qc.Watershed?.flag != null) && (
                     <div className='sb-qc-row'>
                         {[
@@ -138,12 +138,12 @@ function SubjectBanner({ subject, onDeselect }) {
                     </div>
                 )}
 
-                {/* Escalares + Parcelamento lado a lado */}
+                {/* Scalars + Parcellation side by side */}
                 <div className='sb-row'>
 
-                    {/* Escalares */}
+                    {/* Scalars */}
                     <div className='sb-section'>
-                        <span className='sb-section-title'>Escalares</span>
+                        <span className='sb-section-title'>Scalars</span>
                         <table className='sb-table'>
                             <thead>
                                 <tr>
@@ -166,15 +166,15 @@ function SubjectBanner({ subject, onDeselect }) {
                         </table>
                     </div>
 
-                    {/* Parcelamento */}
+                    {/* Parcellation */}
                     <div className='sb-section'>
                         <div className='sb-section-header'>
-                            <span className='sb-section-title'>Parcelamento</span>
+                            <span className='sb-section-title'>Parcellation</span>
                             <div className='sb-parc-selects'>
                                 <select
                                     value={parcMethod}
                                     onChange={e => setParcMethod(e.target.value)}
-                                    title='Método de parcelamento'
+                                    title='Parcellation method'
                                 >
                                     {PARC_METHODS.map(m => (
                                         <option key={m} value={m}>{m}</option>
@@ -183,7 +183,7 @@ function SubjectBanner({ subject, onDeselect }) {
                                 <select
                                     value={parcScalar}
                                     onChange={e => setParcScalar(e.target.value)}
-                                    title='Escalar'
+                                    title='Scalar'
                                 >
                                     {SCALARS.map(s => (
                                         <option key={s} value={s}>{s}</option>
@@ -220,7 +220,7 @@ function SubjectBanner({ subject, onDeselect }) {
     )
 }
 
-// ── KPI cards de visão geral ───────────────────────────────────────────────────
+// ── KPI overview cards ────────────────────────────────────────────────────────
 function KPIRow({ data, method }) {
     const COLORS = {
         FA: '#4C6EF5', MD: '#00C896', RD: '#EF553B', AD: '#AB63FA',
@@ -232,10 +232,10 @@ function KPIRow({ data, method }) {
                 const val = meanOf(data, method, sc)
                 return (
                     <div key={sc} className='kpi-card' style={{ borderTopColor: COLORS[sc] }}>
-                        <span className='kpi-label'>{sc} — Média</span>
+                        <span className='kpi-label'>{sc} — Mean</span>
                         <span className='kpi-value'>{fmt(val, 6)}</span>
                         <span className='kpi-sub'>
-                            {data.length} sujeito{data.length !== 1 ? 's' : ''}
+                            {data.length} subject{data.length !== 1 ? 's' : ''}
                             {' · '}
                             {SEG_KEYS.find(m => m.key === method)?.label}
                         </span>
@@ -246,7 +246,7 @@ function KPIRow({ data, method }) {
     )
 }
 
-// ── Verifica sujeitos CNN disponíveis ──────────────────────────────────────────
+// ── Check for available CNN subjects ─────────────────────────────────────────
 function useCNNSubjects(data) {
     const [cnnSubjects, setCnnSubjects] = useState([])
     useEffect(() => {
@@ -270,7 +270,7 @@ function useCNNSubjects(data) {
     return cnnSubjects
 }
 
-// ── Card wrapper com título ────────────────────────────────────────────────────
+// ── Card wrapper with title ───────────────────────────────────────────────────
 function Card({ title, controls, children }) {
     return (
         <div className='dash-card'>
@@ -283,7 +283,7 @@ function Card({ title, controls, children }) {
     )
 }
 
-// ── Componente principal ───────────────────────────────────────────────────────
+// ── Main view component ───────────────────────────────────────────────────────
 function View({ view, data, selectedId, onDeselect }) {
     const [kpiMethod,       setKpiMethod]       = useState('ROQS_scalar')
     const [selectedCNNIdx,  setSelectedCNNIdx]  = useState(0)
@@ -293,13 +293,13 @@ function View({ view, data, selectedId, onDeselect }) {
         return (
             <div className='view-wrap'>
                 <div style={{ textAlign: 'center', padding: '60px 20px', color: '#7a849e', fontSize: '15px' }}>
-                    Nenhum sujeito para exibir.
+                    No subjects to display.
                 </div>
             </div>
         )
     }
 
-    // ── Vista 2D ──────────────────────────────────────────────────────────────
+    // ── 2D View ───────────────────────────────────────────────────────────
     if (view === '2D') {
         const selectedSubject = selectedId ? data.find(s => s['Id'] === selectedId) || data[0] : null
 
@@ -329,40 +329,40 @@ function View({ view, data, selectedId, onDeselect }) {
                 )}
 
                 {/* KPI Overview */}
-                <Card title='Visão Geral — Médias por Escalar' controls={methodControls}>
+                <Card title='Overview — Mean per Scalar' controls={methodControls}>
                     <KPIRow data={data} method={kpiMethod} />
                 </Card>
 
-                {/* Tabelas de dados */}
-                <Card title='Tabela de Segmentação'>
+                {/* Data tables */}
+                <Card title='Segmentation Table'>
                     <TableSegmentation data={data} type='2D' />
                 </Card>
 
-                <Card title='Tabela de Parcelamento'>
+                <Card title='Parcellation Table'>
                     <TableParcellation data={data} type='2D' />
                 </Card>
 
                 {/* Midline Profile */}
-                <Card title='Perfil Midline ao Longo do Corpo Caloso'>
+                <Card title='Midline Profile Along the Corpus Callosum'>
                     <Midline data={data} />
                 </Card>
 
-                {/* Distribuições — boxplots */}
-                <Card title='Distribuições — Escalares por Método de Segmentação'>
+                {/* Distribution boxplots */}
+                <Card title='Distributions — Scalars by Segmentation Method'>
                     <BoxplotSegmentation data={data} />
                 </Card>
 
-                <Card title='Distribuições — Parcelamento por Parte'>
+                <Card title='Distributions — Parcellation by Part'>
                     <BoxplotParcellation data={data} />
                 </Card>
 
                 {/* Parcellation Radar */}
-                <Card title='Análise de Parcelamento — Radar'>
+                <Card title='Parcellation Analysis — Radar'>
                     <Radar data={data} />
                 </Card>
 
                 {/* Scatter Correlation */}
-                <Card title='Correlação entre Escalares'>
+                <Card title='Scalar Correlation'>
                     <Scatter data={data} />
                 </Card>
 
@@ -370,31 +370,31 @@ function View({ view, data, selectedId, onDeselect }) {
         )
     }
 
-    // ── Vista 3D ──────────────────────────────────────────────────────────────
+    // ── 3D View ───────────────────────────────────────────────────────────
     if (view === '3D') {
         const selectedCNN = cnnSubjects[selectedCNNIdx] || null
 
         return (
             <div className='view-wrap'>
 
-                {/* Tabelas CNN */}
-                <Card title='Tabela de Segmentação — CNN-Based'>
+                {/* CNN tables */}
+                <Card title='Segmentation Table — CNN-Based'>
                     <TableSegmentation data={data} type='3D' />
                 </Card>
 
-                <Card title='Tabela de Parcelamento — CNN-Based'>
+                <Card title='Parcellation Table — CNN-Based'>
                     <TableParcellation data={data} type='3D' />
                 </Card>
 
-                {/* Visualizador volumétrico */}
-                <Card title='Visualizador Volumétrico 3D'>
+                {/* Volumetric viewer */}
+                <Card title='3D Volumetric Viewer'>
                     <div className='area-volumetric'>
                         <div className='cnn-subject-list'>
-                            <span className='cnn-list-title'>Sujeitos com CNN</span>
+                            <span className='cnn-list-title'>CNN Subjects</span>
                             {cnnSubjects.length === 0 ? (
                                 <span className='cnn-empty'>
-                                    Nenhum dado CNN encontrado.<br />
-                                    Execute o pipeline CNN primeiro.
+                                    No CNN data found.<br />
+                                    Run the CNN pipeline first.
                                 </span>
                             ) : (
                                 cnnSubjects.map((s, i) => (
@@ -412,7 +412,7 @@ function View({ view, data, selectedId, onDeselect }) {
                             {selectedCNN
                                 ? <VolumetricView filePath={selectedCNN.cnnPath} />
                                 : <div className='cnn-no-subject'>
-                                    <span>Selecione um sujeito na lista para visualizar o corpo caloso em 3D.</span>
+                                    <span>Select a subject from the list to visualise the corpus callosum in 3D.</span>
                                   </div>
                             }
                         </div>

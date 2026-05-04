@@ -1,0 +1,50 @@
+# docker-compose.yml — inCCsight (CPU, default)
+#
+# Usage:
+#   docker compose up               # start (builds image on first run)
+#   docker compose up --build       # force rebuild
+#   docker compose down             # stop and remove containers
+#   docker compose logs -f          # follow logs
+#
+# For GPU support:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+#
+# Data volumes:
+#   ./data            Pipeline output (mydata.json, etc.)
+#   ./methods/csvs    Intermediate CSV files
+#   ./subjects        Your DTI subject folders (see .env.example)
+#
+# Inside the container, paths look like:
+#   /mnt/subjects/subject001    maps to  <SUBJECTS_DIR>/subject001
+
+services:
+  inccsight:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cpu
+    image: inccsight:latest
+    container_name: inccsight
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    volumes:
+      # Pipeline output — persisted on host
+      - ./data:/app/data
+      - ./methods/csvs:/app/methods/csvs
+      # Model checkpoint — keeps download across rebuilds
+      - ./methods/CNNBased/peso:/app/methods/CNNBased/peso
+      # User's DTI subject data (configure SUBJECTS_DIR in .env)
+      - ${SUBJECTS_DIR:-./subjects}:/mnt/subjects:ro
+    environment:
+      - NODE_ENV=production
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+      - INCCSIGHT_MODEL_URL=${INCCSIGHT_MODEL_URL:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
