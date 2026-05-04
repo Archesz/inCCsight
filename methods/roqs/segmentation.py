@@ -447,6 +447,32 @@ def get_segm(data_paths):
                 canvas_w = np.zeros(wFA_v.shape, dtype='int32')
                 canvas_w[fissure, :, :] = segm_w
                 save.save_nii(data_path, 'segm_watershed', canvas_w, affine)
+
+                # ── PNG midsagital Watershed ─────────────────────────────────
+                try:
+                    from skimage import measure as sk_measure
+                    PANEL_BG = '#1F2C56'
+                    fig_w, ax_w = plt.subplots(figsize=(5, 3.5), dpi=100, facecolor=PANEL_BG)
+                    ax_w.set_facecolor('#0d0d0d')
+                    im_w = ax_w.imshow(FA, cmap='gray', vmin=0, vmax=1)
+                    cbar_w = plt.colorbar(im_w, ax=ax_w)
+                    cbar_w.ax.tick_params(colors='white', labelsize=8)
+                    cbar_w.outline.set_edgecolor('#aaaaaa')
+                    plt.setp(cbar_w.ax.yaxis.get_ticklabels(), color='white')
+                    for c in sk_measure.find_contours(segm_w.astype(float), 0.5):
+                        ax_w.plot(c[:, 1], c[:, 0], color='#FF9900', linewidth=1.5)
+                    ax_w.set_xticks([]); ax_w.set_yticks([])
+                    for sp in ax_w.spines.values():
+                        sp.set_visible(False)
+                    fig_w.tight_layout()
+                    out_dir_w = os.path.join(data_path, 'inCCsight')
+                    os.makedirs(out_dir_w, exist_ok=True)
+                    fig_w.savefig(os.path.join(out_dir_w, 'midsagittal_watershed.png'),
+                                  bbox_inches='tight', dpi=100, facecolor=PANEL_BG)
+                    plt.close(fig_w)
+                except Exception:
+                    plt.close('all')
+
                 print(f"  → Watershed concluído", flush=True)
 
                 # ── Watershed Quality Check ──────────────────────────────────
@@ -476,7 +502,7 @@ def get_segm(data_paths):
                 w_midlinesList.append(roqs_midlines)
                 w_thicknessList.append(thickness_200)
                 w_parcellationStatsList.append(parc_row)
-                qc_water_flags.append(None)
+                qc_water_flags.append(True)   # marca FAIL: Watershed não convergiu
                 qc_water_probs.append(None)
 
             sub_data = {

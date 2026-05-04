@@ -9,7 +9,10 @@ const COLORS = {
 }
 
 function getAllPoints(data, method, scalar) {
-    return data.map(subject => subject[method][scalar])
+    return data.map(subject => {
+        const v = subject[method]?.[scalar]
+        return (v != null && !isNaN(Number(v))) ? Number(v) : null
+    })
 }
 
 function linearRegression(x, y) {
@@ -52,8 +55,8 @@ function Scatter(props) {
     const yWatershed = getAllPoints(props.data, "Watershed_scalar", scalarY)
     const xROQS = getAllPoints(props.data, "ROQS_scalar", scalarX)
     const yROQS = getAllPoints(props.data, "ROQS_scalar", scalarY)
-    const xCNN = getAllPoints(props.data, "santarosa_scalars", scalarX)
-    const yCNN = getAllPoints(props.data, "santarosa_scalars", scalarY)
+    const xCNN = getAllPoints(props.data, "CNN_scalar", scalarX)
+    const yCNN = getAllPoints(props.data, "CNN_scalar", scalarY)
 
     const scatterData = [
         {
@@ -140,11 +143,17 @@ function Scatter(props) {
                 <div className='scatter-col'>
                     <Plot
                         data={histogramData}
-                        layout={{ barmode: "overlay", width: 800, height: 280, margin: { t: 30, b: 0 }, title: `Scalar: ${scalarX}` }}
+                        layout={{ barmode: "overlay", height: 280, margin: { t: 30, b: 0 }, title: `Scalar: ${scalarX}`, autosize: true }}
+                        config={{ responsive: true }}
+                        style={{ width: '100%' }}
+                        useResizeHandler
                     />
                     <Plot
                         data={histogramDataY}
-                        layout={{ barmode: "overlay", width: 800, height: 280, margin: { t: 30, b: 0 }, title: `Scalar: ${scalarY}` }}
+                        layout={{ barmode: "overlay", height: 280, margin: { t: 30, b: 0 }, title: `Scalar: ${scalarY}`, autosize: true }}
+                        config={{ responsive: true }}
+                        style={{ width: '100%' }}
+                        useResizeHandler
                     />
                 </div>
             </div>

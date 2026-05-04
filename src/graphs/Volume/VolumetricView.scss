@@ -4,6 +4,14 @@
     width: 100%;
 }
 
+.volumetric-canvas {
+    width: 100%;
+    height: 520px;
+    display: block;
+    border-radius: 10px;
+    background: #12192e;
+}
+
 /* ── Painel de controles ─────────────────────────────────────────────────── */
 .volumetric-controls {
     display: flex;
@@ -14,6 +22,11 @@
     background: #1a2340;
     border-radius: 12px;
     align-items: flex-end;
+
+    .ctrl-group--right {
+        margin-left: auto;
+        align-items: flex-end;
+    }
 }
 
 .ctrl-group {
@@ -60,6 +73,18 @@
         background: #4C6EF5;
         border-color: #4C6EF5;
         color: white;
+    }
+}
+
+.ctrl-reset {
+    border-color: #334155;
+    color: #94a3b8;
+    letter-spacing: 0.2px;
+
+    &:hover {
+        background: rgba(76, 110, 245, 0.12);
+        border-color: #4C6EF5;
+        color: #7aa3f0;
     }
 }
 

@@ -114,6 +114,34 @@ def test_predict(model, data_paths):
 				dipy.io.peaks.save_nifti(os.path.join(data_path, "inCCsight/cnnBased_midsagittal.nii.gz"), midvolume, T3, hdr = None)
 				dipy.io.peaks.save_nifti(os.path.join(data_path, "inCCsight/cnnBased_FA_V2.nii.gz"), FA_v, T3, hdr = None )
 
+				# ── PNG midsagital CNN ───────────────────────────────────────
+				try:
+					import matplotlib
+					matplotlib.use('Agg')
+					import matplotlib.pyplot as plt
+					from skimage import measure as sk_measure
+					PANEL_BG = '#1F2C56'
+					fig_c, ax_c = plt.subplots(figsize=(5, 3.5), dpi=100, facecolor=PANEL_BG)
+					ax_c.set_facecolor('#0d0d0d')
+					im_c = ax_c.imshow(FA, cmap='gray', vmin=0, vmax=1)
+					cbar_c = plt.colorbar(im_c, ax=ax_c)
+					cbar_c.ax.tick_params(colors='white', labelsize=8)
+					cbar_c.outline.set_edgecolor('#aaaaaa')
+					plt.setp(cbar_c.ax.yaxis.get_ticklabels(), color='white')
+					for c in sk_measure.find_contours(midsagittal.astype(float), 0.5):
+						ax_c.plot(c[:, 1], c[:, 0], color='#00C896', linewidth=1.5)
+					ax_c.set_xticks([]); ax_c.set_yticks([])
+					for sp in ax_c.spines.values():
+						sp.set_visible(False)
+					fig_c.tight_layout()
+					os.makedirs(os.path.join(data_path, 'inCCsight'), exist_ok=True)
+					fig_c.savefig(os.path.join(data_path, 'inCCsight', 'cnnBased_midsagittal.png'),
+								  bbox_inches='tight', dpi=100, facecolor=PANEL_BG)
+					plt.close(fig_c)
+				except Exception:
+					try: plt.close('all')
+					except: pass
+
 				scalar_statistics = gets.getScalars(midsagittal, FA, MD, RD, AD)
 
 				try:

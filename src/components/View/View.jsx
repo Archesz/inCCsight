@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import Plot from 'react-plotly.js'
 
-/* Componentes */
 import TableSegmentation  from '../../graphs/Table/TableSegmentation'
 import TableParcellation  from '../../graphs/Table/TableParcellation'
 import BoxplotSegmentation from '../../graphs/Boxplot/BoxplotSegmentation'
@@ -11,54 +9,257 @@ import Midline            from '../../graphs/Line/Midline'
 import VolumetricView     from '../../graphs/Volume/VolumetricView'
 import Radar              from '../../graphs/Radar/Radar'
 
-/* Ícones */
-import { AiOutlineClose } from 'react-icons/ai'
-
 import '../../styles/home.scss'
-
-// ── Utilitário: resolve o diretório de um caminho (sem path.dirname) ───────
-function dirname(filePath) {
-    const normalized = filePath.replace(/\\/g, '/')
-    const parts = normalized.split('/')
-    parts.pop()
-    return parts.join('/')
-}
 
 const API = 'http://localhost:3001'
 
-// ── Componente de imagem de segmentação ────────────────────────────────────
-function SegmentationPlot({ imgPath }) {
-    if (!imgPath) return <span className='msg-image'>Imagem não disponível</span>
+const SCALARS   = ['FA', 'MD', 'RD', 'AD']
+const SEG_KEYS  = [
+    { key: 'ROQS_scalar',      label: 'ROQS'      },
+    { key: 'Watershed_scalar', label: 'Watershed'  },
+    { key: 'CNN_scalar',       label: 'CNN'        },
+]
 
-    // Serve a imagem via API local (evita CORS e leitura direta de disco)
-    const src = `${API}/api/file?path=${encodeURIComponent(imgPath)}`
+// ── Utilitários ────────────────────────────────────────────────────────────────
+function dirname(p) {
+    return p.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
+}
+
+function meanOf(data, methodKey, scalar) {
+    const vals = data
+        .map(s => s[methodKey]?.[scalar])
+        .filter(v => v != null && !isNaN(Number(v)))
+    if (!vals.length) return null
+    return vals.reduce((a, b) => a + Number(b), 0) / vals.length
+}
+
+function fmt(v, decimals = 6) {
+    if (v == null) return '—'
+    return Number(v).toFixed(decimals)
+}
+
+// ── Utilitário: caminho da imagem por método ──────────────────────────────────
+function imgPathForMethod(subject, method) {
+    if (!subject.img_path) return null
+    const dir = dirname(subject.img_path)
+    if (method === 'ROQS')      return subject.img_path
+    if (method === 'Watershed') return dir + '/midsagittal_watershed.png'
+    if (method === 'CNN')       return dir + '/cnnBased_midsagittal.png'
+    return subject.img_path
+}
+
+const PARC_METHODS = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
+const PARC_PARTS   = ['P1', 'P2', 'P3', 'P4', 'P5']
+
+// ── Banner do sujeito selecionado ──────────────────────────────────────────────
+function SubjectBanner({ subject, onDeselect }) {
+    const [imgMethod,  setImgMethod]  = useState('ROQS')
+    const [imgErrors,  setImgErrors]  = useState({})
+    const [parcMethod, setParcMethod] = useState('Witelson')
+    const [parcScalar, setParcScalar] = useState('FA')
+
+    const qc      = subject.qc || {}
+    const hasCNN  = Object.keys(subject.CNN_scalar  || {}).length > 0
+    const hasCNNP = Object.keys(subject.CNN_parcellation || {}).length > 0
+
+    const imgPath   = imgPathForMethod(subject, imgMethod)
+    const imgFailed = imgErrors[imgMethod]
+
+    const subjectPath = subject.img_path ? dirname(dirname(subject.img_path)) : null
+
+    // Build parcellation key: e.g. "Witelson_FA_P1"
+    const parcKey = (part) => `${parcMethod}_${parcScalar}_${part}`
 
     return (
-        <img
-            src={src}
-            alt='Segmentação midsagital'
-            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-            onError={e => { e.target.style.display = 'none' }}
-        />
+        <div className='subject-banner'>
+
+            {/* ── Painel esquerdo: imagem + abas de método ──────────────── */}
+            <div className='sb-left'>
+                <div className='sb-img-tabs'>
+                    {['ROQS', 'Watershed', 'CNN'].map(m => (
+                        <button
+                            key={m}
+                            className={`sb-img-tab${imgMethod === m ? ' active' : ''}`}
+                            onClick={() => setImgMethod(m)}
+                        >
+                            {m}
+                        </button>
+                    ))}
+                </div>
+
+                <div className='sb-image'>
+                    {imgPath && !imgFailed
+                        ? <img
+                            src={`${API}/api/file?path=${encodeURIComponent(imgPath)}`}
+                            alt={`Segmentação ${imgMethod}`}
+                            onError={() => setImgErrors(prev => ({ ...prev, [imgMethod]: true }))}
+                          />
+                        : <span className='sb-no-img'>
+                            {imgMethod === 'CNN' ? 'CNN: sem imagem 2D' : 'Imagem não disponível'}
+                          </span>
+                    }
+                </div>
+            </div>
+
+            {/* ── Painel direito: dados ─────────────────────────────────── */}
+            <div className='sb-info'>
+
+                {/* Cabeçalho */}
+                <div className='sb-header'>
+                    <span className='sb-id'>Sujeito {subject['Id']}</span>
+                    {subject.group && <span className='sb-group'>{subject.group}</span>}
+                    <button className='sb-close' onClick={onDeselect} title='Voltar para todos'>×</button>
+                </div>
+
+                {subjectPath && (
+                    <div className='sb-path' title={subjectPath}>{subjectPath}</div>
+                )}
+
+                {/* QC — só exibe quando há dado real */}
+                {(qc.ROQS?.flag != null || qc.Watershed?.flag != null) && (
+                    <div className='sb-qc-row'>
+                        {[
+                            { method: 'ROQS',      q: qc.ROQS      },
+                            { method: 'Watershed', q: qc.Watershed },
+                        ].map(({ method, q }) => {
+                            if (!q || q.flag == null) return null
+                            const cls   = q.flag === true ? 'fail' : 'pass'
+                            const label = q.flag === true ? 'FAIL' : 'PASS'
+                            return (
+                                <div key={method} className='sb-qc-item'>
+                                    <span className='sqc-method'>{method}</span>
+                                    <span className={`sqc-badge ${cls}`}>{label}</span>
+                                    {q.prob != null && (
+                                        <span className='sqc-prob'>{(q.prob * 100).toFixed(1)}%</span>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+
+                {/* Escalares + Parcelamento lado a lado */}
+                <div className='sb-row'>
+
+                    {/* Escalares */}
+                    <div className='sb-section'>
+                        <span className='sb-section-title'>Escalares</span>
+                        <table className='sb-table'>
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>ROQS</th>
+                                    <th>Watershed</th>
+                                    {hasCNN && <th>CNN</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {SCALARS.map(sc => (
+                                    <tr key={sc}>
+                                        <td className='sbt-label'>{sc}</td>
+                                        <td>{fmt(subject.ROQS_scalar?.[sc], 4)}</td>
+                                        <td>{fmt(subject.Watershed_scalar?.[sc], 4)}</td>
+                                        {hasCNN && <td>{fmt(subject.CNN_scalar?.[sc], 4)}</td>}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Parcelamento */}
+                    <div className='sb-section'>
+                        <div className='sb-section-header'>
+                            <span className='sb-section-title'>Parcelamento</span>
+                            <div className='sb-parc-selects'>
+                                <select
+                                    value={parcMethod}
+                                    onChange={e => setParcMethod(e.target.value)}
+                                    title='Método de parcelamento'
+                                >
+                                    {PARC_METHODS.map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={parcScalar}
+                                    onChange={e => setParcScalar(e.target.value)}
+                                    title='Escalar'
+                                >
+                                    {SCALARS.map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <table className='sb-table'>
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>ROQS</th>
+                                    <th>Watershed</th>
+                                    {hasCNNP && <th>CNN</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {PARC_PARTS.map(part => (
+                                    <tr key={part}>
+                                        <td className='sbt-label'>{part}</td>
+                                        <td>{fmt(subject.ROQS_parcellation?.[parcKey(part)], 4)}</td>
+                                        <td>{fmt(subject.Watershed_parcellation?.[parcKey(part)], 4)}</td>
+                                        {hasCNNP && <td>{fmt(subject.CNN_parcellation?.[parcKey(part)], 4)}</td>}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
     )
 }
 
-// ── Verifica sujeitos CNN disponíveis via API ──────────────────────────────
+// ── KPI cards de visão geral ───────────────────────────────────────────────────
+function KPIRow({ data, method }) {
+    const COLORS = {
+        FA: '#4C6EF5', MD: '#00C896', RD: '#EF553B', AD: '#AB63FA',
+    }
+
+    return (
+        <div className='kpi-row'>
+            {SCALARS.map(sc => {
+                const val = meanOf(data, method, sc)
+                return (
+                    <div key={sc} className='kpi-card' style={{ borderTopColor: COLORS[sc] }}>
+                        <span className='kpi-label'>{sc} — Média</span>
+                        <span className='kpi-value'>{fmt(val, 6)}</span>
+                        <span className='kpi-sub'>
+                            {data.length} sujeito{data.length !== 1 ? 's' : ''}
+                            {' · '}
+                            {SEG_KEYS.find(m => m.key === method)?.label}
+                        </span>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
+// ── Verifica sujeitos CNN disponíveis ──────────────────────────────────────────
 function useCNNSubjects(data) {
     const [cnnSubjects, setCnnSubjects] = useState([])
-
     useEffect(() => {
         let cancelled = false
         async function check() {
             const results = []
-            for (const subject of data) {
-                const imgPath = subject['img_path']
-                if (!imgPath) continue
-                const cnnPath = dirname(imgPath) + '/cnnBased.nii.gz'
+            for (const s of data) {
+                if (!s.img_path) continue
+                const cnnPath = dirname(s.img_path) + '/cnnBased.nii.gz'
                 try {
                     const res  = await fetch(`${API}/api/exists?path=${encodeURIComponent(cnnPath)}`)
                     const json = await res.json()
-                    if (json.exists) results.push({ id: subject['Id'], cnnPath })
+                    if (json.exists) results.push({ id: s['Id'], cnnPath })
                 } catch (_) {}
             }
             if (!cancelled) setCnnSubjects(results)
@@ -66,175 +267,135 @@ function useCNNSubjects(data) {
         check()
         return () => { cancelled = true }
     }, [data])
-
     return cnnSubjects
 }
 
-// ── Componente principal ───────────────────────────────────────────────────
-function View(props) {
-    const data        = props.data
+// ── Card wrapper com título ────────────────────────────────────────────────────
+function Card({ title, controls, children }) {
+    return (
+        <div className='dash-card'>
+            <div className='dc-header'>
+                <span className='dc-title'>{title}</span>
+                {controls && <div className='dc-controls'>{controls}</div>}
+            </div>
+            <div className='dc-body'>{children}</div>
+        </div>
+    )
+}
+
+// ── Componente principal ───────────────────────────────────────────────────────
+function View({ view, data, selectedId, onDeselect }) {
+    const [kpiMethod,       setKpiMethod]       = useState('ROQS_scalar')
+    const [selectedCNNIdx,  setSelectedCNNIdx]  = useState(0)
     const cnnSubjects = useCNNSubjects(data)
-    const [selectedCNNIdx, setSelectedCNNIdx] = useState(0)
 
-    function closeSelect() {
-        const panel = document.querySelector('#subjectPainel')
-        if (panel) panel.style.display = 'none'
-    }
-
-    if (props.view === '2D') {
+    if (!data || data.length === 0) {
         return (
-            <div className='view-container' id="main-area">
-
-                <div className='subject-select' id="subjectPainel">
-                    <div className='subject-image'>
-                        <span className='subject-name'>{data[0]['Id']}</span>
-
-                        <div className='image'>
-                            <SegmentationPlot imgPath={data[0]['img_path']} />
-                        </div>
-
-                        <div className='image-prompts'>
-                            <div className='image-inputs'>
-                                <div className='input-group'>
-                                    <label>Segm. Method</label>
-                                    <select>
-                                        <option>Watershed</option>
-                                        <option>ROQS Based</option>
-                                        <option>CNN Based</option>
-                                    </select>
-                                </div>
-                                <div className='input-group'>
-                                    <label>Scalar</label>
-                                    <select>
-                                        <option value="wFA">wFA</option>
-                                        <option value="FA">FA</option>
-                                        <option value="MD">MD</option>
-                                        <option value="RD">RD</option>
-                                        <option value="AD">AD</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className='image-buttons'>
-                                <button className='btn-remove'>Remove</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className='subject-qc'>
-                        <span className='qc-title'>Quality Check</span>
-                        {['ROQS', 'Watershed'].map(method => {
-                            const qc    = data[0]?.qc?.[method]
-                            const flag  = qc?.flag
-                            const prob  = qc?.prob
-                            const dotClass = flag === true  ? 'qc-dot qc-fail'
-                                           : flag === false ? 'qc-dot qc-pass'
-                                           :                  'qc-dot qc-na'
-                            const label = flag === true  ? 'FAIL'
-                                        : flag === false ? 'PASS'
-                                        :                  'N/A'
-                            return (
-                                <div key={method} className='qc-row'>
-                                    <span className={dotClass} />
-                                    <span className='qc-method'>{method}</span>
-                                    <span className={`qc-label qc-label-${label.toLowerCase()}`}>{label}</span>
-                                    {prob != null && <span className='qc-prob'>{(prob * 100).toFixed(1)}%</span>}
-                                </div>
-                            )
-                        })}
-                    </div>
-
-                    <div className='subject-tables'>
-                        <TableSegmentation data={data} bg_color="#1F2C56" color="white" type="2D"/>
-                        <TableParcellation data={data} bg_color="#1F2C56" color="white" type="2D"/>
-                    </div>
-
-                    <AiOutlineClose className='close-icon' onClick={closeSelect}/>
-                </div>
-
-                <div className='area-view'>
-
-                    {/* ── Tabelas ─────────────────────────────────────────── */}
-                    <div className='section-header'>Estatísticas de Segmentação e Parcelamento</div>
-                    <div className='area-table'>
-                        <div className='table-col'>
-                            <TableSegmentation data={data} type="2D"/>
-                        </div>
-                        <div className='table-col'>
-                            <TableParcellation data={data} type="2D"/>
-                        </div>
-                    </div>
-
-                    {/* ── Boxplots lado a lado ─────────────────────────────── */}
-                    <div className='section-header'>Distribuições</div>
-                    <div className='area-boxplot'>
-                        <div className='boxplot-col'>
-                            <BoxplotSegmentation data={data} />
-                        </div>
-                        <div className='boxplot-col'>
-                            <BoxplotParcellation data={data} />
-                        </div>
-                    </div>
-
-                    {/* ── Scatter ─────────────────────────────────────────── */}
-                    <div className='section-header'>Correlação entre Escalares</div>
-                    <div className='area-scatter'>
-                        <Scatter data={data}/>
-                    </div>
-
-                    {/* ── Midline + Radar ──────────────────────────────────── */}
-                    <div className='section-header'>Midline e Análise Radar</div>
-                    <div className='area-midline'>
-                        <div className='midline-col'>
-                            <Midline data={data}/>
-                        </div>
-                        <div className='radar-col'>
-                            <Radar data={data}/>
-                        </div>
-                    </div>
-
+            <div className='view-wrap'>
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#7a849e', fontSize: '15px' }}>
+                    Nenhum sujeito para exibir.
                 </div>
             </div>
         )
     }
 
-    if (props.view === '3D') {
-        const selectedSubject = cnnSubjects[selectedCNNIdx] || null
+    // ── Vista 2D ──────────────────────────────────────────────────────────────
+    if (view === '2D') {
+        const selectedSubject = selectedId ? data.find(s => s['Id'] === selectedId) || data[0] : null
+
+        const methodControls = (
+            <>
+                {SEG_KEYS.map(m => (
+                    <button
+                        key={m.key}
+                        className={`method-pill${kpiMethod === m.key ? ' active' : ''}`}
+                        onClick={() => setKpiMethod(m.key)}
+                    >
+                        {m.label}
+                    </button>
+                ))}
+            </>
+        )
 
         return (
-            <div className='view-container' id="main-area">
+            <div className='view-wrap'>
 
-                <div className='subject-select' id="subjectPainel">
-                    <div className='subject-image'>
-                        <span className='subject-name'>3D: {selectedSubject ? selectedSubject.id : data[0]['Id']}</span>
-                        <div className='image-prompts'>
-                            <div className='image-inputs'>
-                                <div className='input-group'>
-                                    <label>Segm. Method</label>
-                                    <select><option>CNN Based</option></select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                {/* Subject banner */}
+                {selectedSubject && (
+                    <SubjectBanner
+                        subject={selectedSubject}
+                        onDeselect={onDeselect}
+                    />
+                )}
 
-                    <div className='subject-tables'>
-                        <TableSegmentation data={data} bg_color="#1F2C56" color="white" type="3D"/>
-                        <TableParcellation data={data} bg_color="#1F2C56" color="white" type="3D"/>
-                    </div>
+                {/* KPI Overview */}
+                <Card title='Visão Geral — Médias por Escalar' controls={methodControls}>
+                    <KPIRow data={data} method={kpiMethod} />
+                </Card>
 
-                    <AiOutlineClose className='close-icon' onClick={closeSelect}/>
-                </div>
+                {/* Tabelas de dados */}
+                <Card title='Tabela de Segmentação'>
+                    <TableSegmentation data={data} type='2D' />
+                </Card>
 
-                <div className='area-view'>
-                    <div className='area-table'>
-                        <TableSegmentation data={data} type="3D"/>
-                        <TableParcellation data={data} type="3D"/>
-                    </div>
+                <Card title='Tabela de Parcelamento'>
+                    <TableParcellation data={data} type='2D' />
+                </Card>
 
+                {/* Midline Profile */}
+                <Card title='Perfil Midline ao Longo do Corpo Caloso'>
+                    <Midline data={data} />
+                </Card>
+
+                {/* Distribuições — boxplots */}
+                <Card title='Distribuições — Escalares por Método de Segmentação'>
+                    <BoxplotSegmentation data={data} />
+                </Card>
+
+                <Card title='Distribuições — Parcelamento por Parte'>
+                    <BoxplotParcellation data={data} />
+                </Card>
+
+                {/* Parcellation Radar */}
+                <Card title='Análise de Parcelamento — Radar'>
+                    <Radar data={data} />
+                </Card>
+
+                {/* Scatter Correlation */}
+                <Card title='Correlação entre Escalares'>
+                    <Scatter data={data} />
+                </Card>
+
+            </div>
+        )
+    }
+
+    // ── Vista 3D ──────────────────────────────────────────────────────────────
+    if (view === '3D') {
+        const selectedCNN = cnnSubjects[selectedCNNIdx] || null
+
+        return (
+            <div className='view-wrap'>
+
+                {/* Tabelas CNN */}
+                <Card title='Tabela de Segmentação — CNN-Based'>
+                    <TableSegmentation data={data} type='3D' />
+                </Card>
+
+                <Card title='Tabela de Parcelamento — CNN-Based'>
+                    <TableParcellation data={data} type='3D' />
+                </Card>
+
+                {/* Visualizador volumétrico */}
+                <Card title='Visualizador Volumétrico 3D'>
                     <div className='area-volumetric'>
                         <div className='cnn-subject-list'>
-                            <span className='cnn-list-title'>Sujeitos com dados CNN</span>
+                            <span className='cnn-list-title'>Sujeitos com CNN</span>
                             {cnnSubjects.length === 0 ? (
-                                <span className='cnn-empty'>Nenhum dado CNN encontrado.<br/>Execute o pipeline CNN primeiro.</span>
+                                <span className='cnn-empty'>
+                                    Nenhum dado CNN encontrado.<br />
+                                    Execute o pipeline CNN primeiro.
+                                </span>
                             ) : (
                                 cnnSubjects.map((s, i) => (
                                     <div
@@ -247,21 +408,22 @@ function View(props) {
                                 ))
                             )}
                         </div>
-
                         <div className='cnn-viewer'>
-                            {selectedSubject ? (
-                                <VolumetricView filePath={selectedSubject.cnnPath} />
-                            ) : (
-                                <div className='cnn-no-subject'>
+                            {selectedCNN
+                                ? <VolumetricView filePath={selectedCNN.cnnPath} />
+                                : <div className='cnn-no-subject'>
                                     <span>Selecione um sujeito na lista para visualizar o corpo caloso em 3D.</span>
-                                </div>
-                            )}
+                                  </div>
+                            }
                         </div>
                     </div>
-                </div>
+                </Card>
+
             </div>
         )
     }
+
+    return null
 }
 
 export default View

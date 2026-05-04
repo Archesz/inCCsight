@@ -73,15 +73,39 @@ def resolve_subjects(folders):
 
 
 def run_step(name, cmd, cwd):
-    print(f"\n{'─'*60}", flush=True)
+    """Executa um subcomando e faz relay linha-a-linha do output em tempo real."""
+    print(f"\n{'-'*60}", flush=True)
     print(f"  [{name}]", flush=True)
-    print(f"  $ {' '.join(cmd)}", flush=True)
-    print(f"{'─'*60}", flush=True)
+    print(f"  $ {' '.join(str(c) for c in cmd)}", flush=True)
+    print(f"{'-'*60}", flush=True)
     t0 = time.time()
-    result = subprocess.run(cmd, cwd=cwd)
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,   # merge stderr → stdout para saída unificada
+        bufsize=0,                  # sem buffer adicional no pipe
+    )
+
+    # Relay linha-a-linha para o stdout de run.py (que é o pipe para o Express)
+    for raw in proc.stdout:
+        try:
+            line = raw.decode("utf-8", errors="replace")
+        except Exception:
+            line = repr(raw)
+        print(line, end="", flush=True)
+
+    proc.wait()
     elapsed = time.time() - t0
-    if result.returncode != 0:
-        print(f"\n[ERRO] {name} terminou com código {result.returncode}", flush=True)
+
+    if proc.returncode != 0:
+        print(f"\n[ERRO] {name} terminou com código {proc.returncode}", flush=True)
         return False
     print(f"\n[OK] {name} concluído em {elapsed:.1f}s", flush=True)
     return True
@@ -111,7 +135,7 @@ args = parser.parse_args()
 # ── Resolução de pastas ───────────────────────────────────────────────────────
 
 print("\n" + "=" * 60, flush=True)
-print("  inCCsight — Pipeline de segmentação do corpo caloso", flush=True)
+print("  inCCsight - Pipeline de segmentacao do corpo caloso", flush=True)
 print("=" * 60, flush=True)
 
 parent_folders = resolve_subjects(args.path)
@@ -122,7 +146,7 @@ if not parent_folders:
 
 print(f"\n  Pastas a processar ({len(parent_folders)}):", flush=True)
 for f in parent_folders:
-    print(f"    • {f}", flush=True)
+    print(f"    > {f}", flush=True)
 
 # ── Etapa 1 — ROQS ────────────────────────────────────────────────────────────
 
@@ -165,6 +189,6 @@ else:
 # ── Fim ───────────────────────────────────────────────────────────────────────
 
 print("\n" + "=" * 60, flush=True)
-print("  Pipeline concluído.", flush=True)
+print("  Pipeline concluido.", flush=True)
 print(f"  JSON gerado em: {os.path.join(BASE_DIR, '..', 'src', 'data', 'mydata.json')}", flush=True)
 print("=" * 60 + "\n", flush=True)

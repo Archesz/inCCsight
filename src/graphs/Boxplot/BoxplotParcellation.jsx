@@ -26,8 +26,6 @@ function BoxplotParcellation(props) {
 
     return (
         <div className='boxplot-container'>
-            <span className='boxplot-title'>Parcellation Boxplots</span>
-
             <div className='boxplot-row'>
                 {["P1", "P2", "P3", "P4", "P5"].map(part => (
                     <Boxplot
@@ -40,23 +38,21 @@ function BoxplotParcellation(props) {
                             ? getScalarValues(props.data, "CNN_parcellation", methodParcellation, scalarParcellation, part)
                             : undefined
                         }
-                        width="300"
                     />
                 ))}
             </div>
 
-            <div className='options-row'>
+            <div className='options-row' style={{ marginTop: 12 }}>
                 <div className='select-group'>
-                    <label>Parc. Method: </label>
+                    <label>Parcelamento</label>
                     <select onChange={e => setMethodParcellation(e.target.value)}>
                         {["Witelson", "Hofer", "Chao", "Cover", "Freesurfer"].map(m => (
                             <option key={m} value={m}>{m}</option>
                         ))}
                     </select>
                 </div>
-
                 <div className='select-group'>
-                    <label>Scalar: </label>
+                    <label>Escalar</label>
                     <select onChange={e => setScalarParcellation(e.target.value)}>
                         {["FA", "RD", "AD", "MD"].map(s => (
                             <option key={s} value={s}>{s}</option>

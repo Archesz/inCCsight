@@ -91,10 +91,11 @@ class Subject:
                  watershed_midlines, ROQS_midlines,
                  watershed_thickness, ROQS_thickness,
                  watershed_parcellation, ROQS_parcellation,
-                 santarosa_scalars, img_path="",
+                 img_path="",
                  roqs_qc_flag=None, roqs_qc_prob=None,
                  water_qc_flag=None, water_qc_prob=None,
-                 cnn_parcellation=None, cnn_midlines=None):
+                 cnn_parcellation=None, cnn_midlines=None,
+                 cnn_scalar=None):
         self.name = self._adjust_name(str(name))
         self.watershed_scalar       = watershed_scalar
         self.ROQS_scalars           = ROQS_scalars
@@ -105,8 +106,8 @@ class Subject:
         self.watershed_parcellation = watershed_parcellation
         self.ROQS_parcellation      = ROQS_parcellation
         self.cnn_parcellation       = cnn_parcellation if cnn_parcellation is not None else {}
-        self.cnn_midlines           = cnn_midlines if cnn_midlines is not None else {}
-        self.santarosa_scalars      = santarosa_scalars
+        self.cnn_midlines           = cnn_midlines     if cnn_midlines     is not None else {}
+        self.cnn_scalar             = cnn_scalar       if cnn_scalar       is not None else {}
         self.img_path               = str(img_path) if img_path else ""
         self.roqs_qc_flag  = roqs_qc_flag
         self.roqs_qc_prob  = roqs_qc_prob
@@ -145,7 +146,7 @@ class Subject:
             },
             "Watershed_scalar":    dict(self.watershed_scalar),
             "ROQS_scalar":         dict(self.ROQS_scalars),
-            "santarosa_scalars":   dict(self.santarosa_scalars),
+            "CNN_scalar":          dict(self.cnn_scalar),
             "Watershed_midlines":  dict(self.watershed_midlines),
             "ROQS_midlines":       dict(self.ROQS_midlines),
             "Watershed_thickness": self.watershed_thickness,
@@ -189,12 +190,21 @@ water_qc_flags  = watershed_scalar_raw["qc_flag"].tolist() if "qc_flag" in water
 water_qc_probs  = watershed_scalar_raw["qc_prob"].tolist() if "qc_prob" in watershed_scalar_raw.columns else []
 watershed_scalar = watershed_scalar_raw.drop(columns=["img_path", "qc_flag", "qc_prob"], errors="ignore")
 
+# CNN scalar: lê cnn_based.csv (gerado pelo predict3D.py) e constrói lookup por nome.
+# O arquivo tem colunas: Names, FA, FA StdDev, MD, MD StdDev, RD, RD StdDev, AD, AD StdDev, Time
+_CNN_BASE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cnn_based.csv")
+_cnn_scalar_by_name: dict = {}
 try:
-    santarosa_scalar = _read_csv("santarosa.csv", required=False)
-    if santarosa_scalar.empty:
-        santarosa_scalar = ROQS_scalar.copy()
+    _cnn_base_raw = _safe_drop_index(pd.read_csv(_CNN_BASE_FILE, sep=";"))
+    if not _cnn_base_raw.empty and "Names" in _cnn_base_raw.columns:
+        for _, row in _cnn_base_raw.iterrows():
+            name_key = str(row["Names"])
+            # Guarda apenas os escalares (exclui Names e Time)
+            scalar_data = {k: v for k, v in row.items()
+                           if k not in ("Names", "Time") and pd.notna(v)}
+            _cnn_scalar_by_name[name_key] = scalar_data
 except FileNotFoundError:
-    santarosa_scalar = ROQS_scalar.copy()
+    pass
 
 # Midlines: parse string→list usando apply (bem mais rápido que loop manual)
 ROQS_midlines      = dataFrameStringToList(_read_csv("ROQS_scalar_midlines.csv"))
@@ -229,14 +239,12 @@ if not cnn_midlines_df.empty:
     for i, row in cnn_midlines_df.iterrows():
         _cnn_mid_by_name[str(i)] = row.to_dict()
 
-names      = list(ROQS_parcellation["Name"])
-n_santa    = len(santarosa_scalar)
+names = list(ROQS_parcellation["Name"])
 
 # ── Construção dos sujeitos ───────────────────────────────────────────────────
 
 subjects_list = []
 for i, name in enumerate(names):
-    santa_i = i % n_santa if n_santa > 0 else 0
     sub = Subject(
         name,
         watershed_scalar.iloc[i],
@@ -247,7 +255,6 @@ for i, name in enumerate(names):
         ROQS_thickness.iloc[i],
         watershed_parcellation.iloc[i],
         ROQS_parcellation.iloc[i],
-        santarosa_scalar.iloc[santa_i],
         img_path=img_paths[i] if i < len(img_paths) else "",
         roqs_qc_flag=roqs_qc_flags[i] if i < len(roqs_qc_flags) else None,
         roqs_qc_prob=roqs_qc_probs[i] if i < len(roqs_qc_probs) else None,
@@ -255,12 +262,21 @@ for i, name in enumerate(names):
         water_qc_prob=water_qc_probs[i] if i < len(water_qc_probs) else None,
         cnn_parcellation=_cnn_parc_by_name.get(str(name), {}),
         cnn_midlines=_cnn_mid_by_name.get(str(name), {}),
+        cnn_scalar=_cnn_scalar_by_name.get(str(name), {}),
     )
     subjects_list.append(sub.to_dict())
 
-# ── Remoção de sujeitos com NaN (passagem única) ──────────────────────────────
+# ── Remoção de sujeitos com NaN — com aviso explícito ────────────────────────
 
-subjects_list = [s for s in subjects_list if not _has_nan(s)]
+clean, removed = [], []
+for s in subjects_list:
+    if _has_nan(s):
+        removed.append(s["Id"])
+    else:
+        clean.append(s)
+if removed:
+    print(f"[AVISO] {len(removed)} sujeito(s) removido(s) por conter NaN: {removed}", flush=True)
+subjects_list = clean
 
 # ── Escrita do JSON ───────────────────────────────────────────────────────────
 

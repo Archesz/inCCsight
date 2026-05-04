@@ -4,7 +4,7 @@ import './GroupComparison.scss'
 
 const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
 const SCALARS      = ['FA', 'MD', 'RD', 'AD']
-const METHODS_SEG  = ['ROQS_scalar', 'Watershed_scalar']
+const METHODS_SEG  = ['ROQS_scalar', 'Watershed_scalar', 'CNN_scalar']
 
 // ── Coleta valores de um escalar para cada sujeito de um grupo ─────────────
 function getValues(subjects, method, scalar) {

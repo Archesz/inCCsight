@@ -55,7 +55,7 @@ function exportCSV(headers, cols, filename) {
 }
 
 function ExpandableParcTable({ allSubjects, color }) {
-    const [open,        setOpen]        = useState(false)
+    const [open,        setOpen]        = useState(true)
     const [segMethod,   setSegMethod]   = useState("ROQS_parcellation")
     const [parcMethod,  setParcMethod]  = useState("Witelson")
     const [scalar,      setScalar]      = useState("FA")
@@ -84,8 +84,10 @@ function ExpandableParcTable({ allSubjects, color }) {
     return (
         <div className='expandable-section'>
             <div className='expandable-header' onClick={() => setOpen(v => !v)}>
-                <span>Per-Subject Data</span>
-                <span className='expand-icon'>{open ? '▲' : '▼'}</span>
+                <span>Dados por Sujeito</span>
+                <span className='expandable-toggle'>
+                    {open ? '▲ Recolher' : '▼ Ver todos os sujeitos'}
+                </span>
             </div>
 
             {open && (

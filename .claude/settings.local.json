@@ -13,7 +13,13 @@
       "Bash(kill %1)",
       "Bash(powershell -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue\\).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force; Write-Host 'Porta 3001 liberada'\")",
       "Bash(python3 -c \"import json; data = json.load\\(open\\('C:/Users/jv866/inCCsight/src/data/mydata.json'\\)\\); print\\('Number of subjects:', len\\(data\\)\\); print\\('\\\\nFirst 2 subjects \\(keys only\\):'\\); [print\\(f'Subject {i}: {list\\(data[i].keys\\(\\)\\)}'\\) for i in range\\(min\\(2, len\\(data\\)\\)\\)]\")",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(python -c \"import subprocess; r=subprocess.run\\([r'C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\venv\\\\Scripts\\\\python.exe','--version'],capture_output=True,text=True\\); print\\(r.stdout, r.stderr\\)\")",
+      "PowerShell($json = Get-Content \"C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\csvs\\\\mydata.json\" -Raw | ConvertFrom-Json; $s = $json[0]; \\($s | ConvertTo-Json -Depth 1\\) -split \"`n\" | Select-Object -First 40)",
+      "PowerShell($json = Get-Content \"C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\csvs\\\\mydata.json\" -Raw | ConvertFrom-Json; $json | Where-Object { $_.img_path -ne $null -and $_.img_path -ne \"\" } | Select-Object -First 1 | Select-Object Id, img_path, group, qc | ConvertTo-Json -Depth 3)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

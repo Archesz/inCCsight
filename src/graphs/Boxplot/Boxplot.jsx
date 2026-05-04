@@ -50,19 +50,29 @@ function Boxplot(props) {
     }
 
     let layout = {
-        title: props.title,
-        height: 420,
-        width: props.width,
-        margin: { t: 40, l: 50, r: 10 },
-        legend: { orientation: "h" },
-        plot_bgcolor: '#E5ECF6',
+        title:  { text: props.title, font: { size: 13 } },
+        height: 320,
+        autosize: true,
+        margin: { t: 36, b: 36, l: 44, r: 10 },
+        legend: { orientation: 'h', y: -0.18 },
+        plot_bgcolor: '#fafbff',
+        paper_bgcolor: 'transparent',
         yaxis: {
-            gridcolor: 'rgb(255, 255, 255)',
-            zerolinecolor: 'rgb(255, 255, 255)',
-        }
+            gridcolor: '#eee',
+            zerolinecolor: '#eee',
+        },
+        xaxis: { showgrid: false },
     }
 
-    return <Plot data={data} layout={layout} />
+    return (
+        <Plot
+            data={data}
+            layout={layout}
+            config={{ responsive: true, displayModeBar: false }}
+            style={{ width: '100%' }}
+            useResizeHandler
+        />
+    )
 }
 
 export default Boxplot

@@ -8,6 +8,15 @@ import Question from '../Question/Question'
 // sem passar pelo proxy do CRA (que pode bufferizar SSE).
 const API = 'http://localhost:3001'
 
+// AbortSignal.timeout() não está disponível em Safari < 16.
+// Este helper cria um sinal de timeout compatível com todos os browsers.
+function abortAfter(ms) {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), ms)
+    controller.signal.addEventListener('abort', () => clearTimeout(id))
+    return controller.signal
+}
+
 // ── Métodos disponíveis no pipeline ───────────────────────────────────────
 // ROQS e Watershed compartilham o mesmo script (roqs/main.py); selecionar
 // qualquer um deles ativa o pipeline 2D completo.
@@ -48,7 +57,11 @@ function View({ type }) {
 
     function hideLoading() {
         const screen = document.querySelector('#loading-screen')
-        if (screen) screen.style.display = 'none'
+        if (screen) {
+            screen.style.display = 'none'
+            const btn = screen.querySelector('#close-pipeline-btn')
+            if (btn) btn.remove()
+        }
     }
 
     function appendLog(text) {
@@ -95,8 +108,16 @@ function View({ type }) {
                             if (msg.code === 0) {
                                 navigate('/Home')
                             } else {
-                                hideLoading()
+                                // Mantém o log visível para o usuário ler o erro
                                 appendLog('\n✖ Pipeline encerrou com erros. Verifique o log acima.\n')
+                                const screen = document.querySelector('#loading-screen')
+                                if (screen && !screen.querySelector('#close-pipeline-btn')) {
+                                    const btn = document.createElement('button')
+                                    btn.id        = 'close-pipeline-btn'
+                                    btn.textContent = 'Fechar'
+                                    btn.onclick   = hideLoading
+                                    screen.appendChild(btn)
+                                }
                             }
                         }
                     } catch (_) {}
@@ -134,7 +155,7 @@ function View({ type }) {
 
         // 1. Verifica se o servidor Express está rodando
         try {
-            const ping = await fetch(`${API}/api/ping`, { signal: AbortSignal.timeout(3000) })
+            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
             if (!ping.ok) throw new Error()
         } catch {
             alert(
@@ -178,7 +199,7 @@ function View({ type }) {
     async function loadLast() {
         // Verifica servidor antes de tentar carregar
         try {
-            const ping = await fetch(`${API}/api/ping`, { signal: AbortSignal.timeout(3000) })
+            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
             if (!ping.ok) throw new Error()
         } catch {
             alert(

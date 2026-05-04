@@ -8,14 +8,17 @@ const SCALARS = ["FA", "MD", "RD", "AD"]
 const SCALARS_WITH_STD = ["FA", "FA StdDev", "MD", "MD StdDev", "RD", "RD StdDev", "AD", "AD StdDev"]
 
 const METHOD_OPTIONS = [
-    { label: "ROQS",          key: "ROQS_scalar"        },
+    { label: "ROQS",          key: "ROQS_scalar"    },
     { label: "Watershed-Based", key: "Watershed_scalar" },
-    { label: "CNN-Based",     key: "santarosa_scalars"  },
+    { label: "CNN-Based",     key: "CNN_scalar"     },
 ]
 
 function getMeanValues(subjects, method, scalar) {
-    const values = subjects.map(s => s[method][scalar])
-    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(6)
+    const values = subjects
+        .map(s => s[method]?.[scalar])
+        .filter(v => v != null && !isNaN(Number(v)))
+    if (!values.length) return '—'
+    return (values.reduce((a, b) => a + Number(b), 0) / values.length).toFixed(6)
 }
 
 function getColumnColors(colValues) {
@@ -43,9 +46,9 @@ function exportCSV(headers, cols, filename) {
 }
 
 function ExpandableSubjectTable({ allSubjects, color, type }) {
-    const [open,        setOpen]        = useState(false)
+    const [open,        setOpen]        = useState(true)
     const [expandMethod, setExpandMethod] = useState(
-        type === "3D" ? "santarosa_scalars" : "ROQS_scalar"
+        type === "3D" ? "CNN_scalar" : "ROQS_scalar"
     )
 
     const scalarCols = ["FA", "MD", "RD", "AD"]
@@ -60,7 +63,7 @@ function ExpandableSubjectTable({ allSubjects, color, type }) {
     const cellColors = colorsForRows(rows, scalarCols.length)
 
     const availableMethods = type === "3D"
-        ? METHOD_OPTIONS.filter(m => m.key === "santarosa_scalars")
+        ? METHOD_OPTIONS.filter(m => m.key === "CNN_scalar")
         : METHOD_OPTIONS
 
     function exportExpanded() {
@@ -77,8 +80,10 @@ function ExpandableSubjectTable({ allSubjects, color, type }) {
     return (
         <div className='expandable-section'>
             <div className='expandable-header' onClick={() => setOpen(v => !v)}>
-                <span>Per-Subject Data</span>
-                <span className='expand-icon'>{open ? '▲' : '▼'}</span>
+                <span>Dados por Sujeito</span>
+                <span className='expandable-toggle'>
+                    {open ? '▲ Recolher' : '▼ Ver todos os sujeitos'}
+                </span>
             </div>
 
             {open && (
@@ -136,7 +141,7 @@ function TableSegmentation(props) {
     const scalarKeys = showStd ? SCALARS_WITH_STD : SCALARS
 
     const methodNames = ["ROQS", "Watershed-Based", "CNN-Based"]
-    const methodKeys  = ["ROQS_scalar", "Watershed_scalar", "santarosa_scalars"]
+    const methodKeys  = ["ROQS_scalar", "Watershed_scalar", "CNN_scalar"]
 
     let cols = [methodNames]
     for (const key of scalarKeys) {
@@ -223,7 +228,7 @@ function TableSegmentation(props) {
     if (props.type === "3D") {
         const cols3d = [["CNN-Based"]]
         for (const key of scalarKeys) {
-            cols3d.push([getMeanValues(subjects, "santarosa_scalars", key)])
+            cols3d.push([getMeanValues(subjects, "CNN_scalar", key)])
         }
 
         const cellColors3d = [

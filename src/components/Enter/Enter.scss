@@ -368,6 +368,21 @@ $text-muted:    #7a849e;
     &::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
 }
 
+/* ── Close pipeline button (shown on error) ─────────────────────────────── */
+#close-pipeline-btn {
+    margin-top: 8px;
+    padding: 10px 32px;
+    background: #c0392b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s;
+    &:hover { background: #e74c3c; }
+}
+
 /* ── News / coming soon ─────────────────────────────────────────────────── */
 .news-container {
     display: flex;

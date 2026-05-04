@@ -30,7 +30,7 @@ function FolderSelector({ id, path, groupName, onUpdate, onRemove, colorIndex })
                 <input
                     type="text"
                     className="path-text-input"
-                    placeholder="Cole o caminho absoluto da pasta (ex: C:\dados\grupo1)"
+                    placeholder="Caminho absoluto da pasta  (ex: /Users/nome/dados/grupo1  ou  C:\dados\grupo1)"
                     value={path}
                     onChange={e => onUpdate({ path: e.target.value })}
                     title={path || 'Nenhum caminho informado'}

@@ -13,7 +13,33 @@ app.use(express.json())
 
 const projectRoot = __dirname
 const methodsDir  = path.join(projectRoot, 'methods')
-const python      = process.platform === 'win32' ? 'python' : 'python3'
+
+// Detecta o Python correto: usa o venv do projeto se existir,
+// caso contrário cai no Python do sistema.
+function findPython() {
+    const candidates = process.platform === 'win32'
+        ? [
+            path.join(methodsDir, 'venv', 'Scripts', 'python.exe'),
+            path.join(methodsDir, 'roqs',  'venv', 'Scripts', 'python.exe'),
+          ]
+        : [
+            path.join(methodsDir, 'venv', 'bin', 'python3'),
+            path.join(methodsDir, 'venv', 'bin', 'python'),
+            path.join(methodsDir, 'roqs',  'venv', 'bin', 'python3'),
+          ]
+    for (const p of candidates) {
+        if (fs.existsSync(p)) {
+            console.log(`✔  Python do venv detectado: ${p}`)
+            return p
+        }
+    }
+    const fallback = process.platform === 'win32' ? 'python' : 'python3'
+    console.warn(`[AVISO] Venv não encontrado — usando Python do sistema: ${fallback}`)
+    console.warn(`        Se faltar pacotes, crie o venv em methods/venv e instale os requirements.`)
+    return fallback
+}
+
+const python = findPython()
 
 // ── Utilitário: stream SSE de um processo Python ───────────────────────────
 function spawnSSE(res, args, cwd) {
@@ -24,7 +50,8 @@ function spawnSSE(res, args, cwd) {
   res.flushHeaders()
 
   // PYTHONUNBUFFERED=1 + flag -u garantem output em tempo real mesmo via pipe
-  const env  = { ...process.env, PYTHONUNBUFFERED: '1' }
+  // PYTHONIOENCODING=utf-8 evita UnicodeEncodeError no Windows (pipe usa cp1252 por padrão)
+  const env  = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
   const proc = spawn(python, ['-u', ...args], { cwd, env })
 
   const send = data => res.write(`data: ${JSON.stringify(data)}\n\n`)

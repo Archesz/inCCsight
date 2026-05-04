@@ -31,3 +31,18 @@ yarn-error.log*
 /methods/roqs/venv
 
 /methods/venv
+
+# Dados gerados pelo pipeline (não versionar)
+/methods/csvs/santarosa.csv
+/src/data/mydata.json
+/methods/csvs/cnn_based.csv
+/methods/csvs/CNN_parcellation_statistics.csv
+/methods/csvs/CNN_scalar_midlines.csv
+/methods/csvs/ROQS_scalar_statistics.csv
+/methods/csvs/ROQS_scalar_midlines.csv
+/methods/csvs/ROQS_dict_thickness.csv
+/methods/csvs/ROQS_parcellation_statistics.csv
+/methods/csvs/Watershed_scalar_statistics.csv
+/methods/csvs/Watershed_scalar_midlines.csv
+/methods/csvs/Watershed_dict_thickness.csv
+/methods/csvs/Watershed_parcellation_statistics.csv

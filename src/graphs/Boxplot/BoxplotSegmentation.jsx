@@ -3,7 +3,12 @@ import Boxplot from './Boxplot'
 import './BoxplotSegmentation.scss'
 
 function getScalarValues(data, method, scalar) {
-    return data.map(subject => parseFloat(subject[method][scalar].toFixed(6)))
+    return data
+        .map(subject => {
+            const v = subject[method]?.[scalar]
+            return v != null && !isNaN(Number(v)) ? parseFloat(Number(v).toFixed(6)) : null
+        })
+        .filter(v => v !== null)
 }
 
 function BoxplotSegmentation(props) {
@@ -11,8 +16,6 @@ function BoxplotSegmentation(props) {
 
     return (
         <div className='boxplot-container'>
-            <span className='boxplot-title'>Segmentation Boxplots</span>
-
             <div className='boxplot-row'>
                 {["FA", "MD", "RD", "AD"].map(scalar => (
                     <Boxplot
@@ -21,8 +24,7 @@ function BoxplotSegmentation(props) {
                         ids={ids}
                         watershed={getScalarValues(props.data, "Watershed_scalar", scalar)}
                         roqs={getScalarValues(props.data, "ROQS_scalar", scalar)}
-                        cnn={getScalarValues(props.data, "santarosa_scalars", scalar)}
-                        width="375"
+                        cnn={getScalarValues(props.data, "CNN_scalar", scalar)}
                     />
                 ))}
             </div>
