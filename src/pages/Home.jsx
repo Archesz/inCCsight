@@ -4,6 +4,7 @@ import logo    from '../assets/images/inccsight.png'
 
 import View            from '../components/View/View'
 import GroupComparison from '../components/GroupComparison/GroupComparison'
+import Glossary        from '../components/Glossary/Glossary'
 
 import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
@@ -26,6 +27,7 @@ function Home() {
     const [qcFilter,     setQcFilter]     = useState(false)
     const [loading,      setLoading]      = useState(true)
     const [error,        setError]        = useState(null)
+    const [showGlossary, setShowGlossary] = useState(false)
 
     useEffect(() => {
         fetch('http://localhost:3001/api/mydata')
@@ -143,6 +145,14 @@ function Home() {
                         </button>
                     )}
 
+                    <button
+                        className='glossary-btn'
+                        onClick={() => setShowGlossary(true)}
+                        title='Open Glossary'
+                    >
+                        ?
+                    </button>
+
                     <BsGear
                         className='gear-icon'
                         onClick={() => navigate('/')}
@@ -237,6 +247,10 @@ function Home() {
                 </div>
 
             </div>
+
+            {/* ── Glossary modal ──────────────────────────────────────────── */}
+            {showGlossary && <Glossary onClose={() => setShowGlossary(false)} />}
+
         </div>
     )
 }

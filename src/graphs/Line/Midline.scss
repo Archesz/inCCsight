@@ -21,3 +21,21 @@
         }
     }
 }
+
+.midline-norm-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+
+    input[type='checkbox'] {
+        accent-color: #82a0ff;
+        width: 13px;
+        height: 13px;
+        cursor: pointer;
+    }
+}

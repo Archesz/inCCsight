@@ -169,13 +169,11 @@ function animateReset(s) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 function VolumetricView({ filePath }) {
-    const canvasRef    = useRef(null)
-    const stateRef     = useRef(null)
-    const meshRef      = useRef(null)      // { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
-    const rafRef       = useRef(null)
-    const workerRef    = useRef(null)
-    const meshBufRef   = useRef(null)      // original decompressed NIfTI buffer (for re-running with different smoothing)
-    const smoothingRef = useRef(0)         // mirrors smoothing state — readable inside async callbacks
+    const canvasRef  = useRef(null)
+    const stateRef   = useRef(null)
+    const meshRef    = useRef(null)   // { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+    const rafRef     = useRef(null)
+    const workerRef  = useRef(null)
 
     const [status,     setStatus]     = useState('loading')
     const [errMsg,     setErrMsg]     = useState('')
@@ -184,7 +182,6 @@ function VolumetricView({ filePath }) {
     const [matName,    setMatName]    = useState('Anatomical')
     const [wireframe,  setWireframe]  = useState(false)
     const [showLabels, setShowLabels] = useState(true)
-    const [smoothing,  setSmoothing]  = useState(0)   // Taubin iterations: 0/2/6/15
 
     // ── Destroy helper ────────────────────────────────────────────────────────
     const destroyScene = useCallback(() => {
@@ -226,44 +223,13 @@ function VolumetricView({ filePath }) {
         }
     }, [])
 
-    // ── Spawn worker — shared by initial load AND smoothing re-runs ───────────
-    // buf is TRANSFERRED (zero-copy) — make a .slice() copy first if you need to reuse it.
-    const spawnWorker = useCallback((buf, iterations) => {
-        killWorker()
-        setStatus('loading'); setErrMsg('')
-
-        const worker = new Worker(new URL('./volumetric.worker.js', import.meta.url))
-        workerRef.current = worker
-
-        worker.onmessage = (e) => {
-            const data = e.data
-            if (data.error) {
-                setErrMsg(data.error); setStatus('error')
-                worker.terminate(); workerRef.current = null
-                return
-            }
-            const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
-            meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
-            setTriCount(triCount)
-            setStatus('ready')
-            worker.terminate(); workerRef.current = null
-        }
-
-        worker.onerror = (err) => {
-            setErrMsg(err.message || 'Worker error'); setStatus('error')
-            worker.terminate(); workerRef.current = null
-        }
-
-        worker.postMessage({ arrayBuffer: buf, smoothIterations: iterations }, [buf])
-    }, [killWorker])
-
     // ── Load NIfTI → Web Worker (Marching Cubes off main thread) ─────────────
     useEffect(() => {
         let cancelled = false
+        setStatus('loading'); setErrMsg('')
         destroyScene()
         killWorker()
-        meshRef.current   = null
-        meshBufRef.current = null
+        meshRef.current = null
 
         const load = async () => {
             try {
@@ -280,10 +246,42 @@ function VolumetricView({ filePath }) {
 
                 if (cancelled) return
 
-                // Keep a copy for smoothing re-runs (buf itself will be transferred)
-                meshBufRef.current = buf.slice()
+                // ── Spawn worker for heavy computation ───────────────────────
+                // Webpack 5 + CRA 5 recognises this pattern and bundles the worker
+                const worker = new Worker(
+                    new URL('./volumetric.worker.js', import.meta.url)
+                )
+                workerRef.current = worker
 
-                spawnWorker(buf, smoothingRef.current)
+                worker.onmessage = (e) => {
+                    if (cancelled) { worker.terminate(); return }
+                    const data = e.data
+                    if (data.error) {
+                        setErrMsg(data.error)
+                        setStatus('error')
+                        worker.terminate()
+                        workerRef.current = null
+                        return
+                    }
+                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
+                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+                    setTriCount(triCount)
+                    setStatus('ready')
+                    worker.terminate()
+                    workerRef.current = null
+                }
+
+                worker.onerror = (err) => {
+                    if (!cancelled) {
+                        setErrMsg(err.message || 'Worker error')
+                        setStatus('error')
+                    }
+                    worker.terminate()
+                    workerRef.current = null
+                }
+
+                // Transfer the ArrayBuffer (zero-copy) to the worker
+                worker.postMessage({ arrayBuffer: buf }, [buf])
 
             } catch (e) {
                 if (!cancelled) { setErrMsg(e.message); setStatus('error') }
@@ -371,26 +369,13 @@ function VolumetricView({ filePath }) {
         URL.revokeObjectURL(url)
     }, [filePath])
 
-    // ── Smoothing preset change — re-run worker with stored buffer ────────────
-    const handleSmoothingChange = useCallback((val) => {
-        setSmoothing(val)
-        smoothingRef.current = val
-        if (!meshBufRef.current) return   // buffer not loaded yet
-        destroyScene()
-        spawnWorker(meshBufRef.current.slice(), val)   // .slice() — worker will own it
-    }, [destroyScene, spawnWorker])
-
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className='volumetric-container'>
 
             {status === 'loading' && (
                 <div className='volumetric-loading'>
-                    <span>
-                        {meshBufRef.current
-                            ? `Applying smoothing (${smoothingRef.current} iterations)…`
-                            : 'Computing 3D surface… (off main thread)'}
-                    </span>
+                    <span>Computing 3D surface… (off main thread)</span>
                 </div>
             )}
             {status === 'error' && (
@@ -443,23 +428,6 @@ function VolumetricView({ filePath }) {
                                 onChange={e => setShowLabels(e.target.checked)} />
                             Orientation A/P/L/R/S/I
                         </label>
-                    </div>
-
-                    <div className='ctrl-group'>
-                        <label>Smoothing</label>
-                        <div className='ctrl-pills'>
-                            {[
-                                { label: 'None',   val: 0  },
-                                { label: 'Light',  val: 2  },
-                                { label: 'Medium', val: 6  },
-                                { label: 'Strong', val: 15 },
-                            ].map(({ label, val }) => (
-                                <button key={val}
-                                    className={`ctrl-pill${smoothing === val ? ' active' : ''}`}
-                                    onClick={() => handleSmoothingChange(val)}
-                                >{label}</button>
-                            ))}
-                        </div>
                     </div>
 
                     {/* Action buttons — pushed to the right */}

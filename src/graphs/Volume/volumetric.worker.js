@@ -5,13 +5,12 @@
  * Off-main-thread worker that handles:
  *   1. NIfTI-1 parsing (DataView)
  *   2. Marching Cubes surface extraction (isosurface)
- *   3. Optional Laplacian smoothing on the indexed mesh
- *   4. Flattening positions + face normals into Float32Arrays
+ *   3. Flattening positions + face normals into Float32Arrays
  *
  * The heavy Float32Arrays are transferred (zero-copy) back to the main thread.
  *
- * Message in:  { arrayBuffer: ArrayBuffer, smoothIterations?: number }
- * Message out (success): { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+ * Message in:  { arrayBuffer: ArrayBuffer }
+ * Message out (success): { posArr, normArr, triCount, maxDim, cx, cy, cz }
  * Message out (error):   { error: string }
  */
 
@@ -41,61 +40,8 @@ function parseNifti1(buf) {
     return { nx, ny, nz, dx, dy, dz, voxels }
 }
 
-// ── Laplacian mesh smoothing ──────────────────────────────────────────────────
-// Operates on the INDEXED representation (rawPos + rawCells) before flattening.
-// Using Taubin's two-step approach (λ forward + μ backward) to prevent shrinkage.
-//   λ =  0.5  — expand toward neighbours
-//   μ = -0.53 — tiny pull back (keeps volume stable)
-function laplacianSmooth(positions, cells, iterations) {
-    if (iterations === 0) return positions
-
-    const n = positions.length
-
-    // ── Build adjacency list ─────────────────────────────────────────────────
-    const adj = new Array(n)
-    for (let i = 0; i < n; i++) adj[i] = []
-
-    for (const [a, b, c] of cells) {
-        adj[a].push(b, c)
-        adj[b].push(a, c)
-        adj[c].push(a, b)
-    }
-    // Deduplicate
-    for (let i = 0; i < n; i++) adj[i] = [...new Set(adj[i])]
-
-    // ── Working copy ─────────────────────────────────────────────────────────
-    let pos = positions.map(p => [p[0], p[1], p[2]])
-
-    const LAMBDA =  0.5
-    const MU     = -0.53
-
-    function step(src, factor) {
-        const dst = new Array(n)
-        for (let i = 0; i < n; i++) {
-            const nbrs = adj[i]
-            if (nbrs.length === 0) { dst[i] = [src[i][0], src[i][1], src[i][2]]; continue }
-            let sx = 0, sy = 0, sz = 0
-            for (const j of nbrs) { sx += src[j][0]; sy += src[j][1]; sz += src[j][2] }
-            const inv = 1 / nbrs.length
-            dst[i] = [
-                src[i][0] + factor * (sx * inv - src[i][0]),
-                src[i][1] + factor * (sy * inv - src[i][1]),
-                src[i][2] + factor * (sz * inv - src[i][2]),
-            ]
-        }
-        return dst
-    }
-
-    for (let iter = 0; iter < iterations; iter++) {
-        pos = step(pos, LAMBDA)   // forward — smooths
-        pos = step(pos, MU)       // backward — restores volume
-    }
-
-    return pos
-}
-
-// ── Marching Cubes + optional smoothing + geometry flattening ─────────────────
-function buildMeshArrays(nifti, smoothIterations) {
+// ── Marching Cubes + geometry flattening ──────────────────────────────────────
+function buildMeshArrays(nifti) {
     const { nx, ny, nz, dx, dy, dz, voxels } = nifti
 
     const sdf = (x, y, z) => {
@@ -113,10 +59,6 @@ function buildMeshArrays(nifti, smoothIterations) {
 
     const rawPos   = result.positions   // [[x,y,z], ...]
     const rawCells = result.cells       // [[i,j,k], ...]
-
-    // ── Apply Laplacian smoothing on indexed mesh (optional) ─────────────────
-    const pos = laplacianSmooth(rawPos, rawCells, smoothIterations)
-
     const triCount = rawCells.length
 
     const posArr  = new Float32Array(triCount * 9)
@@ -124,7 +66,7 @@ function buildMeshArrays(nifti, smoothIterations) {
 
     let p = 0
     for (const [i, j, k] of rawCells) {
-        const a = pos[i], b = pos[j], c = pos[k]
+        const a = rawPos[i], b = rawPos[j], c = rawPos[k]
 
         const ax = a[0]*dx - cx,  ay = a[1]*dy - cy,  az = a[2]*dz - cz
         const bx = b[0]*dx - cx,  by = b[1]*dy - cy,  bz = b[2]*dz - cz
@@ -163,6 +105,7 @@ function buildMeshArrays(nifti, smoothIterations) {
         if (posArr[i+2] > maxZ) maxZ = posArr[i+2]
     }
     const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ)
+    // Geometric center of bounding box (will be 0,0,0 since we centered on cx/cy/cz)
     const bcx = (minX + maxX) / 2
     const bcy = (minY + maxY) / 2
     const bcz = (minZ + maxZ) / 2
@@ -172,10 +115,10 @@ function buildMeshArrays(nifti, smoothIterations) {
 
 // ── Worker message handler ────────────────────────────────────────────────────
 self.onmessage = function (e) {
-    const { arrayBuffer, smoothIterations = 0 } = e.data
+    const { arrayBuffer } = e.data
     try {
-        const nifti  = parseNifti1(arrayBuffer)
-        const result = buildMeshArrays(nifti, smoothIterations)
+        const nifti = parseNifti1(arrayBuffer)
+        const result = buildMeshArrays(nifti)
         if (!result) {
             self.postMessage({ error: 'Marching Cubes produced no surface — check the mask.' })
             return

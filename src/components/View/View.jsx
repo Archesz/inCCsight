@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react'
 
-import TableSegmentation  from '../../graphs/Table/TableSegmentation'
-import TableParcellation  from '../../graphs/Table/TableParcellation'
+import TableSegmentation   from '../../graphs/Table/TableSegmentation'
+import TableParcellation   from '../../graphs/Table/TableParcellation'
 import BoxplotSegmentation from '../../graphs/Boxplot/BoxplotSegmentation'
 import BoxplotParcellation from '../../graphs/Boxplot/BoxplotParcellation'
-import Scatter            from '../../graphs/Scatter/Scatter'
-import Midline            from '../../graphs/Line/Midline'
-import VolumetricView     from '../../graphs/Volume/VolumetricView'
-import Radar              from '../../graphs/Radar/Radar'
+import Scatter             from '../../graphs/Scatter/Scatter'
+import Midline             from '../../graphs/Line/Midline'
+import VolumetricView      from '../../graphs/Volume/VolumetricView'
+import Radar               from '../../graphs/Radar/Radar'
+import BiomarkerProfile    from '../../graphs/BiomarkerProfile/BiomarkerProfile'
 
 import '../../styles/home.scss'
 
@@ -51,12 +52,26 @@ function imgPathForMethod(subject, method) {
 const PARC_METHODS = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
 const PARC_PARTS   = ['P1', 'P2', 'P3', 'P4', 'P5']
 
+// ── Asymmetry Index helper ────────────────────────────────────────────────────
+// AI = (anterior − posterior) / (anterior + posterior), range −1..+1
+// Anterior = mean(P1, P2) FA; Posterior = mean(P4, P5) FA
+// Source: Witelson 1989; Hofer & Frahm 2006
+function calcAsymmetryIndex(parcellation, method) {
+    const k = (part) => `Witelson_FA_${part}`
+    const p = parcellation || {}
+    const ant = ((p[k('P1')] || 0) + (p[k('P2')] || 0)) / 2
+    const pos = ((p[k('P4')] || 0) + (p[k('P5')] || 0)) / 2
+    if (!ant || !pos) return null
+    return (ant - pos) / (ant + pos)
+}
+
 // ── Subject banner ────────────────────────────────────────────────────────────
 function SubjectBanner({ subject, onDeselect }) {
-    const [imgMethod,  setImgMethod]  = useState('ROQS')
-    const [imgErrors,  setImgErrors]  = useState({})
-    const [parcMethod, setParcMethod] = useState('Witelson')
-    const [parcScalar, setParcScalar] = useState('FA')
+    const [imgMethod,   setImgMethod]   = useState('ROQS')
+    const [imgErrors,   setImgErrors]   = useState({})
+    const [parcMethod,  setParcMethod]  = useState('Witelson')
+    const [parcScalar,  setParcScalar]  = useState('FA')
+    const [showBiomark, setShowBiomark] = useState(false)
 
     const qc      = subject.qc || {}
     const hasCNN  = Object.keys(subject.CNN_scalar  || {}).length > 0
@@ -213,6 +228,66 @@ function SubjectBanner({ subject, onDeselect }) {
                         </table>
                     </div>
 
+                </div>
+
+                {/* ── Shape Metrics + Asymmetry Index ─────────────────── */}
+                {(() => {
+                    const shape = subject.ROQS_shape || {}
+                    const ai    = calcAsymmetryIndex(subject.ROQS_parcellation, 'ROQS')
+                    const hasShape = Object.keys(shape).length > 0
+                    if (!hasShape && ai == null) return null
+
+                    return (
+                        <div className='sb-morpho-row'>
+                            {hasShape && (<>
+                                <div className='sb-morpho-item'>
+                                    <span className='sbm-label'>Area</span>
+                                    <span className='sbm-value'>{shape.area ?? '—'}</span>
+                                    <span className='sbm-unit'>voxels</span>
+                                </div>
+                                <div className='sb-morpho-item'>
+                                    <span className='sbm-label'>Length</span>
+                                    <span className='sbm-value'>{shape.cc_length ?? '—'}</span>
+                                    <span className='sbm-unit'>cols</span>
+                                </div>
+                                <div className='sb-morpho-item'>
+                                    <span className='sbm-label'>Max thick.</span>
+                                    <span className='sbm-value'>{shape.max_thickness ?? '—'}</span>
+                                </div>
+                                <div className='sb-morpho-item'>
+                                    <span className='sbm-label'>Mean thick.</span>
+                                    <span className='sbm-value'>{shape.mean_thickness ?? '—'}</span>
+                                </div>
+                                <div className='sb-morpho-item'>
+                                    <span className='sbm-label'>CCI</span>
+                                    <span className='sbm-value'>{shape.cci ?? '—'}</span>
+                                    <span className='sbm-unit' title='Corpus Callosum Index: max_thickness / length'>ⓘ</span>
+                                </div>
+                            </>)}
+                            {ai != null && (
+                                <div className='sb-morpho-item'>
+                                    <span className='sbm-label'>Ant/Post AI</span>
+                                    <span className={`sbm-value ${Math.abs(ai) < 0.05 ? '' : 'sbm-highlight'}`}>
+                                        {ai > 0 ? '+' : ''}{ai.toFixed(3)}
+                                    </span>
+                                    <span className='sbm-unit' title='(FA_ant − FA_post) / (FA_ant + FA_post)'>ⓘ</span>
+                                </div>
+                            )}
+                        </div>
+                    )
+                })()}
+
+                {/* ── Biomarker Profile ───────────────────────────────── */}
+                <div className='sb-biomarker-wrap'>
+                    <button
+                        className='sb-biomarker-toggle'
+                        onClick={() => setShowBiomark(v => !v)}
+                    >
+                        {showBiomark ? '▲' : '▼'} Biomarker Profile
+                    </button>
+                    {showBiomark && (
+                        <BiomarkerProfile subject={subject} method='ROQS' />
+                    )}
                 </div>
 
             </div>

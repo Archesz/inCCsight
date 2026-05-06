@@ -85,6 +85,18 @@ def _df_parse_lists(df: pd.DataFrame) -> pd.DataFrame:
     return df.apply(lambda col: col.map(_parse_list_cell))
 
 
+# ── Numeric helper ───────────────────────────────────────────────────────────
+def _safe_num(val):
+    """Return float or None; handles NaN / None gracefully."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        return None if math.isnan(f) else round(f, 4)
+    except (TypeError, ValueError):
+        return None
+
+
 # ── NaN detection ─────────────────────────────────────────────────────────────
 
 def _has_nan(subject: dict) -> bool:
@@ -135,6 +147,7 @@ class Subject:
         cnn_midlines=None,
         cnn_scalar=None,
         groups_map=None,
+        roqs_shape=None,
     ):
         self.name                  = self._normalize_name(str(name))
         self.watershed_scalar      = watershed_scalar
@@ -154,6 +167,7 @@ class Subject:
         self.watershed_qc_flag     = watershed_qc_flag
         self.watershed_qc_prob     = watershed_qc_prob
         self.group                 = _find_group(self.img_path, groups_map or {})
+        self.roqs_shape            = roqs_shape or {}
 
     @staticmethod
     def _normalize_name(name: str) -> str:
@@ -198,6 +212,7 @@ class Subject:
             "ROQS_parcellation":      dict(self.roqs_parcellation),
             "CNN_parcellation":       dict(self.cnn_parcellation),
             "CNN_midlines":           dict(self.cnn_midlines),
+            "ROQS_shape":             dict(self.roqs_shape),
         }
 
 
@@ -274,8 +289,23 @@ def main():
                        if "qc_flag" in roqs_scalar_raw.columns else [])
     roqs_qc_probs   = (roqs_scalar_raw["qc_prob"].tolist()
                        if "qc_prob" in roqs_scalar_raw.columns else [])
+
+    # ── Shape metrics (new columns, optional for backward compat) ────────────
+    _SHAPE_COLS = ["shape_area", "shape_cc_length", "shape_max_thickness",
+                   "shape_mean_thickness", "shape_cci"]
+    roqs_shape_rows = []
+    if all(c in roqs_scalar_raw.columns for c in _SHAPE_COLS):
+        for _, row in roqs_scalar_raw.iterrows():
+            roqs_shape_rows.append({
+                "area":            _safe_num(row["shape_area"]),
+                "cc_length":       _safe_num(row["shape_cc_length"]),
+                "max_thickness":   _safe_num(row["shape_max_thickness"]),
+                "mean_thickness":  _safe_num(row["shape_mean_thickness"]),
+                "cci":             _safe_num(row["shape_cci"]),
+            })
+
     roqs_scalar     = roqs_scalar_raw.drop(
-        columns=["img_path", "qc_flag", "qc_prob"], errors="ignore"
+        columns=["img_path", "qc_flag", "qc_prob"] + _SHAPE_COLS, errors="ignore"
     )
 
     watershed_scalar_raw = _read_csv("Watershed_scalar_statistics.csv")
@@ -359,6 +389,7 @@ def main():
             cnn_midlines      = _cnn_mid_by_name.get(str(name), {}),
             cnn_scalar        = _cnn_scalar_by_name.get(str(name), {}),
             groups_map        = groups_map,
+            roqs_shape        = roqs_shape_rows[i] if i < len(roqs_shape_rows) else {},
         )
         subjects_list.append(sub.to_dict())
 

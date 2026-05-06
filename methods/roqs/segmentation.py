@@ -288,6 +288,37 @@ def getScalars(segm, wFA, wMD, wRD, wAD):
     return meanFA, stdFA, meanMD, stdMD, meanRD, stdRD, meanAD, stdAD
 
 
+def compute_shape_metrics(segmentation, thickness_200):
+    """
+    Compute morphometric shape metrics from a 2D CC binary mask.
+
+    Returns a dict with:
+      area        — voxel count (proxy for CC cross-sectional area)
+      cc_length   — number of non-empty columns (anterior-posterior extent)
+      max_thickness  — peak column height (mm proxy)
+      mean_thickness — average column height
+      cci         — aspect ratio: max_thickness / cc_length  (Corpus Callosum Index proxy)
+    """
+    import numpy as np
+
+    area      = int(np.sum(segmentation))
+    col_mask  = np.any(segmentation, axis=0)          # True for each occupied column
+    cc_length = int(np.sum(col_mask))
+
+    t = np.array(thickness_200, dtype=float)
+    max_t  = float(np.max(t))  if len(t) else 0.0
+    mean_t = float(np.mean(t)) if len(t) else 0.0
+    cci    = round(max_t / cc_length, 4) if cc_length > 0 else 0.0
+
+    return {
+        "area":            area,
+        "cc_length":       cc_length,
+        "max_thickness":   round(max_t,  4),
+        "mean_thickness":  round(mean_t, 4),
+        "cci":             cci,
+    }
+
+
 def _collect_segm_stats(segmentation, FA, MD, RD, AD, scalar_maps, sub):
     """Compute scalars, midlines, thickness and parcellation for a segmentation mask."""
     scalar_stats = getScalars(segmentation, FA, MD, RD, AD)
@@ -344,6 +375,7 @@ def get_segm(data_paths):
     thicknessList        = []
     parcellationStatsList = []
     parcellationsList = {"ROQS": {}}
+    shapeMetricsList = []          # ← new
     times = []
     # ── Watershed accumulators ───────────────────────────────────────────────
     w_meanFAList = []; w_stdFAList = []
@@ -405,6 +437,7 @@ def get_segm(data_paths):
             midlinesList.append(roqs_midlines)
             thicknessList.append(thickness_200)
             parcellationStatsList.append(parc_row)
+            shapeMetricsList.append(compute_shape_metrics(segmentation, thickness_200))
 
             canvas = np.zeros(wFA_v.shape, dtype='int32')
             canvas[fissure, :, :] = segmentation
@@ -573,6 +606,13 @@ def get_segm(data_paths):
     df_roqs.to_csv("./data/roqs_based.csv", sep=";")
     df_roqs.to_csv("../csvs/roqs_based.csv", sep=";")
 
+    # Flatten shape metrics into individual columns
+    shape_area      = [m['area']           for m in shapeMetricsList]
+    shape_length    = [m['cc_length']      for m in shapeMetricsList]
+    shape_max_t     = [m['max_thickness']  for m in shapeMetricsList]
+    shape_mean_t    = [m['mean_thickness'] for m in shapeMetricsList]
+    shape_cci       = [m['cci']            for m in shapeMetricsList]
+
     df_roqs_scalar = pd.DataFrame({
         'FA': meanFAList, 'FA StdDev': stdFAList,
         'MD': meanMDList, 'MD StdDev': stdMDList,
@@ -581,6 +621,12 @@ def get_segm(data_paths):
         'img_path': imgPathList,
         'qc_flag': qc_roqs_flags,
         'qc_prob': qc_roqs_probs,
+        # ── shape metrics ────────────────────────────────────────────────
+        'shape_area':          shape_area,
+        'shape_cc_length':     shape_length,
+        'shape_max_thickness': shape_max_t,
+        'shape_mean_thickness':shape_mean_t,
+        'shape_cci':           shape_cci,
     }, index=names)
     df_roqs_scalar.to_csv("../csvs/ROQS_scalar_statistics.csv", sep=";")
 

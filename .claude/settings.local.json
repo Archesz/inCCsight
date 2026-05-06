@@ -21,7 +21,14 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "WebSearch",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:www.biorxiv.org)",
+      "WebFetch(domain:www.nature.com)",
+      "WebFetch(domain:link.springer.com)",
+      "Bash(node -e ' *)",
+      "Bash(python -c ' *)"
     ]
   }
 }

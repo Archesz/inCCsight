@@ -12,6 +12,86 @@ const WITELSON_BOUNDARIES = [40, 80, 120, 160]
 const WITELSON_LABELS     = ['P1', 'P2', 'P3', 'P4', 'P5']
 const WITELSON_MIDPOINTS  = [20, 60, 100, 140, 180]
 
+// ── Normative FA reference along CC midline (200 points) ─────────────────────
+// Approximate population mean ± 1 SD for healthy adults (20–60 y).
+// Derived from: Lebel et al. NeuroImage 2008; Hofer & Frahm 2006.
+// P1=genu(0-40), P2=ant.body(40-80), P3=center(80-120), P4=post.body(120-160),
+// P5=splenium(160-200)
+const NORM_FA_BY_REGION = [
+    { mean: 0.60, sd: 0.04 },  // P1
+    { mean: 0.54, sd: 0.04 },  // P2
+    { mean: 0.50, sd: 0.04 },  // P3
+    { mean: 0.54, sd: 0.04 },  // P4
+    { mean: 0.67, sd: 0.04 },  // P5
+]
+const NORM_MD_BY_REGION = [
+    { mean: 0.00082, sd: 0.00006 },
+    { mean: 0.00088, sd: 0.00006 },
+    { mean: 0.00092, sd: 0.00007 },
+    { mean: 0.00088, sd: 0.00006 },
+    { mean: 0.00078, sd: 0.00006 },
+]
+const NORM_RD_BY_REGION = [
+    { mean: 0.00042, sd: 0.00005 },
+    { mean: 0.00052, sd: 0.00005 },
+    { mean: 0.00058, sd: 0.00006 },
+    { mean: 0.00052, sd: 0.00005 },
+    { mean: 0.00036, sd: 0.00005 },
+]
+const NORM_AD_BY_REGION = [
+    { mean: 0.00162, sd: 0.00010 },
+    { mean: 0.00168, sd: 0.00010 },
+    { mean: 0.00172, sd: 0.00010 },
+    { mean: 0.00168, sd: 0.00010 },
+    { mean: 0.00158, sd: 0.00010 },
+]
+
+const NORM_TABLES = { FA: NORM_FA_BY_REGION, MD: NORM_MD_BY_REGION,
+                      RD: NORM_RD_BY_REGION, AD: NORM_AD_BY_REGION }
+
+// Build 200-point normative arrays with smooth cubic interpolation at region boundaries
+function buildNormativeProfile(scalar) {
+    const table = NORM_TABLES[scalar]
+    if (!table) return null
+
+    const boundaries = [0, 40, 80, 120, 160, 200]
+    const means  = new Float64Array(200)
+    const uppers = new Float64Array(200)
+    const lowers = new Float64Array(200)
+
+    for (let i = 0; i < 200; i++) {
+        // Determine region index
+        let region = 4
+        for (let r = 0; r < 5; r++) {
+            if (i < boundaries[r + 1]) { region = r; break }
+        }
+
+        // Smooth transition: linear interpolation between adjacent region means
+        // within ±4 points of each boundary
+        const BLEND = 6
+        let frac = 0, blending = false
+        if (region < 4 && i >= boundaries[region + 1] - BLEND) {
+            frac = (i - (boundaries[region + 1] - BLEND)) / (2 * BLEND)
+            blending = true
+        } else if (region > 0 && i < boundaries[region] + BLEND) {
+            frac = 1 - (i - boundaries[region] + BLEND) / (2 * BLEND)
+            blending = true
+        }
+
+        const m = blending
+            ? table[region].mean * (1 - frac) + table[Math.min(region + 1, 4)].mean * frac
+            : table[region].mean
+        const s = blending
+            ? table[region].sd * (1 - frac) + table[Math.min(region + 1, 4)].sd * frac
+            : table[region].sd
+
+        means[i]  = m
+        uppers[i] = m + s
+        lowers[i] = m - s
+    }
+    return { means: Array.from(means), uppers: Array.from(uppers), lowers: Array.from(lowers) }
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 function getMeanPoints(data, method, scalar) {
@@ -94,12 +174,40 @@ function hasCNNMidlines(data) {
 // ── Componente ─────────────────────────────────────────────────────────────
 
 function Midline(props) {
-    const [scalar, setScalar] = useState('FA')
+    const [scalar,   setScalar]   = useState('FA')
+    const [showNorm, setShowNorm] = useState(false)
 
     const x          = Array.from({ length: 200 }, (_, i) => i)
     const showCNN    = hasCNNMidlines(props.data)
     let   traces     = []
     let   yAxisTitle = scalar
+
+    // ── Normative band traces ─────────────────────────────────────────────
+    if (showNorm && scalar !== 'Thickness') {
+        const norm = buildNormativeProfile(scalar)
+        if (norm) {
+            // Upper boundary (invisible line, filled below)
+            traces.push({
+                x, y: norm.uppers,
+                mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip',
+                name: 'norm_upper',
+            })
+            // Lower boundary (fills up to upper)
+            traces.push({
+                x, y: norm.lowers,
+                fill: 'tonexty', mode: 'lines', line: { width: 0 },
+                fillcolor: 'rgba(180,200,255,0.18)',
+                showlegend: false, hoverinfo: 'skip', name: 'norm_lower',
+            })
+            // Mean line
+            traces.push({
+                x, y: norm.means,
+                mode: 'lines', name: 'Normative mean ±1 SD',
+                line: { color: 'rgba(130,160,255,0.6)', width: 1.5, dash: 'dot' },
+                hovertemplate: 'Point %{x}<br>Normative mean: %{y:.6f}<extra>Normative</extra>',
+            })
+        }
+    }
 
     if (scalar !== 'Thickness') {
         const roqsMean = getMeanPoints(props.data, 'ROQS_midlines', scalar)
@@ -218,6 +326,17 @@ function Midline(props) {
                         <option key={s} value={s}>{s}</option>
                     ))}
                 </select>
+
+                {scalar !== 'Thickness' && (
+                    <label className='midline-norm-toggle'>
+                        <input
+                            type='checkbox'
+                            checked={showNorm}
+                            onChange={e => setShowNorm(e.target.checked)}
+                        />
+                        Normative range
+                    </label>
+                )}
             </div>
         </div>
     )

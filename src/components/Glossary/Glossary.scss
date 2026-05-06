@@ -1,0 +1,272 @@
+// ── Overlay ──────────────────────────────────────────────────────────────────
+.gls-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: glsFadeIn 0.18s ease;
+}
+
+@keyframes glsFadeIn {
+    from { opacity: 0 }
+    to   { opacity: 1 }
+}
+
+// ── Modal container ───────────────────────────────────────────────────────────
+.gls-modal {
+    background: #1e2433;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    width: min(860px, 100%);
+    height: min(680px, 90vh);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: glsSlideIn 0.2s ease;
+}
+
+@keyframes glsSlideIn {
+    from { transform: translateY(20px); opacity: 0 }
+    to   { transform: translateY(0);    opacity: 1 }
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+.gls-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #171c29;
+    flex-shrink: 0;
+}
+
+.gls-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #e2e8f0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.gls-search {
+    flex: 1;
+    height: 32px;
+    background: #252d3d;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: #e2e8f0;
+    padding: 0 10px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &::placeholder { color: #64748b }
+
+    &:focus {
+        border-color: #82a0ff;
+        background: #2a3450;
+    }
+}
+
+.gls-close {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s, background 0.15s;
+
+    &:hover {
+        color: #e2e8f0;
+        background: rgba(255,255,255,0.08);
+    }
+}
+
+// ── Body layout ───────────────────────────────────────────────────────────────
+.gls-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+.gls-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(255,255,255,0.07);
+    background: #181d2b;
+    overflow-y: auto;
+    padding: 8px 0;
+
+    &::-webkit-scrollbar { width: 4px }
+    &::-webkit-scrollbar-track { background: transparent }
+    &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px }
+}
+
+.gls-cat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover {
+        background: rgba(255,255,255,0.05);
+        color: #cbd5e1;
+    }
+
+    &--active {
+        background: rgba(130, 160, 255, 0.12);
+        color: #a5b4fc;
+        font-weight: 600;
+    }
+}
+
+.gls-cat-icon { font-size: 14px; flex-shrink: 0 }
+.gls-cat-label { flex: 1; line-height: 1.3 }
+.gls-cat-count {
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 10px;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+// ── Content area ──────────────────────────────────────────────────────────────
+.gls-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    &::-webkit-scrollbar { width: 5px }
+    &::-webkit-scrollbar-track { background: transparent }
+    &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px }
+}
+
+.gls-empty {
+    color: #64748b;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 40px;
+}
+
+// ── Term cards ────────────────────────────────────────────────────────────────
+.gls-card {
+    background: #252d3d;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+
+    &:hover { border-color: rgba(130,160,255,0.3) }
+
+    &--open {
+        border-color: rgba(130,160,255,0.45);
+        background: #2a3450;
+    }
+}
+
+.gls-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+}
+
+.gls-card-term {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: #c7d2fe;
+    line-height: 1.3;
+}
+
+.gls-card-unit {
+    font-size: 10.5px;
+    color: #64748b;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    padding: 2px 6px;
+    white-space: nowrap;
+}
+
+.gls-card-chevron {
+    font-size: 9px;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.gls-card-short {
+    font-size: 12px;
+    color: #94a3b8;
+    padding: 4px 12px 10px;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.gls-card-body {
+    border-top: 1px solid rgba(255,255,255,0.07);
+    padding: 10px 12px 12px;
+
+    p {
+        font-size: 12.5px;
+        color: #cbd5e1;
+        line-height: 1.65;
+        margin: 0 0 8px;
+        white-space: pre-wrap;
+
+        &:last-child { margin-bottom: 0 }
+    }
+}
+
+.gls-card-ref {
+    font-size: 11px !important;
+    color: #82a0ff !important;
+    margin-top: 6px !important;
+    font-style: italic;
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+.gls-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    background: #171c29;
+    font-size: 11px;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.gls-footer-hint {
+    color: #475569;
+    font-style: italic;
+}
