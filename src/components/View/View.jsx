@@ -267,15 +267,6 @@ function SubjectBanner({ subject, onDeselect }) {
                                     <span className='sbm-unit' title='Corpus Callosum Index: max_thickness / length'>ⓘ</span>
                                 </div>
                             </>)}
-                            {ai != null && (
-                                <div className='sb-morpho-item'>
-                                    <span className='sbm-label'>Ant/Post AI</span>
-                                    <span className={`sbm-value ${Math.abs(ai) < 0.05 ? '' : 'sbm-highlight'}`}>
-                                        {ai > 0 ? '+' : ''}{ai.toFixed(3)}
-                                    </span>
-                                    <span className='sbm-unit' title='(FA_ant − FA_post) / (FA_ant + FA_post)'>ⓘ</span>
-                                </div>
-                            )}
                         </div>
                     )
                 })()}
