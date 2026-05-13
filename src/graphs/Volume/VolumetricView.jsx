@@ -174,14 +174,16 @@ function VolumetricView({ filePath }) {
     const meshRef    = useRef(null)   // { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
     const rafRef     = useRef(null)
     const workerRef  = useRef(null)
+    const rawBufRef  = useRef(null)   // copy of raw ArrayBuffer for re-processing with different smoothing
 
     const [status,     setStatus]     = useState('loading')
     const [errMsg,     setErrMsg]     = useState('')
     const [triCount,   setTriCount]   = useState(0)
-    const [opacity,    setOpacity]    = useState(0.95)
+    const [opacity,    setOpacity]    = useState(1.0)
     const [matName,    setMatName]    = useState('Anatomical')
     const [wireframe,  setWireframe]  = useState(false)
     const [showLabels, setShowLabels] = useState(true)
+    const [smoothIter, setSmoothIter] = useState(0)
 
     // ── Destroy helper ────────────────────────────────────────────────────────
     const destroyScene = useCallback(() => {
@@ -223,13 +225,54 @@ function VolumetricView({ filePath }) {
         }
     }, [])
 
-    // ── Load NIfTI → Web Worker (Marching Cubes off main thread) ─────────────
-    useEffect(() => {
-        let cancelled = false
-        setStatus('loading'); setErrMsg('')
-        destroyScene()
+    // ── Shared worker-spawn helper ────────────────────────────────────────────
+    const spawnWorker = useCallback((buf, smooth, cancelledRef) => {
         killWorker()
         meshRef.current = null
+
+        const worker = new Worker(
+            new URL('./volumetric.worker.js', import.meta.url)
+        )
+        workerRef.current = worker
+
+        worker.onmessage = (e) => {
+            if (cancelledRef.v) { worker.terminate(); return }
+            const data = e.data
+            if (data.error) {
+                setErrMsg(data.error)
+                setStatus('error')
+                worker.terminate()
+                workerRef.current = null
+                return
+            }
+            const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
+            meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+            setTriCount(triCount)
+            setStatus('ready')
+            worker.terminate()
+            workerRef.current = null
+        }
+
+        worker.onerror = (err) => {
+            if (!cancelledRef.v) {
+                setErrMsg(err.message || 'Worker error')
+                setStatus('error')
+            }
+            worker.terminate()
+            workerRef.current = null
+        }
+
+        // Transfer a copy so rawBufRef stays intact for re-use
+        const xfer = buf.slice(0)
+        worker.postMessage({ arrayBuffer: xfer, smoothIterations: smooth }, [xfer])
+    }, [killWorker])
+
+    // ── Load NIfTI → Web Worker (Marching Cubes off main thread) ─────────────
+    useEffect(() => {
+        const cancelled = { v: false }
+        setStatus('loading'); setErrMsg('')
+        destroyScene()
+        rawBufRef.current = null
 
         const load = async () => {
             try {
@@ -244,57 +287,34 @@ function VolumetricView({ filePath }) {
                     buf = await res.arrayBuffer()
                 }
 
-                if (cancelled) return
+                if (cancelled.v) return
 
-                // ── Spawn worker for heavy computation ───────────────────────
-                // Webpack 5 + CRA 5 recognises this pattern and bundles the worker
-                const worker = new Worker(
-                    new URL('./volumetric.worker.js', import.meta.url)
-                )
-                workerRef.current = worker
-
-                worker.onmessage = (e) => {
-                    if (cancelled) { worker.terminate(); return }
-                    const data = e.data
-                    if (data.error) {
-                        setErrMsg(data.error)
-                        setStatus('error')
-                        worker.terminate()
-                        workerRef.current = null
-                        return
-                    }
-                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
-                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
-                    setTriCount(triCount)
-                    setStatus('ready')
-                    worker.terminate()
-                    workerRef.current = null
-                }
-
-                worker.onerror = (err) => {
-                    if (!cancelled) {
-                        setErrMsg(err.message || 'Worker error')
-                        setStatus('error')
-                    }
-                    worker.terminate()
-                    workerRef.current = null
-                }
-
-                // Transfer the ArrayBuffer (zero-copy) to the worker
-                worker.postMessage({ arrayBuffer: buf }, [buf])
+                rawBufRef.current = buf   // keep original for smoothing re-runs
+                spawnWorker(buf, smoothIter, cancelled)
 
             } catch (e) {
-                if (!cancelled) { setErrMsg(e.message); setStatus('error') }
+                if (!cancelled.v) { setErrMsg(e.message); setStatus('error') }
             }
         }
         load()
         return () => {
-            cancelled = true
+            cancelled.v = true
             killWorker()
             destroyScene()
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filePath])
+
+    // ── Re-process with new smoothing level (no re-fetch needed) ─────────────
+    useEffect(() => {
+        if (!rawBufRef.current) return   // file not loaded yet
+        const cancelled = { v: false }
+        setStatus('loading')
+        destroyScene()
+        spawnWorker(rawBufRef.current, smoothIter, cancelled)
+        return () => { cancelled.v = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [smoothIter])
 
     // ── Build scene on ready ──────────────────────────────────────────────────
     useEffect(() => {
@@ -402,6 +422,24 @@ function VolumetricView({ filePath }) {
                                     className={`ctrl-pill${matName === m ? ' active' : ''}`}
                                     onClick={() => setMatName(m)}
                                 >{m}</button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className='ctrl-group'>
+                        <label>Smoothing</label>
+                        <div className='ctrl-pills'>
+                            {[
+                                { label: 'Off',  val: 0  },
+                                { label: 'Low',  val: 5  },
+                                { label: 'Med',  val: 15 },
+                                { label: 'High', val: 30 },
+                            ].map(({ label, val }) => (
+                                <button key={val}
+                                    className={`ctrl-pill${smoothIter === val ? ' active' : ''}`}
+                                    onClick={() => setSmoothIter(val)}
+                                    title={val === 0 ? 'No smoothing' : `${val} Laplacian iterations`}
+                                >{label}</button>
                             ))}
                         </div>
                     </div>
