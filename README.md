@@ -139,6 +139,13 @@ chmod +x setup.sh start.sh
 
 Opens **http://localhost:3000** automatically.
 
+> Both `start.bat` / `start.sh` run a single npm command internally:
+> ```bash
+> npm run dev
+> ```
+> This uses `concurrently` to launch both the React dev server (port **3000**) and
+> the Express API server (port **3001**) in the same terminal.
+
 ---
 
 ## Installation — Clone (manual)
