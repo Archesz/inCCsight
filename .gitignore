@@ -1,51 +1,26 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-/dist
-
-# misc
-.DS_Store
+# Node
+node_modules/
+build/
+dist/
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# User subject data (mounted as Docker volume or local path)
-/subjects/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+methods/venv/
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Large model weights (use LFS or external storage)
+*.pth
+*.pt
+*.ckpt
+*.h5
 
-# Methods directory (analysis code — do not exclude)
-# /methods
+# OS
+.DS_Store
+Thumbs.db
 
-# Virtual environments
-/methods/CNNBased/venv
-/methods/roqs/venv
-/methods/venv
-
-# Pipeline-generated data (do not version)
-/methods/csvs/santarosa.csv
-/data/mydata.json
-/methods/csvs/cnn_based.csv
-/methods/csvs/CNN_parcellation_statistics.csv
-/methods/csvs/CNN_scalar_midlines.csv
-/methods/csvs/ROQS_scalar_statistics.csv
-/methods/csvs/ROQS_scalar_midlines.csv
-/methods/csvs/ROQS_dict_thickness.csv
-/methods/csvs/ROQS_parcellation_statistics.csv
-/methods/csvs/Watershed_scalar_statistics.csv
-/methods/csvs/Watershed_scalar_midlines.csv
-/methods/csvs/Watershed_dict_thickness.csv
-/methods/csvs/Watershed_parcellation_statistics.csv
+# Worktrees
+.claude/worktrees/
