@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'
 import './VolumetricView.scss'
@@ -9,6 +10,59 @@ const MATERIAL_PRESETS = {
     'Anatomical': { color: 0xddd0b8, emissive: 0x1a0f05, roughness: 0.55, metalness: 0.06 },
     'Scientific': { color: 0x4a8fd4, emissive: 0x041020, roughness: 0.38, metalness: 0.18 },
     'Thermal':    { color: 0xf07030, emissive: 0x300a00, roughness: 0.48, metalness: 0.04 },
+}
+
+// ── Laplacian smoothing on a THREE.BufferGeometry (non-indexed input) ─────────
+// Merges duplicate vertices → builds adjacency → applies λ-iterations → recomputes normals
+function applyLaplacianSmooth(geoIn, iterations) {
+    if (iterations <= 0) return geoIn
+
+    // Build an indexed geometry by welding coincident vertices
+    const indexed = BufferGeometryUtils.mergeVertices(geoIn, 0.01)
+    const posAttr = indexed.getAttribute('position')
+    const idxAttr = indexed.getIndex()
+    if (!posAttr || !idxAttr) return geoIn   // fallback — should never happen
+
+    const n    = posAttr.count
+    const idx  = idxAttr.array
+    const tris = idx.length / 3
+
+    // Build adjacency (neighbor list per vertex)
+    const nbSets = Array.from({ length: n }, () => new Set())
+    for (let t = 0; t < tris; t++) {
+        const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2]
+        nbSets[a].add(b); nbSets[a].add(c)
+        nbSets[b].add(a); nbSets[b].add(c)
+        nbSets[c].add(a); nbSets[c].add(b)
+    }
+    const neighbors = nbSets.map(s => [...s])
+
+    // λ-Laplacian iterations (λ = 0.5)
+    const lambda = 0.5
+    const pos  = new Float32Array(posAttr.array)   // working copy
+    const next = new Float32Array(pos.length)
+
+    for (let iter = 0; iter < iterations; iter++) {
+        for (let i = 0; i < n; i++) {
+            const nb = neighbors[i]
+            if (nb.length === 0) {
+                next[i*3] = pos[i*3]; next[i*3+1] = pos[i*3+1]; next[i*3+2] = pos[i*3+2]
+                continue
+            }
+            let sx = 0, sy = 0, sz = 0
+            for (const j of nb) { sx += pos[j*3]; sy += pos[j*3+1]; sz += pos[j*3+2] }
+            const cnt = nb.length
+            next[i*3]   = pos[i*3]   + lambda * (sx / cnt - pos[i*3])
+            next[i*3+1] = pos[i*3+1] + lambda * (sy / cnt - pos[i*3+1])
+            next[i*3+2] = pos[i*3+2] + lambda * (sz / cnt - pos[i*3+2])
+        }
+        pos.set(next)
+    }
+
+    posAttr.array.set(pos)
+    posAttr.needsUpdate = true
+    indexed.computeVertexNormals()
+    return indexed
 }
 
 // ── Orient-label sprite ───────────────────────────────────────────────────────
@@ -30,17 +84,16 @@ function makeSprite(text, position) {
 }
 
 // ── Default camera position (lateral-oblique, neuroimaging sagittal view) ────
-// NIfTI voxel space: X=L-R, Y=P-A, Z=I-S
 function defaultCameraPos(center, maxDim) {
     return new THREE.Vector3(
-        center.x + maxDim * 2.1,   // lateral (right side)
-        center.y - maxDim * 0.4,   // slightly posterior
-        center.z + maxDim * 0.25,  // slightly superior
+        center.x + maxDim * 2.1,
+        center.y - maxDim * 0.4,
+        center.z + maxDim * 0.25,
     )
 }
 
 // ── Scene setup ───────────────────────────────────────────────────────────────
-function createScene(canvas, posArr, normArr, bcx, bcy, bcz, maxDim, matPreset, opacity) {
+function createScene(canvas, posArr, normArr, bcx, bcy, bcz, maxDim, matPreset, opacity, smoothIter) {
     const W = canvas.clientWidth  || 800
     const H = canvas.clientHeight || 520
 
@@ -52,10 +105,8 @@ function createScene(canvas, posArr, normArr, bcx, bcy, bcz, maxDim, matPreset, 
     const scene  = new THREE.Scene()
     scene.background = new THREE.Color(0x12192e)
 
-    // ── Camera — Z is "up" in NIfTI/neuroimaging space ──────────────────────
-    // Must set .up BEFORE creating OrbitControls, which reads it on construction
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 5000)
-    camera.up.set(0, 0, 1)   // Z = superior direction
+    camera.up.set(0, 0, 1)
 
     // ── Lights ──────────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0xffffff, 0.45))
@@ -73,11 +124,14 @@ function createScene(canvas, posArr, normArr, bcx, bcy, bcz, maxDim, matPreset, 
     rim.position.set(0, 200, -100)
     scene.add(rim)
 
-    // ── Build geometry from transferred arrays ───────────────────────────────
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
-    geo.setAttribute('normal',   new THREE.BufferAttribute(normArr, 3))
-    geo.computeVertexNormals()   // smooth shading
+    // ── Build geometry ───────────────────────────────────────────────────────
+    let geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(posArr.slice(), 3))
+    geo.setAttribute('normal',   new THREE.BufferAttribute(normArr.slice(), 3))
+    geo.computeVertexNormals()
+
+    // Apply Laplacian smoothing on indexed geometry if requested
+    geo = applyLaplacianSmooth(geo, smoothIter)
 
     // ── Main mesh ────────────────────────────────────────────────────────────
     const preset = MATERIAL_PRESETS[matPreset] || MATERIAL_PRESETS['Anatomical']
@@ -91,7 +145,7 @@ function createScene(canvas, posArr, normArr, bcx, bcy, bcz, maxDim, matPreset, 
     mesh.castShadow = true
     scene.add(mesh)
 
-    // Wireframe overlay (toggled externally)
+    // Wireframe overlay
     const wireMat  = new THREE.MeshBasicMaterial({
         color: 0x4C6EF5, wireframe: true, transparent: true, opacity: 0.12,
     })
@@ -156,7 +210,7 @@ function animateReset(s) {
 
     const tick = () => {
         frame++
-        const t = 1 - Math.pow(1 - frame / FRAMES, 3)   // ease-out cubic
+        const t = 1 - Math.pow(1 - frame / FRAMES, 3)
 
         camera.position.lerpVectors(camera.position.clone(), targetPos,    t)
         controls.target.lerpVectors(controls.target.clone(), targetTarget, t)
@@ -174,7 +228,6 @@ function VolumetricView({ filePath }) {
     const meshRef    = useRef(null)   // { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
     const rafRef     = useRef(null)
     const workerRef  = useRef(null)
-    const rawBufRef  = useRef(null)   // copy of raw ArrayBuffer for re-processing with different smoothing
 
     const [status,     setStatus]     = useState('loading')
     const [errMsg,     setErrMsg]     = useState('')
@@ -206,11 +259,11 @@ function VolumetricView({ filePath }) {
     }, [])
 
     // ── Spawn / re-spawn scene ────────────────────────────────────────────────
-    const spawnScene = useCallback((mat, op, wf, labels) => {
+    const spawnScene = useCallback((mat, op, wf, labels, smooth) => {
         if (!meshRef.current || !canvasRef.current) return
         destroyScene()
         const { posArr, normArr, maxDim, bcx, bcy, bcz } = meshRef.current
-        const s = createScene(canvasRef.current, posArr, normArr, bcx, bcy, bcz, maxDim, mat, op)
+        const s = createScene(canvasRef.current, posArr, normArr, bcx, bcy, bcz, maxDim, mat, op, smooth)
         s.wireMesh.visible = wf
         s.labels.forEach(l => { l.visible = labels })
         stateRef.current = s
@@ -225,54 +278,13 @@ function VolumetricView({ filePath }) {
         }
     }, [])
 
-    // ── Shared worker-spawn helper ────────────────────────────────────────────
-    const spawnWorker = useCallback((buf, smooth, cancelledRef) => {
-        killWorker()
-        meshRef.current = null
-
-        const worker = new Worker(
-            new URL('./volumetric.worker.js', import.meta.url)
-        )
-        workerRef.current = worker
-
-        worker.onmessage = (e) => {
-            if (cancelledRef.v) { worker.terminate(); return }
-            const data = e.data
-            if (data.error) {
-                setErrMsg(data.error)
-                setStatus('error')
-                worker.terminate()
-                workerRef.current = null
-                return
-            }
-            const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
-            meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
-            setTriCount(triCount)
-            setStatus('ready')
-            worker.terminate()
-            workerRef.current = null
-        }
-
-        worker.onerror = (err) => {
-            if (!cancelledRef.v) {
-                setErrMsg(err.message || 'Worker error')
-                setStatus('error')
-            }
-            worker.terminate()
-            workerRef.current = null
-        }
-
-        // Transfer a copy so rawBufRef stays intact for re-use
-        const xfer = buf.slice(0)
-        worker.postMessage({ arrayBuffer: xfer, smoothIterations: smooth }, [xfer])
-    }, [killWorker])
-
     // ── Load NIfTI → Web Worker (Marching Cubes off main thread) ─────────────
     useEffect(() => {
-        const cancelled = { v: false }
+        let cancelled = false
         setStatus('loading'); setErrMsg('')
         destroyScene()
-        rawBufRef.current = null
+        killWorker()
+        meshRef.current = null
 
         const load = async () => {
             try {
@@ -287,46 +299,66 @@ function VolumetricView({ filePath }) {
                     buf = await res.arrayBuffer()
                 }
 
-                if (cancelled.v) return
+                if (cancelled) return
 
-                rawBufRef.current = buf   // keep original for smoothing re-runs
-                spawnWorker(buf, smoothIter, cancelled)
+                const worker = new Worker(
+                    new URL('./volumetric.worker.js', import.meta.url)
+                )
+                workerRef.current = worker
+
+                worker.onmessage = (e) => {
+                    if (cancelled) { worker.terminate(); return }
+                    const data = e.data
+                    if (data.error) {
+                        setErrMsg(data.error)
+                        setStatus('error')
+                        worker.terminate()
+                        workerRef.current = null
+                        return
+                    }
+                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
+                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+                    setTriCount(triCount)
+                    setStatus('ready')
+                    worker.terminate()
+                    workerRef.current = null
+                }
+
+                worker.onerror = (err) => {
+                    if (!cancelled) {
+                        setErrMsg(err.message || 'Worker error')
+                        setStatus('error')
+                    }
+                    worker.terminate()
+                    workerRef.current = null
+                }
+
+                worker.postMessage({ arrayBuffer: buf }, [buf])
 
             } catch (e) {
-                if (!cancelled.v) { setErrMsg(e.message); setStatus('error') }
+                if (!cancelled) { setErrMsg(e.message); setStatus('error') }
             }
         }
         load()
         return () => {
-            cancelled.v = true
+            cancelled = true
             killWorker()
             destroyScene()
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filePath])
 
-    // ── Re-process with new smoothing level (no re-fetch needed) ─────────────
-    useEffect(() => {
-        if (!rawBufRef.current) return   // file not loaded yet
-        const cancelled = { v: false }
-        setStatus('loading')
-        destroyScene()
-        spawnWorker(rawBufRef.current, smoothIter, cancelled)
-        return () => { cancelled.v = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [smoothIter])
-
     // ── Build scene on ready ──────────────────────────────────────────────────
     useEffect(() => {
-        if (status === 'ready') spawnScene(matName, opacity, wireframe, showLabels)
+        if (status === 'ready') spawnScene(matName, opacity, wireframe, showLabels, smoothIter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status])
 
-    // ── Material change → full scene rebuild ──────────────────────────────────
+    // ── Material or smoothing change → full scene rebuild ─────────────────────
     useEffect(() => {
-        if (status === 'ready') spawnScene(matName, opacity, wireframe, showLabels)
+        if (status === 'ready') spawnScene(matName, opacity, wireframe, showLabels, smoothIter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [matName])
+    }, [matName, smoothIter])
 
     // ── Opacity — live tweak on existing material ─────────────────────────────
     useEffect(() => {
@@ -377,8 +409,6 @@ function VolumetricView({ filePath }) {
         const blob     = new Blob([result], { type: 'application/octet-stream' })
         const url      = URL.createObjectURL(blob)
         const a        = document.createElement('a')
-        // Derive subject name from path, e.g.
-        // /mnt/subjects/subject_001/inCCsight/cnnBased.nii.gz → subject_001
         const parts      = (filePath || '').replace(/\\/g, '/').split('/')
         const subjectName = parts[parts.length - 3] || 'corpus_callosum'
         a.href     = url

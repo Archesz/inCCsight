@@ -40,60 +40,8 @@ function parseNifti1(buf) {
     return { nx, ny, nz, dx, dy, dz, voxels }
 }
 
-// ── Laplacian mesh smoothing (operates on shared vertex list) ─────────────────
-function laplacianSmooth(positions, cells, iterations) {
-    if (iterations <= 0) return positions
-    const n = positions.length
-
-    // Build adjacency as flat arrays for speed
-    const neighborCount = new Int32Array(n)
-    for (const [a, b, c] of cells) {
-        neighborCount[a] += 2; neighborCount[b] += 2; neighborCount[c] += 2
-    }
-    const offsets = new Int32Array(n + 1)
-    for (let i = 0; i < n; i++) offsets[i + 1] = offsets[i] + neighborCount[i]
-    const total = offsets[n]
-    const adj   = new Int32Array(total)
-    const fill  = new Int32Array(n)
-    for (const [a, b, c] of cells) {
-        adj[offsets[a] + fill[a]++] = b
-        adj[offsets[a] + fill[a]++] = c
-        adj[offsets[b] + fill[b]++] = a
-        adj[offsets[b] + fill[b]++] = c
-        adj[offsets[c] + fill[c]++] = a
-        adj[offsets[c] + fill[c]++] = b
-    }
-
-    // Smoothing iterations with λ=0.5 (move half-way toward centroid of neighbours)
-    const lambda = 0.5
-    let pos = positions.map(p => [p[0], p[1], p[2]])
-    const next = pos.map(p => [p[0], p[1], p[2]])
-
-    for (let iter = 0; iter < iterations; iter++) {
-        for (let i = 0; i < n; i++) {
-            const start = offsets[i]
-            const end   = offsets[i + 1]
-            if (start === end) { next[i][0] = pos[i][0]; next[i][1] = pos[i][1]; next[i][2] = pos[i][2]; continue }
-            let sx = 0, sy = 0, sz = 0
-            const cnt = end - start
-            for (let k = start; k < end; k++) {
-                const j = adj[k]
-                sx += pos[j][0]; sy += pos[j][1]; sz += pos[j][2]
-            }
-            next[i][0] = pos[i][0] + lambda * (sx / cnt - pos[i][0])
-            next[i][1] = pos[i][1] + lambda * (sy / cnt - pos[i][1])
-            next[i][2] = pos[i][2] + lambda * (sz / cnt - pos[i][2])
-        }
-        // swap
-        for (let i = 0; i < n; i++) {
-            pos[i][0] = next[i][0]; pos[i][1] = next[i][1]; pos[i][2] = next[i][2]
-        }
-    }
-    return pos
-}
-
 // ── Marching Cubes + geometry flattening ──────────────────────────────────────
-function buildMeshArrays(nifti, smoothIterations = 0) {
+function buildMeshArrays(nifti) {
     const { nx, ny, nz, dx, dy, dz, voxels } = nifti
 
     const sdf = (x, y, z) => {
@@ -109,8 +57,7 @@ function buildMeshArrays(nifti, smoothIterations = 0) {
     const cy = (ny * dy) / 2
     const cz = (nz * dz) / 2
 
-    // Apply Laplacian smoothing before flattening (shared vertices → correct adjacency)
-    const rawPos   = laplacianSmooth(result.positions, result.cells, smoothIterations)
+    const rawPos   = result.positions   // [[x,y,z], ...]
     const rawCells = result.cells       // [[i,j,k], ...]
     const triCount = rawCells.length
 
@@ -168,10 +115,10 @@ function buildMeshArrays(nifti, smoothIterations = 0) {
 
 // ── Worker message handler ────────────────────────────────────────────────────
 self.onmessage = function (e) {
-    const { arrayBuffer, smoothIterations = 0 } = e.data
+    const { arrayBuffer } = e.data
     try {
         const nifti = parseNifti1(arrayBuffer)
-        const result = buildMeshArrays(nifti, smoothIterations)
+        const result = buildMeshArrays(nifti)
         if (!result) {
             self.postMessage({ error: 'Marching Cubes produced no surface — check the mask.' })
             return
