@@ -89,9 +89,16 @@ echo ================================================
 echo.
 echo   To start inCCsight, run:  start.bat
 echo.
-echo   NOTE: For CNN 3D segmentation, place the model
-echo   checkpoint (.ckpt) in:
+echo   -----------------------------------------------
+echo   MANUAL STEPS — model files not tracked by git:
+echo   -----------------------------------------------
+echo.
+echo   [QC model]  Copy the file:
+echo     vit_with_area_binary_best_combined_auc.pth
+echo   to:
+echo     methods\models\
+echo.
+echo   [CNN model]  Place the 3D segmentation checkpoint (.ckpt) in:
 echo     methods\CNNBased\peso\
-echo   Or run:  python scripts\download_model.py
 echo.
 pause
