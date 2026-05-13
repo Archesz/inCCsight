@@ -143,11 +143,14 @@ class Subject:
         roqs_qc_prob=None,
         watershed_qc_flag=None,
         watershed_qc_prob=None,
+        cnn_qc_flag=None,
+        cnn_qc_prob=None,
         cnn_parcellation=None,
         cnn_midlines=None,
         cnn_scalar=None,
         groups_map=None,
         roqs_shape=None,
+        removed=False,
     ):
         self.name                  = self._normalize_name(str(name))
         self.watershed_scalar      = watershed_scalar
@@ -166,8 +169,11 @@ class Subject:
         self.roqs_qc_prob          = roqs_qc_prob
         self.watershed_qc_flag     = watershed_qc_flag
         self.watershed_qc_prob     = watershed_qc_prob
+        self.cnn_qc_flag           = cnn_qc_flag
+        self.cnn_qc_prob           = cnn_qc_prob
         self.group                 = _find_group(self.img_path, groups_map or {})
         self.roqs_shape            = roqs_shape or {}
+        self.removed               = bool(removed)
 
     @staticmethod
     def _normalize_name(name: str) -> str:
@@ -193,6 +199,7 @@ class Subject:
     def to_dict(self) -> dict:
         return {
             "Id":                    self.name,
+            "removed":               self.removed,
             "img_path":              self.img_path,
             "group":                 self.group,
             "qc": {
@@ -200,6 +207,8 @@ class Subject:
                               "prob": self._safe_float(self.roqs_qc_prob)},
                 "Watershed": {"flag": self._safe_bool(self.watershed_qc_flag),
                               "prob": self._safe_float(self.watershed_qc_prob)},
+                "CNN":        {"flag": self._safe_bool(self.cnn_qc_flag),
+                               "prob": self._safe_float(self.cnn_qc_prob)},
             },
             "Watershed_scalar":       dict(self.watershed_scalar),
             "ROQS_scalar":            dict(self.roqs_scalar),
@@ -280,6 +289,37 @@ def _build_metadata() -> dict:
 
 def main():
     groups_map = _load_groups_map()
+
+    # ── Removed subjects list (optional — managed by QC panel) ──────────────
+    _REMOVED_FILE = os.path.join(_HERE, "removed_subjects.json")
+    _removed_ids: set = set()
+    try:
+        with open(_REMOVED_FILE, "r", encoding="utf-8") as f:
+            _rm_data = json.load(f)
+            _removed_ids = set(_rm_data.get("ids", []))
+        if _removed_ids:
+            print(f"[OK] removed_subjects.json: {len(_removed_ids)} subject(s) excluded from analysis", flush=True)
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        print(f"[WARNING] Could not read removed_subjects.json: {exc}", flush=True)
+
+    # ── ViT QC scores (optional — produced by methods/qc/run_qc.py) ─────────
+    _VIT_QC_FILE = os.path.join(_HERE, "vit_qc_scores.csv")
+    _vit_qc_by_subject: dict = {}   # subject_name → {roqs_prob, roqs_flag, …}
+    try:
+        vit_qc_df = pd.read_csv(_VIT_QC_FILE)
+        for _, row in vit_qc_df.iterrows():
+            raw = str(row["subject"])
+            if raw.startswith("Subject_"):
+                raw = raw[len("Subject_"):]
+            key = raw.zfill(7)
+            _vit_qc_by_subject[key] = row.to_dict()
+        print(f"[OK] vit_qc_scores.csv loaded: {len(_vit_qc_by_subject)} subject(s)", flush=True)
+    except FileNotFoundError:
+        print("[INFO] vit_qc_scores.csv not found — QC scores will be empty.", flush=True)
+    except Exception as exc:
+        print(f"[WARNING] Could not read vit_qc_scores.csv: {exc}", flush=True)
 
     # ── Read required CSVs ────────────────────────────────────────────────────
     roqs_scalar_raw = _read_csv("ROQS_scalar_statistics.csv")
@@ -370,6 +410,28 @@ def main():
     # ── Build subjects ────────────────────────────────────────────────────────
     subjects_list = []
     for i, name in enumerate(names):
+        # Normalise name the same way Subject does (strip Subject_ prefix, zfill 7)
+        norm_name = str(name)
+        if norm_name.startswith("Subject_"):
+            norm_name = norm_name[len("Subject_"):]
+        norm_name = norm_name.zfill(7)
+
+        # ── ViT QC scores (override old SVM scores when available) ───────────
+        vit_row = _vit_qc_by_subject.get(norm_name, {})
+
+        def _vit(field, fallback):
+            v = vit_row.get(field)
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                return fallback
+            return v
+
+        roqs_flag   = _vit("roqs_flag",      roqs_qc_flags[i] if i < len(roqs_qc_flags) else None)
+        roqs_prob   = _vit("roqs_prob",       roqs_qc_probs[i] if i < len(roqs_qc_probs) else None)
+        water_flag  = _vit("watershed_flag",  water_qc_flags[i] if i < len(water_qc_flags) else None)
+        water_prob  = _vit("watershed_prob",  water_qc_probs[i] if i < len(water_qc_probs) else None)
+        cnn_flag    = _vit("cnn_flag",        None)
+        cnn_prob    = _vit("cnn_prob",        None)
+
         sub = Subject(
             name,
             watershed_scalar.iloc[i],
@@ -381,28 +443,31 @@ def main():
             watershed_parcellation.iloc[i],
             roqs_parcellation.iloc[i],
             img_path          = img_paths[i] if i < len(img_paths) else "",
-            roqs_qc_flag      = roqs_qc_flags[i] if i < len(roqs_qc_flags) else None,
-            roqs_qc_prob      = roqs_qc_probs[i] if i < len(roqs_qc_probs) else None,
-            watershed_qc_flag = water_qc_flags[i] if i < len(water_qc_flags) else None,
-            watershed_qc_prob = water_qc_probs[i] if i < len(water_qc_probs) else None,
+            roqs_qc_flag      = roqs_flag,
+            roqs_qc_prob      = roqs_prob,
+            watershed_qc_flag = water_flag,
+            watershed_qc_prob = water_prob,
+            cnn_qc_flag       = cnn_flag,
+            cnn_qc_prob       = cnn_prob,
             cnn_parcellation  = _cnn_parc_by_name.get(str(name), {}),
             cnn_midlines      = _cnn_mid_by_name.get(str(name), {}),
             cnn_scalar        = _cnn_scalar_by_name.get(str(name), {}),
             groups_map        = groups_map,
             roqs_shape        = roqs_shape_rows[i] if i < len(roqs_shape_rows) else {},
+            removed           = norm_name in _removed_ids,
         )
         subjects_list.append(sub.to_dict())
 
-    # ── Remove subjects with NaN values ───────────────────────────────────────
-    clean, removed = [], []
+    # ── Remove subjects with NaN values (skip if already marked removed) ─────
+    clean, nan_dropped = [], []
     for s in subjects_list:
-        if _has_nan(s):
-            removed.append(s["Id"])
+        if not s.get("removed") and _has_nan(s):
+            nan_dropped.append(s["Id"])
         else:
             clean.append(s)
-    if removed:
+    if nan_dropped:
         print(
-            f"[WARNING] {len(removed)} subject(s) removed due to NaN values: {removed}",
+            f"[WARNING] {len(nan_dropped)} subject(s) dropped due to NaN values: {nan_dropped}",
             flush=True,
         )
     subjects_list = clean

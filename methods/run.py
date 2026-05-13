@@ -42,6 +42,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROQS_DIR = os.path.join(BASE_DIR, "roqs")
 CNN_DIR  = os.path.join(BASE_DIR, "CNNBased")
 CSVS_DIR = os.path.join(BASE_DIR, "csvs")
+QC_DIR   = os.path.join(BASE_DIR, "qc")
 PYTHON   = sys.executable
 
 
@@ -115,6 +116,7 @@ parser.add_argument(
 )
 parser.add_argument("--skip-cnn",  action="store_true", help="Skip CNN step")
 parser.add_argument("--skip-roqs", action="store_true", help="Skip ROQS step")
+parser.add_argument("--skip-qc",   action="store_true", help="Skip ViT QC step")
 parser.add_argument("--skip-json", action="store_true", help="Skip JSON conversion step")
 args = parser.parse_args()
 
@@ -175,7 +177,21 @@ if not args.skip_cnn:
 else:
     print("\n[--] CNN skipped (--skip-cnn)", flush=True)
 
-# ── Step 3 — JSON conversion ──────────────────────────────────────────────────
+# ── Step 3 — ViT Quality Control ─────────────────────────────────────────────
+
+if not args.skip_qc:
+    print(f"PROGRESS:0:{total_subjects}:Running ViT quality control", flush=True)
+    qc_ok = run_step(
+        "ViT QC — Segmentation Quality Scoring",
+        [PYTHON, "qc/run_qc.py", "-p"] + parent_folders,
+        cwd=BASE_DIR
+    )
+    if not qc_ok:
+        print("\n[WARNING] QC step failed. Continuing without QC scores…", flush=True)
+else:
+    print("\n[--] ViT QC skipped (--skip-qc)", flush=True)
+
+# ── Step 4 — JSON conversion ──────────────────────────────────────────────────
 
 if not args.skip_json:
     print(f"PROGRESS:{total_subjects}:{total_subjects}:Converting CSV to JSON", flush=True)

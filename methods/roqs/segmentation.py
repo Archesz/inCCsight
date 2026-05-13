@@ -324,14 +324,18 @@ def _collect_segm_stats(segmentation, FA, MD, RD, AD, scalar_maps, sub):
     scalar_stats = getScalars(segmentation, FA, MD, RD, AD)
 
     try:
+        from libcc import points as _lcc_points
+        _px, _py = _lcc_points(segmentation, 201)   # 201 knots → 200 intervals
+        _midline_y = str([float(_py[i]) for i in range(200)])
         midlines = {
             'FA': str([float(x) for x in getFAmidline(segmentation, FA, n_points=200)]),
             'MD': str([float(x) for x in getFAmidline(segmentation, MD, n_points=200)]),
             'RD': str([float(x) for x in getFAmidline(segmentation, RD, n_points=200)]),
             'AD': str([float(x) for x in getFAmidline(segmentation, AD, n_points=200)]),
+            'y':  _midline_y,
         }
     except Exception:
-        midlines = {'FA': '[]', 'MD': '[]', 'RD': '[]', 'AD': '[]'}
+        midlines = {'FA': '[]', 'MD': '[]', 'RD': '[]', 'AD': '[]', 'y': '[]'}
 
     try:
         col_heights = np.sum(segmentation, axis=0).astype(float)
@@ -385,19 +389,8 @@ def get_segm(data_paths):
     w_midlinesList         = []
     w_thicknessList        = []
     w_parcellationStatsList = []
-    # ── QC accumulators ──────────────────────────────────────────────────────
-    qc_roqs_flags = []; qc_roqs_probs = []
-    qc_water_flags = []; qc_water_probs = []
-
-    # Load QC model once (graceful fallback if models are missing)
-    try:
-        shape_imports = libcc.shapeSignImports()
-        _qc_available = True
-        print("✓ QC: modelos carregados com sucesso.", flush=True)
-    except Exception as _qc_err:
-        shape_imports = None
-        _qc_available = False
-        print(f"[WARN] QC: não foi possível carregar modelos ({_qc_err}). QC será ignorado.", flush=True)
+    # QC is now handled by the dedicated ViT-B/16 step (methods/qc/run_qc.py)
+    # which runs after ROQS+CNN and scores all saved NIfTI masks.
 
     for data_path in data_paths:
         try:
@@ -443,22 +436,8 @@ def get_segm(data_paths):
             canvas[fissure, :, :] = segmentation
             save.save_nii(data_path, 'segm_roqs', canvas, affine)
 
-            # ── ROQS Quality Check ───────────────────────────────────────────
-            if _qc_available:
-                try:
-                    qc_flag, qc_prob = libcc.checkShapeSign(segmentation, shape_imports)
-                    qc_roqs_flags.append(bool(qc_flag))
-                    qc_roqs_probs.append(float(qc_prob[0]) if hasattr(qc_prob, '__len__') else float(qc_prob))
-                    print(f"  → QC ROQS: flag={qc_flag}, prob={qc_prob}", flush=True)
-                except Exception as _qce:
-                    print(f"  [WARN] QC ROQS falhou para {sub}: {_qce}", flush=True)
-                    qc_roqs_flags.append(None)
-                    qc_roqs_probs.append(None)
-            else:
-                qc_roqs_flags.append(None)
-                qc_roqs_probs.append(None)
-
             # ── Watershed segmentation ────────────────────────────────────────
+            _sh_r0 = _sh_r1 = _sh_c0 = _sh_c1 = None   # shared crop (set when WS succeeds)
             print(f"  → Executando Watershed para {sub}", flush=True)
             try:
                 segm_w, _, _ = libcc.segm_watershed(wFA)
@@ -481,47 +460,46 @@ def get_segm(data_paths):
                 canvas_w[fissure, :, :] = segm_w
                 save.save_nii(data_path, 'segm_watershed', canvas_w, affine)
 
+                # ── Shared bounding box: union of ROQS + Watershed masks ──────
+                _PAD_SH = 20
+                _rr_sh  = np.where(segmentation.any(axis=1))[0]
+                _cr_sh  = np.where(segmentation.any(axis=0))[0]
+                _rw_sh  = np.where(segm_w.any(axis=1))[0]
+                _cw_sh  = np.where(segm_w.any(axis=0))[0]
+                if _rr_sh.size and _cr_sh.size and _rw_sh.size and _cw_sh.size:
+                    _sh_r0 = max(min(_rr_sh[0],  _rw_sh[0])  - _PAD_SH, 0)
+                    _sh_r1 = min(max(_rr_sh[-1], _rw_sh[-1]) + _PAD_SH, segmentation.shape[0])
+                    _sh_c0 = max(min(_cr_sh[0],  _cw_sh[0])  - _PAD_SH, 0)
+                    _sh_c1 = min(max(_cr_sh[-1], _cw_sh[-1]) + _PAD_SH, segmentation.shape[1])
+                else:
+                    _sh_r0, _sh_r1 = 0, segmentation.shape[0]
+                    _sh_c0, _sh_c1 = 0, segmentation.shape[1]
+
                 # ── PNG midsagital Watershed ─────────────────────────────────
                 try:
                     from skimage import measure as sk_measure
                     PANEL_BG = '#1F2C56'
-                    fig_w, ax_w = plt.subplots(figsize=(5, 3.5), dpi=100, facecolor=PANEL_BG)
+                    fig_w, ax_w = plt.subplots(figsize=(4, 3), dpi=120, facecolor=PANEL_BG)
                     ax_w.set_facecolor('#0d0d0d')
-                    im_w = ax_w.imshow(FA, cmap='gray', vmin=0, vmax=1)
-                    cbar_w = plt.colorbar(im_w, ax=ax_w)
-                    cbar_w.ax.tick_params(colors='white', labelsize=8)
-                    cbar_w.outline.set_edgecolor('#aaaaaa')
-                    plt.setp(cbar_w.ax.yaxis.get_ticklabels(), color='white')
+                    ax_w.imshow(FA, cmap='gray', vmin=0, vmax=1)
+                    ax_w.set_xlim(_sh_c0, _sh_c1)
+                    ax_w.set_ylim(_sh_r1, _sh_r0)
                     for c in sk_measure.find_contours(segm_w.astype(float), 0.5):
                         ax_w.plot(c[:, 1], c[:, 0], color='#FF9900', linewidth=1.5)
                     ax_w.set_xticks([]); ax_w.set_yticks([])
                     for sp in ax_w.spines.values():
                         sp.set_visible(False)
-                    fig_w.tight_layout()
+                    ax_w.set_aspect('equal')
+                    fig_w.tight_layout(pad=0.1)
                     out_dir_w = os.path.join(data_path, 'inCCsight')
                     os.makedirs(out_dir_w, exist_ok=True)
                     fig_w.savefig(os.path.join(out_dir_w, 'midsagittal_watershed.png'),
-                                  bbox_inches='tight', dpi=100, facecolor=PANEL_BG)
+                                  bbox_inches='tight', dpi=120, facecolor=PANEL_BG)
                     plt.close(fig_w)
                 except Exception:
                     plt.close('all')
 
                 print(f"  → Watershed concluído", flush=True)
-
-                # ── Watershed Quality Check ──────────────────────────────────
-                if _qc_available:
-                    try:
-                        qc_flag_w, qc_prob_w = libcc.checkShapeSign(segm_w, shape_imports)
-                        qc_water_flags.append(bool(qc_flag_w))
-                        qc_water_probs.append(float(qc_prob_w[0]) if hasattr(qc_prob_w, '__len__') else float(qc_prob_w))
-                        print(f"  → QC Watershed: flag={qc_flag_w}, prob={qc_prob_w}", flush=True)
-                    except Exception as _qce_w:
-                        print(f"  [WARN] QC Watershed falhou para {sub}: {_qce_w}", flush=True)
-                        qc_water_flags.append(None)
-                        qc_water_probs.append(None)
-                else:
-                    qc_water_flags.append(None)
-                    qc_water_probs.append(None)
 
             except Exception as e_w:
                 import traceback as _tb
@@ -535,8 +513,6 @@ def get_segm(data_paths):
                 w_midlinesList.append(roqs_midlines)
                 w_thicknessList.append(thickness_200)
                 w_parcellationStatsList.append(parc_row)
-                qc_water_flags.append(True)   # marca FAIL: Watershed não convergiu
-                qc_water_probs.append(None)
 
             sub_data = {
                 "name":    sub,
@@ -551,32 +527,41 @@ def get_segm(data_paths):
             try:
                 from skimage import measure as sk_measure
 
+                # Use shared crop when Watershed succeeded, else ROQS-only crop
+                if _sh_r0 is not None:
+                    r0_r, r1_r, c0_r, c1_r = _sh_r0, _sh_r1, _sh_c0, _sh_c1
+                else:
+                    _rr = np.where(segmentation.any(axis=1))[0]
+                    _cr = np.where(segmentation.any(axis=0))[0]
+                    if _rr.size and _cr.size:
+                        _pr  = 20
+                        r0_r = max(_rr[0] - _pr, 0);  r1_r = min(_rr[-1] + _pr, segmentation.shape[0])
+                        c0_r = max(_cr[0] - _pr, 0);  c1_r = min(_cr[-1] + _pr, segmentation.shape[1])
+                    else:
+                        r0_r, r1_r = 0, segmentation.shape[0]
+                        c0_r, c1_r = 0, segmentation.shape[1]
+
                 PANEL_BG = '#1F2C56'
-                fig, ax = plt.subplots(figsize=(5, 3.5), dpi=100, facecolor=PANEL_BG)
+                fig, ax = plt.subplots(figsize=(4, 3), dpi=120, facecolor=PANEL_BG)
                 ax.set_facecolor('#0d0d0d')
-
-                im = ax.imshow(FA, cmap='gray', vmin=0, vmax=1)
-
-                cbar = plt.colorbar(im, ax=ax)
-                cbar.ax.tick_params(colors='white', labelsize=8)
-                cbar.outline.set_edgecolor('#aaaaaa')
-                plt.setp(cbar.ax.yaxis.get_ticklabels(), color='white')
+                ax.imshow(FA, cmap='gray', vmin=0, vmax=1)
+                ax.set_xlim(c0_r, c1_r)
+                ax.set_ylim(r1_r, r0_r)
 
                 contours = sk_measure.find_contours(segmentation.astype(float), 0.5)
                 for c in contours:
                     ax.plot(c[:, 1], c[:, 0], 'r-', linewidth=1.5)
 
-                ax.set_xticks([])
-                ax.set_yticks([])
+                ax.set_xticks([]); ax.set_yticks([])
                 for spine in ax.spines.values():
                     spine.set_visible(False)
-
-                fig.tight_layout()
+                ax.set_aspect('equal')
+                fig.tight_layout(pad=0.1)
 
                 out_dir = os.path.join(data_path, 'inCCsight')
                 os.makedirs(out_dir, exist_ok=True)
                 img_path = os.path.join(out_dir, 'midsagittal_roqs.png')
-                fig.savefig(img_path, bbox_inches='tight', dpi=100, facecolor=PANEL_BG)
+                fig.savefig(img_path, bbox_inches='tight', dpi=120, facecolor=PANEL_BG)
                 plt.close(fig)
             except Exception:
                 plt.close('all')
@@ -619,8 +604,6 @@ def get_segm(data_paths):
         'RD': meanRDList, 'RD StdDev': stdRDList,
         'AD': meanADList, 'AD StdDev': stdADList,
         'img_path': imgPathList,
-        'qc_flag': qc_roqs_flags,
-        'qc_prob': qc_roqs_probs,
         # ── shape metrics ────────────────────────────────────────────────
         'shape_area':          shape_area,
         'shape_cc_length':     shape_length,
@@ -644,8 +627,6 @@ def get_segm(data_paths):
         'RD': w_meanRDList, 'RD StdDev': w_stdRDList,
         'AD': w_meanADList, 'AD StdDev': w_stdADList,
         'img_path': imgPathList,   # same PNG (ROQS midsagittal)
-        'qc_flag': qc_water_flags,
-        'qc_prob': qc_water_probs,
     }, index=names)
     df_watershed_scalar.to_csv("../csvs/Watershed_scalar_statistics.csv", sep=";")
 

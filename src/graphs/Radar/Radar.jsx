@@ -113,8 +113,8 @@ function RadarBySegmentation({ data }) {
         title:  { text: 'Segmentations by Parcellation', font: { size: 14 } },
         legend: { orientation: 'h' },
         polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
-        margin: { t: 48, l: 32, r: 32, b: 8 },
-        height: 380,
+        margin: { t: 40, l: 20, r: 20, b: 8 },
+        height: 300,
     }
 
     return (
@@ -122,7 +122,12 @@ function RadarBySegmentation({ data }) {
             <Plot
                 data={plotData}
                 layout={layout}
-                config={{ responsive: true, displayModeBar: false }}
+                config={{
+                    responsive: true,
+                    displayModeBar: 'hover',
+                    modeBarButtons: [['toImage']],
+                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'radar_chart' },
+                }}
                 style={{ width: '100%' }}
                 useResizeHandler
             />
@@ -185,8 +190,8 @@ function RadarByParcellation({ data }) {
         title:  { text: 'Parcellations by Segmentation', font: { size: 14 } },
         legend: { orientation: 'h' },
         polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
-        margin: { t: 48, l: 32, r: 32, b: 8 },
-        height: 380,
+        margin: { t: 40, l: 20, r: 20, b: 8 },
+        height: 300,
     }
 
     return (
@@ -194,7 +199,12 @@ function RadarByParcellation({ data }) {
             <Plot
                 data={plotData}
                 layout={layout}
-                config={{ responsive: true, displayModeBar: false }}
+                config={{
+                    responsive: true,
+                    displayModeBar: 'hover',
+                    modeBarButtons: [['toImage']],
+                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'radar_chart' },
+                }}
                 style={{ width: '100%' }}
                 useResizeHandler
             />
@@ -232,4 +242,5 @@ function Radar(props) {
     )
 }
 
+export { RadarBySegmentation, RadarByParcellation }
 export default memo(Radar)

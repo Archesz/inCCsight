@@ -1,0 +1,401 @@
+// ── QualityControl panel ──────────────────────────────────────────────────────
+
+$bg      : #F3F5FB;
+$surface : #ffffff;
+$border  : #E3E7F0;
+$primary : #111F4A;
+$accent  : #4C6EF5;
+$green   : #00C896;
+$red     : #E74C3C;
+$orange  : #F5A623;
+$muted   : #7a849e;
+$text    : #1a1f36;
+
+.qc-root {
+    display: flex;
+    flex-direction: column;
+    min-height: min-content;
+    background: $bg;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+// ── Controls bar ──────────────────────────────────────────────────────────────
+.qc-ctrl-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 14px 24px;
+    background: $surface;
+    border-bottom: 1px solid $border;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+
+    .qcc-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+
+        &--check {
+            justify-content: flex-end;
+        }
+    }
+
+    .qcc-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: $muted;
+
+        strong { color: $text; font-size: 11px; }
+    }
+
+    .qcc-method-tabs {
+        display: flex;
+        gap: 3px;
+
+        .qcc-mtab {
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: 1.5px solid $border;
+            background: transparent;
+            color: $muted;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.14s;
+
+            &:hover { border-color: $accent; color: $accent; }
+            &.active { background: $primary; border-color: $primary; color: white; }
+        }
+    }
+
+    .qcc-slider {
+        width: 160px;
+        accent-color: $accent;
+        cursor: pointer;
+    }
+
+    .qcc-select {
+        height: 28px;
+        border: 1.5px solid $border;
+        border-radius: 6px;
+        padding: 0 8px;
+        font-size: 12px;
+        background: #fafbfe;
+        color: $text;
+        outline: none;
+        cursor: pointer;
+        min-width: 70px;
+
+        &:focus { border-color: $accent; }
+    }
+
+    .qcc-check-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: $muted;
+        cursor: pointer;
+
+        input[type='checkbox'] {
+            accent-color: $accent;
+            width: 14px;
+            height: 14px;
+        }
+    }
+}
+
+// ── Stats bar ─────────────────────────────────────────────────────────────────
+.qc-stats-bar {
+    display: flex;
+    gap: 12px;
+    padding: 10px 24px;
+    background: $surface;
+    border-bottom: 1px solid $border;
+    flex-shrink: 0;
+
+    .qcs {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 70px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid $border;
+        background: #f9fafd;
+
+        &--flag  { border-color: rgba($red,    0.3); background: rgba($red,    0.05); }
+        &--shape { border-color: rgba($orange,  0.3); background: rgba($orange,  0.05); }
+        &--z     { border-color: rgba($accent,  0.3); background: rgba($accent,  0.05); }
+        &--rm    { border-color: rgba($muted,   0.3); background: rgba($muted,   0.05); }
+    }
+
+    .qcs-val {
+        font-size: 20px;
+        font-weight: 800;
+        color: $text;
+        line-height: 1;
+
+        .qcs--flag  & { color: $red;    }
+        .qcs--shape & { color: $orange; }
+        .qcs--z     & { color: $accent; }
+        .qcs--rm    & { color: $muted;  }
+    }
+
+    .qcs-lbl {
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: $muted;
+        margin-top: 3px;
+        white-space: nowrap;
+    }
+}
+
+// ── Action bar ────────────────────────────────────────────────────────────────
+.qc-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+    background: $surface;
+    border-bottom: 1px solid $border;
+    flex-shrink: 0;
+    gap: 12px;
+
+    .qca-sel,
+    .qca-act {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .qca-btn {
+        height: 30px;
+        padding: 0 14px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+
+        &.ghost {
+            border: 1.5px solid $border;
+            background: transparent;
+            color: $muted;
+            &:hover:not(:disabled) { border-color: $accent; color: $accent; }
+        }
+
+        &.danger {
+            border: 1.5px solid $red;
+            background: rgba($red, 0.08);
+            color: $red;
+            &:hover:not(:disabled) { background: $red; color: white; }
+        }
+
+        &.restore {
+            border: 1.5px solid $accent;
+            background: rgba($accent, 0.08);
+            color: $accent;
+            &:hover:not(:disabled) { background: $accent; color: white; }
+        }
+
+        &:disabled { opacity: 0.45; cursor: default; }
+    }
+}
+
+// ── Grid area ─────────────────────────────────────────────────────────────────
+.qc-grid-area {
+    padding: 20px 24px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+.qcg-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .qcg-section-hd {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: $muted;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid $border;
+
+        &--flag { color: $red;    border-bottom-color: rgba($red,    0.3); }
+        &--pass { color: $green;  border-bottom-color: rgba($green,  0.25); }
+        &--rm   { color: $muted;  border-bottom-color: $border; }
+
+        .qcg-hint {
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: 0;
+            color: rgba($muted, 0.7);
+            font-size: 9px;
+        }
+    }
+}
+
+// ── Card grid ─────────────────────────────────────────────────────────────────
+.qcg {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+// ── Subject card ──────────────────────────────────────────────────────────────
+.qcc {
+    background: $surface;
+    border: 1.5px solid $border;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.14s, box-shadow 0.14s, opacity 0.14s;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+
+    &:hover:not(.qcc--removed) {
+        border-color: $accent;
+        box-shadow: 0 2px 12px rgba($accent, 0.18);
+    }
+
+    &--flagged {
+        border-color: rgba($red, 0.4);
+        &:hover { border-color: $red; box-shadow: 0 2px 12px rgba($red, 0.2); }
+    }
+
+    &--selected {
+        border-color: $accent !important;
+        box-shadow: 0 0 0 2px rgba($accent, 0.28) !important;
+        background: rgba($accent, 0.04);
+    }
+
+    &--removed {
+        opacity: 0.5;
+        cursor: default;
+        border-style: dashed;
+    }
+}
+
+// thumbnail
+.qcc-img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #0d0d1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+
+    .qcc-no-img {
+        color: rgba(255,255,255,0.2);
+        font-size: 20px;
+        font-weight: 300;
+    }
+}
+
+// card body
+.qcc-info {
+    padding: 7px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    position: relative;
+}
+
+.qcc-id {
+    font-size: 11px;
+    font-weight: 700;
+    color: $text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.qcc-group {
+    font-size: 9px;
+    font-weight: 600;
+    color: $muted;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.qcc-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 2px;
+}
+
+.qcc-tag {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+
+    &.shape-fail { background: rgba($red,    0.12); color: $red;    }
+    &.shape-pass { background: rgba($green,  0.12); color: darken($green, 10%); }
+    &.z-fail     { background: rgba($orange, 0.14); color: darken($orange, 10%); }
+    &.z-pass     { background: rgba($accent, 0.10); color: $accent; }
+}
+
+.qcc-check {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 15px;
+    height: 15px;
+    accent-color: $accent;
+    cursor: pointer;
+}
+
+.qcc-restore-btn {
+    margin-top: 5px;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 5px;
+    border: 1.5px solid $accent;
+    background: rgba($accent, 0.08);
+    color: $accent;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: all 0.14s;
+
+    &:hover:not(:disabled) { background: $accent; color: white; }
+    &:disabled { opacity: 0.5; cursor: default; }
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+.qc-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: $muted;
+    font-size: 14px;
+}

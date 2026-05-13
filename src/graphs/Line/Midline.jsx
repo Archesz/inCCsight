@@ -315,7 +315,12 @@ function Midline(props) {
             <Plot
                 data={traces}
                 layout={layout}
-                config={{ responsive: true, displayModeBar: false }}
+                config={{
+                    responsive: true,
+                    displayModeBar: 'hover',
+                    modeBarButtons: [['toImage']],
+                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'midline_profile' },
+                }}
                 style={{ width: '100%' }}
                 useResizeHandler
             />

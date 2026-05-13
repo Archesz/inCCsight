@@ -68,7 +68,12 @@ function Boxplot(props) {
         <Plot
             data={data}
             layout={layout}
-            config={{ responsive: true, displayModeBar: false }}
+            config={{
+                responsive: true,
+                displayModeBar: 'hover',
+                modeBarButtons: [['toImage']],
+                toImageButtonOptions: { format: 'png', scale: 2, filename: `boxplot_${props.title || 'chart'}` },
+            }}
             style={{ width: '100%' }}
             useResizeHandler
         />

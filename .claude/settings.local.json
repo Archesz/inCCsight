@@ -28,7 +28,18 @@
       "WebFetch(domain:www.nature.com)",
       "WebFetch(domain:link.springer.com)",
       "Bash(node -e ' *)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Read(//c/Users/jv866/Downloads/**)",
+      "Bash(powershell -command \"Expand-Archive -Path 'quality-control-segmentation \\(1\\).zip' -DestinationPath 'qc-inspect' -Force\")",
+      "Bash(dir \"qc-inspect\" /s /b)",
+      "Bash(python3 -c ' *)",
+      "PowerShell(& \"C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\venv\\\\Scripts\\\\python.exe\" -c \"import torchvision; print\\('torchvision OK:', torchvision.__version__\\)\" 2>&1)",
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; & \"C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\jv866\\\\inCCsight\\\\methods\\\\qc\\\\run_qc.py\" -p \"C:\\\\Users\\\\jv866\\\\Downloads\\\\Teste_InCCsight\" 2>&1)",
+      "Bash(node --input-type=module --eval ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('segmentation.py'\\).read\\(\\)\\); print\\('segmentation.py: syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('segmentation.py', encoding='utf-8'\\).read\\(\\)\\); print\\('segmentation.py: syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('segmentation.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('segmentation.py', encoding='utf-8'\\).read\\(\\)\\); print\\('segmentation.py: OK'\\)\")"
     ]
   }
 }

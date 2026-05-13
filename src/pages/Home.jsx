@@ -5,6 +5,7 @@ import logo    from '../assets/images/inccsight.png'
 import View            from '../components/View/View'
 import GroupComparison from '../components/GroupComparison/GroupComparison'
 import Glossary        from '../components/Glossary/Glossary'
+import QualityControl  from '../components/QualityControl/QualityControl'
 
 import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
@@ -27,7 +28,25 @@ function Home() {
     const [qcFilter,     setQcFilter]     = useState(false)
     const [loading,      setLoading]      = useState(true)
     const [error,        setError]        = useState(null)
-    const [showGlossary, setShowGlossary] = useState(false)
+    const [showGlossary,      setShowGlossary]      = useState(false)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+    function _applySubjects(subjects) {
+        const groups = [...new Set(subjects.map(s => s.group || '').filter(Boolean))]
+        setAllSubjects(subjects)
+        setAllGroups(groups)
+        setGroupColor(Object.fromEntries(groups.map((g, i) => [g, i])))
+    }
+
+    function reloadData() {
+        fetch('http://localhost:3001/api/mydata')
+            .then(r => r.json())
+            .then(json => {
+                const subjects = Array.isArray(json) ? json : (json.subjects || [])
+                _applySubjects(subjects)
+            })
+            .catch(e => console.error('Reload failed:', e))
+    }
 
     useEffect(() => {
         fetch('http://localhost:3001/api/mydata')
@@ -38,27 +57,27 @@ function Home() {
             .then(json => {
                 // Support both legacy array format and new {_metadata, subjects} format
                 const subjects = Array.isArray(json) ? json : (json.subjects || [])
-                const groups = [...new Set(subjects.map(s => s.group || '').filter(Boolean))]
-                setAllSubjects(subjects)
-                setData(subjects)
-                setAllGroups(groups)
-                setGroupColor(Object.fromEntries(groups.map((g, i) => [g, i])))
+                _applySubjects(subjects)
                 setLoading(false)
             })
             .catch(e => { setError(e.message); setLoading(false) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // Active subjects excludes those explicitly removed via QC panel
+    const activeSubjects = allSubjects.filter(s => !s.removed)
 
     // ── Subject selection ──────────────────────────────────────────────────
     function selectSubject(id) {
         if (id === '__all__') {
             setSelectedId(null)
-            const filtered = allSubjects
+            const filtered = activeSubjects
                 .filter(s => !groupFilter || s.group === groupFilter)
-                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true)
+                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
             setData(filtered)
         } else {
             setSelectedId(id)
-            setData(allSubjects.filter(s => s['Id'] === id))
+            setData(activeSubjects.filter(s => s['Id'] === id))
         }
     }
 
@@ -67,21 +86,26 @@ function Home() {
     }
 
     // ── Subjects visible in sidebar ────────────────────────────────────────
-    const visibleSubjects = allSubjects
+    const visibleSubjects = activeSubjects
         .filter(s => !groupFilter || s.group === groupFilter)
-        .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true)
+        .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
         .filter(s => s['Id'].toLowerCase().includes(search.toLowerCase()))
 
-    const failCount = allSubjects.filter(s => s.qc?.ROQS?.flag === true).length
+    const failCount = activeSubjects.filter(s =>
+        s.qc?.ROQS?.flag === true ||
+        s.qc?.Watershed?.flag === true ||
+        s.qc?.CNN?.flag === true
+    ).length
 
     // ── Update data when filter changes ────────────────────────────────────
     useEffect(() => {
         if (!selectedId) {
-            const filtered = allSubjects
+            const filtered = activeSubjects
                 .filter(s => !groupFilter || s.group === groupFilter)
-                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true)
+                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
             setData(filtered)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [groupFilter, qcFilter, allSubjects, selectedId])
 
     // ── Loading and error states ───────────────────────────────────────────
@@ -117,6 +141,7 @@ function Home() {
                         ...(allGroups.length >= 2
                             ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
                             : []),
+                        { id: 'qc', label: 'Quality Control' },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -165,7 +190,8 @@ function Home() {
             <div className='dash-body'>
 
                 {/* ── Sidebar ─────────────────────────────────────────────── */}
-                <div className='dash-sidebar'>
+                <div className='sidebar-wrap'>
+                <div className={`dash-sidebar${sidebarCollapsed ? ' dash-sidebar--collapsed' : ''}`}>
                     <div className='sidebar-head'>
                         <span className='sidebar-title'>Subjects</span>
                         <input
@@ -232,11 +258,24 @@ function Home() {
                         )}
                     </div>
                 </div>
+                <button
+                    className='sidebar-toggle-btn'
+                    onClick={() => setSidebarCollapsed(v => !v)}
+                    title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                    {sidebarCollapsed ? '›' : '‹'}
+                </button>
+                </div>
 
                 {/* ── Main ────────────────────────────────────────────────── */}
                 <div className='dash-main'>
-                    {activeTab === 'compare'
-                        ? <GroupComparison allSubjects={allSubjects} allGroups={allGroups} />
+                    {activeTab === 'qc'
+                        ? <QualityControl
+                            allSubjects={allSubjects}
+                            onReload={reloadData}
+                          />
+                        : activeTab === 'compare'
+                        ? <GroupComparison allSubjects={activeSubjects} allGroups={allGroups} />
                         : <View
                             view={activeTab}
                             data={data}

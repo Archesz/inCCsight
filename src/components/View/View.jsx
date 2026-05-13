@@ -7,8 +7,8 @@ import BoxplotParcellation from '../../graphs/Boxplot/BoxplotParcellation'
 import Scatter             from '../../graphs/Scatter/Scatter'
 import Midline             from '../../graphs/Line/Midline'
 import VolumetricView      from '../../graphs/Volume/VolumetricView'
-import Radar               from '../../graphs/Radar/Radar'
-import BiomarkerProfile    from '../../graphs/BiomarkerProfile/BiomarkerProfile'
+import Radar, { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
+import BubblePlot         from '../../graphs/BubblePlot/BubblePlot'
 
 import '../../styles/home.scss'
 
@@ -71,7 +71,6 @@ function SubjectBanner({ subject, onDeselect }) {
     const [imgErrors,   setImgErrors]   = useState({})
     const [parcMethod,  setParcMethod]  = useState('Witelson')
     const [parcScalar,  setParcScalar]  = useState('FA')
-    const [showBiomark, setShowBiomark] = useState(false)
 
     const qc      = subject.qc || {}
     const hasCNN  = Object.keys(subject.CNN_scalar  || {}).length > 0
@@ -131,11 +130,12 @@ function SubjectBanner({ subject, onDeselect }) {
                 )}
 
                 {/* QC — only shown when real data is present */}
-                {(qc.ROQS?.flag != null || qc.Watershed?.flag != null) && (
+                {(qc.ROQS?.flag != null || qc.Watershed?.flag != null || qc.CNN?.flag != null) && (
                     <div className='sb-qc-row'>
                         {[
                             { method: 'ROQS',      q: qc.ROQS      },
                             { method: 'Watershed', q: qc.Watershed },
+                            { method: 'CNN',       q: qc.CNN        },
                         ].map(({ method, q }) => {
                             if (!q || q.flag == null) return null
                             const cls   = q.flag === true ? 'fail' : 'pass'
@@ -145,7 +145,10 @@ function SubjectBanner({ subject, onDeselect }) {
                                     <span className='sqc-method'>{method}</span>
                                     <span className={`sqc-badge ${cls}`}>{label}</span>
                                     {q.prob != null && (
-                                        <span className='sqc-prob'>{(q.prob * 100).toFixed(1)}%</span>
+                                        <span className='sqc-prob'
+                                              title='P(incorrect) — ViT-B/16 quality model'>
+                                            {(q.prob * 100).toFixed(1)}%
+                                        </span>
                                     )}
                                 </div>
                             )
@@ -277,18 +280,6 @@ function SubjectBanner({ subject, onDeselect }) {
                     )
                 })()}
 
-                {/* ── Biomarker Profile ───────────────────────────────── */}
-                <div className='sb-biomarker-wrap'>
-                    <button
-                        className='sb-biomarker-toggle'
-                        onClick={() => setShowBiomark(v => !v)}
-                    >
-                        {showBiomark ? '▲' : '▼'} Biomarker Profile
-                    </button>
-                    {showBiomark && (
-                        <BiomarkerProfile subject={subject} method='ROQS' />
-                    )}
-                </div>
 
             </div>
         </div>
@@ -408,35 +399,47 @@ function View({ view, data, selectedId, onDeselect }) {
                     <KPIRow data={data} method={kpiMethod} />
                 </Card>
 
-                {/* Data tables */}
-                <Card title='Segmentation Table'>
-                    <TableSegmentation data={data} type='2D' />
-                </Card>
+                {/* Data tables — side by side */}
+                <div className='two-col'>
+                    <Card title='Segmentation Table'>
+                        <TableSegmentation data={data} type='2D' />
+                    </Card>
+                    <Card title='Parcellation Table'>
+                        <TableParcellation data={data} type='2D' />
+                    </Card>
+                </div>
 
-                <Card title='Parcellation Table'>
-                    <TableParcellation data={data} type='2D' />
-                </Card>
+                {/* Row 3 — Midline | Bubble Plot */}
+                <div className='two-col'>
+                    <Card title='Midline Profile Along the Corpus Callosum'>
+                        <Midline data={data} />
+                    </Card>
+                    <Card title='Bubble Plots — CC Body Profile'>
+                        <BubblePlot data={data} />
+                    </Card>
+                </div>
 
-                {/* Midline Profile */}
-                <Card title='Midline Profile Along the Corpus Callosum'>
-                    <Midline data={data} />
-                </Card>
-
-                {/* Distribution boxplots */}
+                {/* Row 4 — Segmentation Boxplot (full width) */}
                 <Card title='Distributions — Scalars by Segmentation Method'>
                     <BoxplotSegmentation data={data} />
                 </Card>
 
+                {/* Row 5 — Parcellation Boxplot (full width) */}
                 <Card title='Distributions — Parcellation by Part'>
                     <BoxplotParcellation data={data} />
                 </Card>
 
-                {/* Parcellation Radar */}
-                <Card title='Parcellation Analysis — Radar'>
-                    <Radar data={data} />
-                </Card>
+                {/* Row 6 — Radar charts side by side */}
+                <div className='two-col'>
+                    <Card title='Segmentations by Parcellation'>
+                        <RadarBySegmentation data={data} />
+                    </Card>
+                    <Card title='Parcellations by Segmentation'>
+                        <RadarByParcellation data={data} />
+                    </Card>
+                </div>
 
-                {/* Scatter Correlation */}
+                {/* Row 7 — Scatter + histograms */}
                 <Card title='Scalar Correlation'>
                     <Scatter data={data} />
                 </Card>

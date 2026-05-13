@@ -1,0 +1,77 @@
+// ── BubblePlot ────────────────────────────────────────────────────────────────
+
+.bp-root {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+// controls row
+.bp-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.bp-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.bp-ctrl-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #7a849e;
+    white-space: nowrap;
+}
+
+.bp-select {
+    height: 28px;
+    border: 1.5px solid #E3E7F0;
+    border-radius: 6px;
+    padding: 0 8px;
+    font-size: 12px;
+    background: #fafbfe;
+    color: #1a1f36;
+    outline: none;
+    cursor: pointer;
+    min-width: 80px;
+
+    &:focus { border-color: #4C6EF5; }
+}
+
+.bp-hint {
+    font-size: 11px;
+    color: #aab0c4;
+    font-style: italic;
+    margin-left: auto;
+}
+
+// plot container
+.bp-plots {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    // Plotly JS adds an outer div — make it fill width
+    > div {
+        width: 100%;
+    }
+}
+
+// empty state
+.bp-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    color: #aab0c4;
+    font-size: 13px;
+    background: #f5f7fb;
+    border-radius: 8px;
+}

@@ -132,6 +132,125 @@ app.post('/api/check-paths', (req, res) => {
   res.json(results)
 })
 
+// ── POST /api/browse-folder — open native OS folder-picker dialog ─────────────
+// Returns { path: "..." } on success, { path: "" } when user cancels,
+// or { error: "..." } when the platform is not supported.
+app.post('/api/browse-folder', (_req, res) => {
+  const { execFile, exec } = require('child_process')
+
+  if (process.platform === 'win32') {
+    // PowerShell FolderBrowserDialog — works headless on Win10/11
+    const ps = [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `Add-Type -AssemblyName System.Windows.Forms;` +
+      `$d = New-Object System.Windows.Forms.FolderBrowserDialog;` +
+      `$d.Description = 'Select subject/group folder';` +
+      `$d.ShowNewFolderButton = $false;` +
+      `if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath } else { '' }`
+    ]
+    execFile('powershell.exe', ps, { timeout: 60000 }, (err, stdout) => {
+      if (err) return res.json({ path: '' })
+      res.json({ path: stdout.trim() })
+    })
+
+  } else if (process.platform === 'darwin') {
+    // macOS: AppleScript
+    exec(
+      `osascript -e 'POSIX path of (choose folder with prompt "Select subject/group folder")'`,
+      { timeout: 60000 },
+      (err, stdout) => res.json({ path: err ? '' : stdout.trim().replace(/\/$/, '') })
+    )
+
+  } else {
+    // Linux: try zenity, fall back to kdialog
+    exec('which zenity', (e) => {
+      if (!e) {
+        exec('zenity --file-selection --directory --title="Select subject/group folder"',
+          { timeout: 60000 },
+          (err, stdout) => res.json({ path: err ? '' : stdout.trim() })
+        )
+      } else {
+        exec('kdialog --getexistingdirectory .',
+          { timeout: 60000 },
+          (err, stdout) => {
+            if (err) return res.status(501).json({ error: 'Install zenity or kdialog for folder picker support.' })
+            res.json({ path: stdout.trim() })
+          }
+        )
+      }
+    })
+  }
+})
+
+// ── GET /api/removed-subjects ─────────────────────────────────────────────────
+app.get('/api/removed-subjects', (_req, res) => {
+  const rmFile = path.join(methodsDir, 'csvs', 'removed_subjects.json')
+  try {
+    const data = JSON.parse(fs.readFileSync(rmFile, 'utf8'))
+    res.json({ ids: data.ids || [] })
+  } catch (_) {
+    res.json({ ids: [] })
+  }
+})
+
+// ── POST /api/remove-subjects — add IDs to removed list + re-run transform ───
+app.post('/api/remove-subjects', (req, res) => {
+  const { execSync } = require('child_process')
+  const { ids = [] } = req.body
+  const rmFile = path.join(methodsDir, 'csvs', 'removed_subjects.json')
+
+  let current = { ids: [] }
+  try { current = JSON.parse(fs.readFileSync(rmFile, 'utf8')) } catch (_) {}
+
+  const newIds = [...new Set([...current.ids, ...ids])]
+  try {
+    fs.writeFileSync(rmFile, JSON.stringify({ ids: newIds }, null, 2), 'utf-8')
+  } catch (e) {
+    return res.status(500).json({ error: 'Could not write removed_subjects.json: ' + e.message })
+  }
+
+  try {
+    execSync(`"${python}" -u transformInJson.py`, {
+      cwd: path.join(methodsDir, 'csvs'),
+      timeout: 30000,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
+    })
+  } catch (e) {
+    console.warn('[WARN] transformInJson.py failed after remove:', e.message)
+  }
+
+  res.json({ ids: newIds })
+})
+
+// ── POST /api/restore-subjects — remove IDs from removed list + re-run ────────
+app.post('/api/restore-subjects', (req, res) => {
+  const { execSync } = require('child_process')
+  const { ids = [] } = req.body
+  const rmFile = path.join(methodsDir, 'csvs', 'removed_subjects.json')
+
+  let current = { ids: [] }
+  try { current = JSON.parse(fs.readFileSync(rmFile, 'utf8')) } catch (_) {}
+
+  const newIds = current.ids.filter(id => !ids.includes(id))
+  try {
+    fs.writeFileSync(rmFile, JSON.stringify({ ids: newIds }, null, 2), 'utf-8')
+  } catch (e) {
+    return res.status(500).json({ error: 'Could not write removed_subjects.json: ' + e.message })
+  }
+
+  try {
+    execSync(`"${python}" -u transformInJson.py`, {
+      cwd: path.join(methodsDir, 'csvs'),
+      timeout: 30000,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
+    })
+  } catch (e) {
+    console.warn('[WARN] transformInJson.py failed after restore:', e.message)
+  }
+
+  res.json({ ids: newIds })
+})
+
 // ── GET /api/ping ─────────────────────────────────────────────────────────────
 app.get('/api/ping', (_req, res) => res.json({ ok: true }))
 
