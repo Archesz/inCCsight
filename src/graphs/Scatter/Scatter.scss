@@ -1,49 +1,35 @@
-.scatter-container{
-    display: flex;
+.scatter-container {
+    display:        flex;
     flex-direction: column;
-    box-sizing: border-box;
-    padding: 0;
+    box-sizing:     border-box;
+    padding:        0;
 
-    .scatter-title{
-        font-weight: bolder;
-        font-size: 20px;
-    }
-
-    .scatter-row{
-        display: flex;
+    .select-row {
+        display:     flex;
         flex-direction: row;
-    }
+        flex-wrap:   wrap;
+        gap:         12px;
+        margin:      12px 0 4px 12px;
 
-    .select-row{
-        display: flex;
-        flex-direction: row;
-        margin-left: 35px;
-        margin-top: 20px;
-
-        .select-scalar{
-            margin-left: 45px;
-            font-weight: bolder;
-            font-size: 18px;
-            display: flex;
+        .select-scalar {
+            font-weight: 600;
+            font-size:   13px;
+            display:     flex;
             flex-direction: column;
             align-items: flex-start;
-    
-            .select{
-                margin-left: 0px;
-                margin-top: 5px;
-                height: 26px;
-                width: 100px;
+            gap:         4px;
+
+            span { color: #555; }
+
+            .select {
+                height:        28px;
+                width:         110px;
                 border-radius: 4px;
-                font-weight: bold;
+                font-weight:   bold;
+                border:        1px solid #ccc;
+                padding:       0 6px;
+                font-size:     13px;
             }
         }
-
     }
-}
-
-.scatter-col{
-    display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    margin-top: -100px;
 }
