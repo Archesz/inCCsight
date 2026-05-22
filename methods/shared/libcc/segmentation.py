@@ -51,10 +51,11 @@ def segm_watershed(wFA_ms, gaussian_sigma=0.3):
     # ── Watershed ────────────────────────────────────────────────────────────
     wc_wfa = watershed(grad_wFA, segm_markers)
 
-    # Threshold regions by mean FA (keep high-FA regions = white matter)
+    # Threshold regions by mean FA (keep high-FA regions = white matter).
+    # 0.15 instead of 0.20 to handle lower-FA subjects (e.g. Alzheimer's / ADNI).
     seg_wFA = np.zeros(wFA_ms.shape, dtype=bool)
     for i in np.unique(wc_wfa):
-        if np.mean(wFA_ms[wc_wfa == i]) > 0.2 * wFA_ms.max():
+        if np.mean(wFA_ms[wc_wfa == i]) > 0.15 * wFA_ms.max():
             seg_wFA[wc_wfa == i] = True
 
     # Extract the Corpus Callosum (largest wide structure in upper half)

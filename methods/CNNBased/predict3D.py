@@ -54,8 +54,9 @@ def test_predict(model, data_paths):
 		for data_path in data_paths:
 			try:
 				start = time.time()
-				# Use the folder name directly to match the ROQS naming convention.
-				sub = os.path.basename(data_path)
+				# Normalize name to match ROQS convention (Subject_ prefix).
+				_code = os.path.basename(data_path)
+				sub = _code if _code.startswith('Subject_') else f'Subject_{_code}'
 
 				print(f"[CNN] Processing subject: {data_path}", flush=True)
 

@@ -8,27 +8,40 @@ def getTheCC(segmentation):
     labels = label(segmentation, connectivity=1)  # connectivity=1 → 4-connectivity in 2D
     regions = regionprops(labels)
 
-    theCC = []
-    maxwidth = 0
-    i = 1
+    img_height = labels.shape[0]
+    img_width  = labels.shape[1]
 
-    ymed = None
-    xmed = None
+    theCC      = []
+    best_width = 0
+    ymed       = None
+    xmed       = None
 
-    # background is labeled as 0
-    for props in regions[1:]:
-        minr, minc, maxr, maxc = props.bbox                            
-        dx = maxc-minc
-        dy = maxr-minr
+    def _search(row_limit):
+        nonlocal theCC, best_width, ymed, xmed
+        for props in regions:
+            minr, minc, maxr, maxc = props.bbox
+            dx = maxc - minc
+            dy = maxr - minr
+            if maxr < row_limit and dx > best_width:
+                best_width = dx
+                theCC = labels == props.label
+                ymed  = maxr - dy / 2
+                xmed  = maxc - dx / 2
 
-        if dx > maxwidth:
-            maxwidth = dx
-            if maxr < 60:
-                theCC = labels == i+1
-                ymed = maxr-dy/2
-                xmed = maxc-dx/2
-        i=i+1
-                
+    # Primary: find widest region in upper 60% of image
+    _search(img_height * 0.6)
+
+    # Fallback: relax to upper 80% if nothing found
+    if not np.any(theCC):
+        _search(img_height * 0.8)
+
+    # Reject regions too narrow to be a real CC (avoids spline failures downstream)
+    min_cc_width = max(10, int(img_width * 0.08))
+    if best_width < min_cc_width:
+        theCC = []
+        ymed  = None
+        xmed  = None
+
     return theCC, ymed, xmed
 
 def getCentralPoint(kmeans, k, kpoints):

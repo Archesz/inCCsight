@@ -45,7 +45,17 @@
       "Bash(git stash *)",
       "Bash(git -c http.sslVerify=false push origin inccsight-redesign)",
       "Bash(git -c http.sslVerify=false push --force-with-lease origin inccsight-redesign)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('dependencies',{}\\).get\\('three','not found'\\)\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('dependencies',{}\\).get\\('three','not found'\\)\\)\")",
+      "Bash(pip install *)",
+      "Bash(pip index *)",
+      "Bash(echo \"EXIT_CODE:$?\")",
+      "Bash(python3 *)",
+      "Bash(mkdir -p /home/jovi/inccsight_final/methods/models)",
+      "Bash(cp \"/home/jovi/Área de Trabalho/vit_with_area_binary_best_combined_auc.pth\" /home/jovi/inccsight_final/methods/models/)",
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/pip show *)",
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/python --version)",
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/python *)",
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/pip install *)"
     ]
   }
 }

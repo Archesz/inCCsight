@@ -74,6 +74,12 @@ def points(resultado,npoints):
         boundup = boundary[indfrente:indfundo+1,:]
         bounddown = boundary[np.r_[indfrente:-1:-1,boundary.shape[0]-1:indfundo-1:-1],:]
 
+    min_pts = 4  # splprep requires m > k=3
+    if len(boundup) < min_pts or len(bounddown) < min_pts:
+        raise ValueError(
+            f"Too few boundary points for spline (up={len(boundup)}, down={len(bounddown)})"
+        )
+
     unew = np.linspace(0,1,npoints)
     tck,u = interpolate.splprep(boundup.transpose(),s=0)
     yupInter,xupInter = interpolate.splev(unew,tck)
@@ -129,6 +135,12 @@ def thickness(resultado, npoints):
     else:
         boundup = boundary[indfrente:indfundo+1,:]
         bounddown = boundary[np.r_[indfrente:-1:-1,boundary.shape[0]-1:indfundo-1:-1],:]
+
+    min_pts = 4  # splprep requires m > k=3
+    if len(boundup) < min_pts or len(bounddown) < min_pts:
+        raise ValueError(
+            f"Too few boundary points for spline (up={len(boundup)}, down={len(bounddown)})"
+        )
 
     unew = np.linspace(0,1,npoints)
     tck,u = interpolate.splprep(boundup.transpose(),s=0)

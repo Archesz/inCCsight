@@ -6,65 +6,66 @@
 #   CUDA 12.1: pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121
 
 # --- Core scientific stack ---
-numpy==1.24.2
-scipy==1.9.1
-pandas==1.5.3
-scikit-image==0.20.0
-scikit-learn==1.2.2
-matplotlib>=3.6.0
+numpy==1.26.4
+scipy==1.11.4
+pandas==2.1.4
+scikit-image==0.22.0
+scikit-learn==1.3.2
+matplotlib>=3.8.0
 
 # --- Neuroimaging ---
-nibabel==5.0.1
-dipy==1.6.0
+nibabel==5.2.1
+dipy==1.9.0
 
 # --- Deep learning (PyTorch installed separately) ---
-monai==1.1.0
-pytorch-lightning==2.0.0
-torchmetrics==0.11.4
-lightning-utilities==0.8.0
+monai==1.4.0
+torchvision==0.19.1
+pytorch-lightning==2.2.1
+torchmetrics==1.3.1
+lightning-utilities==0.11.2
 
 # --- Image I/O ---
-Pillow==9.4.0
-imageio==2.27.0
-h5py==3.8.0
-tifffile==2023.3.21
-PyWavelets==1.4.1
+Pillow==10.2.0
+imageio==2.34.0
+h5py==3.10.0
+tifffile==2024.1.30
+PyWavelets==1.5.0
 
 # --- Connectivity / graph ---
-connected-components-3d==3.10.5
-networkx==3.0
+connected-components-3d==3.12.4
+networkx==3.2.1
 
 # --- Utilities ---
-tqdm==4.65.0
-joblib==1.2.0
-sympy==1.11.1
+tqdm==4.66.2
+joblib==1.3.2
+sympy==1.12
 mpmath==1.3.0
 
 # --- Async / networking ---
-aiohttp==3.8.4
+aiohttp==3.9.3
 aiosignal==1.3.1
-async-timeout==4.0.2
-requests==2.28.2
-urllib3==1.26.15
-certifi==2022.12.7
-charset-normalizer==3.1.0
-idna==3.4
-yarl==1.8.2
-multidict==6.0.4
-frozenlist==1.3.3
+async-timeout==4.0.3
+requests==2.31.0
+urllib3==2.2.1
+certifi==2024.2.2
+charset-normalizer==3.3.2
+idna==3.6
+yarl==1.9.4
+multidict==6.0.5
+frozenlist==1.4.1
 
 # --- Python internals / compat ---
-typing_extensions==4.5.0
+typing_extensions==4.10.0
 python-dateutil==2.8.2
-pytz==2023.2
+pytz==2024.1
 six==1.16.0
-packaging==23.0
-PyYAML==6.0
-Jinja2==3.1.2
-MarkupSafe==2.1.2
-attrs==22.2.0
+packaging==23.2
+PyYAML==6.0.1
+Jinja2==3.1.3
+MarkupSafe==2.1.5
+attrs==23.2.0
 colorama==0.4.6
-filelock==3.10.7
-fsspec==2023.3.0
-lazy_loader==0.2
-threadpoolctl==3.1.0
+filelock==3.13.1
+fsspec==2024.2.0
+lazy_loader==0.4
+threadpoolctl==3.3.0
