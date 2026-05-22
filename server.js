@@ -251,6 +251,69 @@ app.post('/api/restore-subjects', (req, res) => {
   res.json({ ids: newIds })
 })
 
+// ── CSV parser (BOM-safe, comma or semicolon, quoted fields) ─────────────────
+function parseCsv(text) {
+    text = text.replace(/^﻿/, '')
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+    if (lines.length < 2) return []
+    const delim = lines[0].includes(';') ? ';' : ','
+    function splitLine(line) {
+        const cells = []
+        let cur = '', inQ = false
+        for (const ch of line) {
+            if (ch === '"' && !inQ) { inQ = true; continue }
+            if (ch === '"' &&  inQ) { inQ = false; continue }
+            if (ch === delim && !inQ) { cells.push(cur.trim()); cur = ''; continue }
+            cur += ch
+        }
+        cells.push(cur.trim())
+        return cells
+    }
+    const headers = splitLine(lines[0]).map(h => h.toLowerCase().trim())
+    return lines.slice(1).map(line => {
+        const cells = splitLine(line)
+        const row = {}
+        headers.forEach((h, i) => { row[h] = (cells[i] ?? '').trim() })
+        return row
+    }).filter(row => Object.values(row).some(v => v !== ''))
+}
+
+const DEMOGRAPH_COLS = [
+    'subject_id', 'age', 'sex', 'ethnicity', 'diagnosis',
+    'disease_duration', 'medication', 'scanner', 'field_strength',
+    'acquisition_date', 'weight_kg', 'height_cm',
+]
+
+// ── GET /api/demograph ────────────────────────────────────────────────────────
+app.get('/api/demograph', (req, res) => {
+    const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
+    let groupsMap = {}
+    try { groupsMap = JSON.parse(fs.readFileSync(groupsFile, 'utf8')) } catch (_) {}
+
+    const allRows = []
+    for (const [folderPath, groupName] of Object.entries(groupsMap)) {
+        const csvPath = path.join(folderPath, 'demograph.csv')
+        if (!fs.existsSync(csvPath)) continue
+        try {
+            const rows = parseCsv(fs.readFileSync(csvPath, 'utf8'))
+            rows.forEach(row => { row.group = groupName; allRows.push(row) })
+        } catch (e) {
+            console.warn(`[WARN] demograph.csv parse error at ${csvPath}:`, e.message)
+        }
+    }
+
+    if (!allRows.length) {
+        return res.status(404).json({ error: 'No demograph.csv found in any group folder.' })
+    }
+
+    const presentCols = DEMOGRAPH_COLS.filter(col =>
+        col !== 'subject_id' &&
+        allRows.some(r => r[col] !== undefined && r[col] !== '')
+    )
+
+    res.json({ rows: allRows, presentCols })
+})
+
 // ── GET /api/ping ─────────────────────────────────────────────────────────────
 app.get('/api/ping', (_req, res) => res.json({ ok: true }))
 

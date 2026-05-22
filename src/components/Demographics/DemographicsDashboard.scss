@@ -1,0 +1,185 @@
+.dm-container {
+    padding: 32px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+// ── KPI summary row ───────────────────────────────────────────────────────────
+
+.dm-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+
+    @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 480px) { grid-template-columns: 1fr; }
+}
+
+.dm-kpi-card {
+    background:    white;
+    border:        1px solid #e8eaf6;
+    border-radius: 12px;
+    padding:       20px 24px;
+    box-shadow:    0 2px 8px rgba(0, 0, 0, 0.05);
+    display:       flex;
+    flex-direction: column;
+    gap:           4px;
+}
+
+.dm-kpi-val {
+    font-size:   28px;
+    font-weight: 800;
+    color:       #1F2C56;
+    line-height: 1;
+}
+
+.dm-kpi-label {
+    font-size:  12px;
+    color:      #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+// ── Group legend ──────────────────────────────────────────────────────────────
+
+.dm-legend {
+    display:   flex;
+    flex-wrap: wrap;
+    gap:       16px;
+}
+
+.dm-legend-item {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+    font-size:   13px;
+    font-weight: 600;
+    color:       #444;
+}
+
+.dm-dot {
+    width:         10px;
+    height:        10px;
+    border-radius: 50%;
+    flex-shrink:   0;
+    display:       inline-block;
+}
+
+// ── Section ───────────────────────────────────────────────────────────────────
+
+.dm-section {
+    display:        flex;
+    flex-direction: column;
+    gap:            14px;
+}
+
+.dm-section-title {
+    font-size:      14px;
+    font-weight:    700;
+    color:          #555;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+// ── Completeness bars ─────────────────────────────────────────────────────────
+
+.dm-completeness-grid {
+    background:    white;
+    border:        1px solid #e8eaf6;
+    border-radius: 12px;
+    padding:       20px 24px;
+    box-shadow:    0 2px 8px rgba(0, 0, 0, 0.05);
+    display:       flex;
+    flex-direction: column;
+    gap:           12px;
+}
+
+.dm-completeness-row {
+    display:     grid;
+    grid-template-columns: 140px 1fr 44px 64px;
+    align-items: center;
+    gap:         12px;
+
+    @media (max-width: 600px) {
+        grid-template-columns: 110px 1fr 40px 56px;
+    }
+}
+
+.dm-col-label {
+    font-size:   13px;
+    font-weight: 600;
+    color:       #444;
+    white-space: nowrap;
+    overflow:    hidden;
+    text-overflow: ellipsis;
+}
+
+.dm-bar-track {
+    height:        8px;
+    background:    #f0f2f8;
+    border-radius: 4px;
+    overflow:      hidden;
+}
+
+.dm-bar-fill {
+    height:        100%;
+    border-radius: 4px;
+    transition:    width 0.4s ease;
+}
+
+.dm-col-pct {
+    font-size:   13px;
+    font-weight: 700;
+    color:       #333;
+    text-align:  right;
+}
+
+.dm-col-count {
+    font-size: 12px;
+    color:     #aaa;
+    text-align: right;
+    white-space: nowrap;
+}
+
+// ── Chart grid ────────────────────────────────────────────────────────────────
+
+.dm-charts-grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr;
+    gap:                   16px;
+
+    @media (max-width: 900px) { grid-template-columns: 1fr; }
+}
+
+.dm-chart-card {
+    background:    white;
+    border:        1px solid #e8eaf6;
+    border-radius: 12px;
+    padding:       16px 12px 8px;
+    box-shadow:    0 2px 8px rgba(0, 0, 0, 0.05);
+    overflow:      hidden;
+
+    &--full {
+        grid-column: 1 / -1;
+    }
+}
+
+.dm-chart-title {
+    display:     block;
+    font-size:   13px;
+    font-weight: 700;
+    color:       #444;
+    margin-bottom: 4px;
+    padding:     0 4px;
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+.dm-no-data {
+    padding:    40px;
+    text-align: center;
+    color:      #bbb;
+    font-size:  13px;
+}

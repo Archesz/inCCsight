@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate }  from 'react-router-dom'
 import logo    from '../assets/images/inccsight.png'
 
-import View            from '../components/View/View'
-import GroupComparison from '../components/GroupComparison/GroupComparison'
-import Glossary        from '../components/Glossary/Glossary'
-import QualityControl  from '../components/QualityControl/QualityControl'
+import View                  from '../components/View/View'
+import GroupComparison       from '../components/GroupComparison/GroupComparison'
+import Glossary              from '../components/Glossary/Glossary'
+import QualityControl        from '../components/QualityControl/QualityControl'
+import DemographicsDashboard from '../components/Demographics/DemographicsDashboard'
 
 import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
@@ -30,12 +31,20 @@ function Home() {
     const [error,        setError]        = useState(null)
     const [showGlossary,      setShowGlossary]      = useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const [demographData,    setDemographData]    = useState(null)
 
     function _applySubjects(subjects) {
         const groups = [...new Set(subjects.map(s => s.group || '').filter(Boolean))]
         setAllSubjects(subjects)
         setAllGroups(groups)
         setGroupColor(Object.fromEntries(groups.map((g, i) => [g, i])))
+    }
+
+    function fetchDemograph() {
+        fetch('http://localhost:3001/api/demograph')
+            .then(r => r.ok ? r.json() : null)
+            .then(json => { if (json?.rows?.length) setDemographData(json) })
+            .catch(() => {})
     }
 
     function reloadData() {
@@ -46,6 +55,7 @@ function Home() {
                 _applySubjects(subjects)
             })
             .catch(e => console.error('Reload failed:', e))
+        fetchDemograph()
     }
 
     useEffect(() => {
@@ -61,6 +71,7 @@ function Home() {
                 setLoading(false)
             })
             .catch(e => { setError(e.message); setLoading(false) })
+        fetchDemograph()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -140,6 +151,9 @@ function Home() {
                         { id: '3D',      label: '3D Volumetric'    },
                         ...(allGroups.length >= 2
                             ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
+                            : []),
+                        ...(demographData
+                            ? [{ id: 'demograph', label: 'Demographics' }]
                             : []),
                         { id: 'qc', label: 'Quality Control' },
                     ].map(tab => (
@@ -276,6 +290,11 @@ function Home() {
                           />
                         : activeTab === 'compare'
                         ? <GroupComparison allSubjects={activeSubjects} allGroups={allGroups} />
+                        : activeTab === 'demograph'
+                        ? <DemographicsDashboard
+                            rows={demographData.rows}
+                            presentCols={demographData.presentCols}
+                          />
                         : <View
                             view={activeTab}
                             data={data}
