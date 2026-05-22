@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import Plot from 'react-plotly.js'
 import './DemographicsDashboard.scss'
 
@@ -228,7 +228,13 @@ function BmiScatter({ rows, groups }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-function DemographicsDashboard({ rows, presentCols }) {
+function DemographicsDashboard({ rows, presentCols, onReload }) {
+    const [reloading, setReloading] = useState(false)
+
+    function handleReload() {
+        setReloading(true)
+        Promise.resolve(onReload?.()).finally(() => setReloading(false))
+    }
     const groups = useMemo(
         () => [...new Set(rows.map(r => r.group).filter(Boolean))],
         [rows]
@@ -258,6 +264,19 @@ function DemographicsDashboard({ rows, presentCols }) {
 
     return (
         <div className='dm-container'>
+
+            {/* Header */}
+            <div className='dm-header'>
+                <span className='dm-title'>Demographics</span>
+                <button
+                    className='dm-reload-btn'
+                    onClick={handleReload}
+                    title='Reload demograph.csv'
+                    disabled={reloading}
+                >
+                    ↻ {reloading ? 'Reloading…' : 'Reload'}
+                </button>
+            </div>
 
             {/* Summary KPIs */}
             <div className='dm-kpi-row'>

@@ -41,7 +41,7 @@ function Home() {
     }
 
     function fetchDemograph() {
-        fetch('http://localhost:3001/api/demograph')
+        return fetch('http://localhost:3001/api/demograph')
             .then(r => r.ok ? r.json() : null)
             .then(json => { if (json?.rows?.length) setDemographData(json) })
             .catch(() => {})
@@ -294,6 +294,7 @@ function Home() {
                         ? <DemographicsDashboard
                             rows={demographData.rows}
                             presentCols={demographData.presentCols}
+                            onReload={fetchDemograph}
                           />
                         : <View
                             view={activeTab}
