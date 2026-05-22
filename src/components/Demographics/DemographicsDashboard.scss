@@ -215,4 +215,167 @@
     text-align: center;
     color:      #bbb;
     font-size:  13px;
+
+    code {
+        background: #f0f2f8;
+        padding:    1px 6px;
+        border-radius: 4px;
+        color:      #555;
+    }
+}
+
+// ── Header actions (Reload + Customize) ──────────────────────────────────────
+
+.dm-header-actions {
+    display: flex;
+    gap:     8px;
+}
+
+// ── Customize panel ──────────────────────────────────────────────────────────
+
+.dm-customize {
+    display:        flex;
+    flex-direction: column;
+    gap:            10px;
+    padding:        16px 20px;
+    background:     #f8f9fe;
+    border:         1px solid #e8eaf6;
+    border-radius:  12px;
+}
+
+.dm-customize-label {
+    font-size:      12px;
+    font-weight:    700;
+    color:          #888;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.dm-chips {
+    display:   flex;
+    flex-wrap: wrap;
+    gap:       7px;
+}
+
+.dm-chip {
+    padding:        5px 12px;
+    border-radius:  14px;
+    border:         1.5px solid #d6d9e6;
+    background:     white;
+    color:          #999;
+    font-size:      12px;
+    font-weight:    600;
+    cursor:         pointer;
+    transition:     all 0.15s;
+    display:        flex;
+    align-items:    center;
+    gap:            6px;
+
+    &::before {
+        content:      '';
+        width:        7px;
+        height:       7px;
+        border-radius: 50%;
+        background:   #d0d3e0;
+        flex-shrink:  0;
+    }
+
+    &:hover { border-color: #9aa3c8; }
+
+    &.on {
+        color:        #1F2C56;
+        border-color: #4C6EF5;
+        background:   #eef1ff;
+
+        &::before { background: #00A878; }
+    }
+}
+
+// ── DTI cross-analysis controls ──────────────────────────────────────────────
+
+.dm-dti-controls {
+    display:       flex;
+    align-items:   center;
+    gap:           28px;
+    flex-wrap:     wrap;
+    padding:       14px 20px;
+    background:    #f8f9fe;
+    border:        1px solid #e8eaf6;
+    border-radius: 12px;
+}
+
+.dm-picker {
+    display:        flex;
+    flex-direction: column;
+    gap:            6px;
+
+    label {
+        font-size:      12px;
+        font-weight:    700;
+        color:          #888;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+}
+
+.dm-pills {
+    display: flex;
+    gap:     6px;
+}
+
+.dm-pill {
+    padding:        5px 14px;
+    border-radius:  16px;
+    border:         1.5px solid #ccd0e0;
+    background:     white;
+    color:          #555;
+    font-size:      13px;
+    font-weight:    600;
+    cursor:         pointer;
+    transition:     all 0.18s;
+
+    &:hover { border-color: #4C6EF5; color: #4C6EF5; }
+
+    &.active {
+        background:   #111F4A;
+        border-color: #111F4A;
+        color:        white;
+    }
+}
+
+.dm-matched-count {
+    margin-left: auto;
+    font-size:   12px;
+    color:       #888;
+    font-weight: 600;
+}
+
+// ── Section head com select (scatter / boxplot var pickers) ──────────────────
+
+.dm-section-head {
+    display:     flex;
+    align-items: center;
+    gap:         16px;
+    flex-wrap:   wrap;
+}
+
+.dm-select {
+    height:        30px;
+    padding:       0 10px;
+    border-radius: 6px;
+    border:        1.5px solid #ccd0e0;
+    background:    white;
+    color:         #333;
+    font-size:     13px;
+    font-weight:   600;
+    cursor:        pointer;
+}
+
+.dm-scatter-stats {
+    display:    flex;
+    gap:        18px;
+    padding:    8px 12px 4px;
+    font-size:  12px;
+    color:      #666;
+    font-weight: 600;
 }

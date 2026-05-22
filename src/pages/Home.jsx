@@ -298,6 +298,7 @@ function Home() {
                         ? <DemographicsDashboard
                             rows={demographData.rows}
                             presentCols={demographData.presentCols}
+                            subjects={activeSubjects}
                             onReload={fetchDemograph}
                           />
                         : activeTab === 'tractography'

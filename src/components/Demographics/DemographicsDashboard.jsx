@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import Plot from 'react-plotly.js'
 import './DemographicsDashboard.scss'
 
@@ -25,6 +25,29 @@ const SECTIONS = [
     { id: 'anthro',       title: 'Anthropometric', cols: ['weight_kg', 'height_cm']                        },
 ]
 
+// ── DTI cross-analysis configuration ─────────────────────────────────────────
+
+const DTI_METHODS = [
+    { key: 'ROQS_scalar',       label: 'ROQS' },
+    { key: 'Watershed_scalar',  label: 'Watershed' },
+    { key: 'santarosa_scalars', label: 'CNN' },
+]
+const DTI_SCALARS = ['FA', 'MD', 'RD', 'AD']
+
+// Seções que podem ser ligadas/desligadas pelo painel de personalização
+const TOGGLABLE_SECTIONS = [
+    { key: 'completeness', label: 'Data Completeness' },
+    { key: 'demographics', label: 'Demographics' },
+    { key: 'clinical',     label: 'Clinical' },
+    { key: 'acquisition',  label: 'Acquisition' },
+    { key: 'anthro',       label: 'Anthropometric' },
+    { key: 'bmi',          label: 'Body Composition' },
+    { key: 'dtiCorr',      label: 'DTI Correlation' },
+    { key: 'dtiScatter',   label: 'Demographics × DTI' },
+    { key: 'dtiBox',       label: 'DTI by Category' },
+]
+const STORAGE_KEY = 'inccsight.demographics.prefs'
+
 const LAYOUT_BASE = {
     margin:        { t: 16, b: 52, l: 56, r: 16 },
     paper_bgcolor: 'transparent',
@@ -45,6 +68,39 @@ function isFullWidth(col, rows) {
     if (meta?.type === 'categorical') return uniqueVals(rows, col).length > 5
     return false
 }
+
+// ── Stats helpers (used by cross-DTI sections) ───────────────────────────────
+
+function toNum(v) {
+    if (v === '' || v == null) return NaN
+    const n = Number(v)
+    return Number.isFinite(n) ? n : NaN
+}
+function mean(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN }
+function pearson(pairs) {
+    const n = pairs.length
+    if (n < 2) return NaN
+    const mx = mean(pairs.map(p => p[0]))
+    const my = mean(pairs.map(p => p[1]))
+    let sxy = 0, sxx = 0, syy = 0
+    for (const [x, y] of pairs) {
+        const dx = x - mx, dy = y - my
+        sxy += dx * dy; sxx += dx * dx; syy += dy * dy
+    }
+    const d = Math.sqrt(sxx * syy)
+    return d === 0 ? NaN : sxy / d
+}
+function linfit(pairs) {
+    if (pairs.length < 2) return null
+    const mx = mean(pairs.map(p => p[0]))
+    const my = mean(pairs.map(p => p[1]))
+    let sxy = 0, sxx = 0
+    for (const [x, y] of pairs) { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2 }
+    if (sxx === 0) return null
+    const a = sxy / sxx
+    return { a, b: my - a * mx }
+}
+const fmt = (v, d = 3) => (Number.isFinite(v) ? v.toFixed(d) : '—')
 
 // ── Violin chart for numeric columns ─────────────────────────────────────────
 
@@ -228,8 +284,29 @@ function BmiScatter({ rows, groups }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-function DemographicsDashboard({ rows, presentCols, onReload }) {
-    const [reloading, setReloading] = useState(false)
+function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
+    const [reloading,      setReloading]      = useState(false)
+    const [showCustomize,  setShowCustomize]  = useState(false)
+    const [dtiMethod,      setDtiMethod]      = useState('ROQS_scalar')
+    const [dtiScalar,      setDtiScalar]      = useState('FA')
+    const [scatterVarSel,  setScatterVarSel]  = useState(null)
+    const [boxVarSel,      setBoxVarSel]      = useState(null)
+
+    // ── Preferências persistidas (toggles de seção) ─────────────────────────
+    const [prefs, setPrefs] = useState(() => {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY)
+            if (raw) return { sections: {}, ...JSON.parse(raw) }
+        } catch (_) { /* ignora */ }
+        return { sections: {} }
+    })
+    useEffect(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)) } catch (_) { /* ignora */ }
+    }, [prefs])
+
+    const sectionOn = key => prefs.sections[key] !== false
+    const toggleSection = key =>
+        setPrefs(p => ({ ...p, sections: { ...p.sections, [key]: p.sections[key] === false } }))
 
     function handleReload() {
         setReloading(true)
@@ -253,6 +330,78 @@ function DemographicsDashboard({ rows, presentCols, onReload }) {
 
     const hasBmi = presentCols.includes('weight_kg') && presentCols.includes('height_cm')
 
+    // ── Cross-DTI: casa linhas demográficas com sujeitos (subject_id ↔ Id) ──
+    const matched = useMemo(() => {
+        if (!subjects?.length) return []
+        const byId = new Map(subjects.map(s => [String(s.Id), s]))
+        return rows
+            .map(r => ({ row: r, subject: byId.get(String(r.subject_id ?? '').trim()) }))
+            .filter(m => m.subject)
+    }, [rows, subjects])
+
+    // colunas numéricas/categóricas disponíveis para cross-DTI (entre as presentCols)
+    const dtiNumericBase = presentCols.filter(c => COL_META[c]?.type === 'numeric')
+    const dtiNumericCols = hasBmi ? [...dtiNumericBase, '_bmi'] : dtiNumericBase
+    const dtiCategoricalCols = presentCols.filter(c => COL_META[c]?.type === 'categorical')
+
+    const colLabel = c => c === '_bmi' ? 'BMI (derived)' : (COL_META[c]?.label || c)
+    const getNumeric = (row, col) => {
+        if (col === '_bmi') {
+            const w = parseFloat(row.weight_kg), h = parseFloat(row.height_cm)
+            if (isNaN(w) || isNaN(h) || h <= 0) return NaN
+            return w / ((h / 100) ** 2)
+        }
+        return toNum(row[col])
+    }
+    const dtiValue = subject => {
+        const v = subject?.[dtiMethod]?.[dtiScalar]
+        return typeof v === 'number' ? v : toNum(v)
+    }
+    const dtiMethodLabel = DTI_METHODS.find(m => m.key === dtiMethod)?.label || dtiMethod
+
+    const scatterVar = (scatterVarSel && dtiNumericCols.includes(scatterVarSel))
+        ? scatterVarSel : (dtiNumericCols[0] ?? null)
+    const boxVar = (boxVarSel && dtiCategoricalCols.includes(boxVarSel))
+        ? boxVarSel : (dtiCategoricalCols[0] ?? null)
+
+    // matriz de correlação demografia × DTI (rows = demo numeric; cols = FA/MD/RD/AD)
+    const corrMatrix = dtiNumericCols.map(dc =>
+        DTI_SCALARS.map(sc => {
+            const pairs = matched
+                .map(m => {
+                    const x = getNumeric(m.row, dc)
+                    const yv = m.subject?.[dtiMethod]?.[sc]
+                    const y = typeof yv === 'number' ? yv : toNum(yv)
+                    return [x, y]
+                })
+                .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+            return pearson(pairs)
+        })
+    )
+
+    // scatter (demo numeric × dtiScalar)
+    const scatterPairs = scatterVar
+        ? matched
+            .map(m => ({
+                x: getNumeric(m.row, scatterVar),
+                y: dtiValue(m.subject),
+                id: m.row.subject_id || m.subject.Id,
+                group: m.row.group || m.subject.group || '—',
+            }))
+            .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+        : []
+    const scatterFit    = linfit(scatterPairs.map(p => [p.x, p.y]))
+    const scatterR      = pearson(scatterPairs.map(p => [p.x, p.y]))
+    const scatterGroups = [...new Set(scatterPairs.map(p => p.group))]
+
+    // boxplot DTI por categoria
+    const boxCats = boxVar
+        ? [...new Set(matched.map(m => String(m.row[boxVar] ?? '').trim()).filter(v => v !== ''))]
+        : []
+
+    const showDtiControls = matched.length > 0 &&
+        (sectionOn('dtiCorr') || sectionOn('dtiScatter') || sectionOn('dtiBox'))
+
     function renderChart(col) {
         const meta = COL_META[col]
         if (!meta) return null
@@ -268,15 +417,40 @@ function DemographicsDashboard({ rows, presentCols, onReload }) {
             {/* Header */}
             <div className='dm-header'>
                 <span className='dm-title'>Demographics</span>
-                <button
-                    className='dm-reload-btn'
-                    onClick={handleReload}
-                    title='Reload demograph.csv'
-                    disabled={reloading}
-                >
-                    ↻ {reloading ? 'Reloading…' : 'Reload'}
-                </button>
+                <div className='dm-header-actions'>
+                    <button
+                        className='dm-reload-btn'
+                        onClick={() => setShowCustomize(v => !v)}
+                        title='Customize visible sections'
+                    >
+                        {showCustomize ? '▾' : '▸'} Customize
+                    </button>
+                    <button
+                        className='dm-reload-btn'
+                        onClick={handleReload}
+                        title='Reload demograph.csv'
+                        disabled={reloading}
+                    >
+                        ↻ {reloading ? 'Reloading…' : 'Reload'}
+                    </button>
+                </div>
             </div>
+
+            {/* Customize panel */}
+            {showCustomize && (
+                <div className='dm-customize'>
+                    <span className='dm-customize-label'>Visible sections</span>
+                    <div className='dm-chips'>
+                        {TOGGLABLE_SECTIONS.map(s => (
+                            <button
+                                key={s.key}
+                                className={`dm-chip${sectionOn(s.key) ? ' on' : ''}`}
+                                onClick={() => toggleSection(s.key)}
+                            >{s.label}</button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Summary KPIs */}
             <div className='dm-kpi-row'>
@@ -311,30 +485,33 @@ function DemographicsDashboard({ rows, presentCols, onReload }) {
             )}
 
             {/* Data completeness */}
-            <div className='dm-section'>
-                <span className='dm-section-title'>Data Completeness</span>
-                <div className='dm-completeness-grid'>
-                    {completeness.map(({ col, present, total, pct }) => (
-                        <div key={col} className='dm-completeness-row'>
-                            <span className='dm-col-label'>{COL_META[col]?.label || col}</span>
-                            <div className='dm-bar-track'>
-                                <div
-                                    className='dm-bar-fill'
-                                    style={{
-                                        width:      `${pct}%`,
-                                        background: pct >= 80 ? '#4C6EF5' : pct >= 50 ? '#FFA15A' : '#EF553B',
-                                    }}
-                                />
+            {sectionOn('completeness') && (
+                <div className='dm-section'>
+                    <span className='dm-section-title'>Data Completeness</span>
+                    <div className='dm-completeness-grid'>
+                        {completeness.map(({ col, present, total, pct }) => (
+                            <div key={col} className='dm-completeness-row'>
+                                <span className='dm-col-label'>{COL_META[col]?.label || col}</span>
+                                <div className='dm-bar-track'>
+                                    <div
+                                        className='dm-bar-fill'
+                                        style={{
+                                            width:      `${pct}%`,
+                                            background: pct >= 80 ? '#4C6EF5' : pct >= 50 ? '#FFA15A' : '#EF553B',
+                                        }}
+                                    />
+                                </div>
+                                <span className='dm-col-pct'>{pct}%</span>
+                                <span className='dm-col-count'>{present}/{total}</span>
                             </div>
-                            <span className='dm-col-pct'>{pct}%</span>
-                            <span className='dm-col-count'>{present}/{total}</span>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Chart sections */}
             {SECTIONS.map(section => {
+                if (!sectionOn(section.id)) return null
                 const activeCols = section.cols.filter(c => presentCols.includes(c))
                 if (!activeCols.length) return null
                 return (
@@ -360,7 +537,7 @@ function DemographicsDashboard({ rows, presentCols, onReload }) {
             })}
 
             {/* Body composition — only when both weight and height are present */}
-            {hasBmi && (
+            {sectionOn('bmi') && hasBmi && (
                 <div className='dm-section'>
                     <span className='dm-section-title'>Body Composition</span>
                     <div className='dm-charts-grid'>
@@ -369,6 +546,197 @@ function DemographicsDashboard({ rows, presentCols, onReload }) {
                             <BmiScatter rows={rows} groups={groups} />
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ── DTI cross-analysis ─────────────────────────────────────── */}
+
+            {/* Aviso quando há sujeitos mas nenhuma linha casa por subject_id */}
+            {subjects.length > 0 && rows.length > 0 && matched.length === 0 &&
+             (sectionOn('dtiCorr') || sectionOn('dtiScatter') || sectionOn('dtiBox')) && (
+                <div className='dm-section'>
+                    <div className='dm-no-data'>
+                        Cross-DTI sections need a <code>subject_id</code> column in
+                        demograph.csv matching the analyzed subjects (exact match).
+                    </div>
+                </div>
+            )}
+
+            {/* Controles compartilhados (método + escalar DTI) */}
+            {showDtiControls && (
+                <div className='dm-dti-controls'>
+                    <div className='dm-picker'>
+                        <label>DTI Method</label>
+                        <div className='dm-pills'>
+                            {DTI_METHODS.map(m => (
+                                <button
+                                    key={m.key}
+                                    className={`dm-pill${dtiMethod === m.key ? ' active' : ''}`}
+                                    onClick={() => setDtiMethod(m.key)}
+                                >{m.label}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className='dm-picker'>
+                        <label>Scalar</label>
+                        <div className='dm-pills'>
+                            {DTI_SCALARS.map(s => (
+                                <button
+                                    key={s}
+                                    className={`dm-pill${dtiScalar === s ? ' active' : ''}`}
+                                    onClick={() => setDtiScalar(s)}
+                                >{s}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <span className='dm-matched-count'>
+                        {matched.length} of {rows.length} matched to a subject
+                    </span>
+                </div>
+            )}
+
+            {/* DTI Correlation heatmap */}
+            {sectionOn('dtiCorr') && matched.length >= 2 && dtiNumericCols.length > 0 && (
+                <div className='dm-section'>
+                    <span className='dm-section-title'>
+                        Correlation — Demographics × DTI ({dtiMethodLabel})
+                    </span>
+                    <div className='dm-chart-card dm-chart-card--full'>
+                        <Plot
+                            data={[{
+                                type: 'heatmap',
+                                z: corrMatrix,
+                                x: DTI_SCALARS,
+                                y: dtiNumericCols.map(colLabel),
+                                zmin: -1, zmax: 1, colorscale: 'RdBu', reversescale: true,
+                                hoverongaps: false,
+                                text: corrMatrix.map(row => row.map(v => fmt(v, 2))),
+                                texttemplate: '%{text}', textfont: { size: 11 },
+                            }]}
+                            layout={{
+                                ...LAYOUT_BASE,
+                                height: 90 + dtiNumericCols.length * 44,
+                                margin: { t: 10, b: 50, l: 150, r: 30 },
+                                xaxis:  { side: 'bottom' },
+                                yaxis:  { automargin: true },
+                            }}
+                            config={{ displayModeBar: false, responsive: true }}
+                            style={{ width: '100%', maxWidth: 680 }}
+                            useResizeHandler
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Scatter: variável numérica × escalar DTI */}
+            {sectionOn('dtiScatter') && matched.length > 0 && dtiNumericCols.length > 0 && (
+                <div className='dm-section'>
+                    <div className='dm-section-head'>
+                        <span className='dm-section-title'>
+                            Demographics × {dtiScalar} ({dtiMethodLabel})
+                        </span>
+                        <select
+                            className='dm-select'
+                            value={scatterVar || ''}
+                            onChange={e => setScatterVarSel(e.target.value)}
+                        >
+                            {dtiNumericCols.map(c => (
+                                <option key={c} value={c}>{colLabel(c)}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {scatterPairs.length >= 2 ? (
+                        <div className='dm-chart-card dm-chart-card--full'>
+                            <Plot
+                                data={[
+                                    ...scatterGroups.map((g, gi) => {
+                                        const pts = scatterPairs.filter(p => p.group === g)
+                                        return {
+                                            type: 'scatter', mode: 'markers', name: g,
+                                            x: pts.map(p => p.x), y: pts.map(p => p.y),
+                                            text: pts.map(p => p.id),
+                                            marker: { size: 9, color: GROUP_COLORS[gi % GROUP_COLORS.length], opacity: 0.85 },
+                                        }
+                                    }),
+                                    ...(scatterFit ? [{
+                                        type: 'scatter', mode: 'lines', name: 'linear fit',
+                                        x: [Math.min(...scatterPairs.map(p => p.x)), Math.max(...scatterPairs.map(p => p.x))],
+                                        y: [Math.min(...scatterPairs.map(p => p.x)), Math.max(...scatterPairs.map(p => p.x))]
+                                            .map(x => scatterFit.a * x + scatterFit.b),
+                                        line: { color: '#1F2C56', dash: 'dash', width: 2 },
+                                        hoverinfo: 'skip',
+                                    }] : []),
+                                ]}
+                                layout={{
+                                    ...LAYOUT_BASE,
+                                    height: 360, margin: { t: 16, b: 56, l: 60, r: 16 },
+                                    xaxis: { title: colLabel(scatterVar), gridcolor: '#eee' },
+                                    yaxis: { title: `${dtiScalar} (${dtiMethodLabel})`, gridcolor: '#eee' },
+                                    showlegend: scatterGroups.length > 1,
+                                    legend: { orientation: 'h', y: -0.18 },
+                                }}
+                                config={{ displayModeBar: false, responsive: true }}
+                                style={{ width: '100%' }}
+                                useResizeHandler
+                            />
+                            <div className='dm-scatter-stats'>
+                                <span>n {scatterPairs.length}</span>
+                                <span>Pearson r {fmt(scatterR, 3)}</span>
+                                {scatterFit && <span>slope {fmt(scatterFit.a, 4)}</span>}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className='dm-no-data'>Not enough matched subjects with both values.</div>
+                    )}
+                </div>
+            )}
+
+            {/* Boxplot: escalar DTI por categoria */}
+            {sectionOn('dtiBox') && matched.length > 0 && dtiCategoricalCols.length > 0 && (
+                <div className='dm-section'>
+                    <div className='dm-section-head'>
+                        <span className='dm-section-title'>
+                            {dtiScalar} ({dtiMethodLabel}) by Category
+                        </span>
+                        <select
+                            className='dm-select'
+                            value={boxVar || ''}
+                            onChange={e => setBoxVarSel(e.target.value)}
+                        >
+                            {dtiCategoricalCols.map(c => (
+                                <option key={c} value={c}>{colLabel(c)}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {boxCats.length > 0 ? (
+                        <div className='dm-chart-card dm-chart-card--full'>
+                            <Plot
+                                data={boxCats.map((cat, ci) => {
+                                    const ys = matched
+                                        .filter(m => String(m.row[boxVar] ?? '').trim() === cat)
+                                        .map(m => dtiValue(m.subject))
+                                        .filter(Number.isFinite)
+                                    return {
+                                        type: 'box', name: cat, y: ys, boxmean: 'sd',
+                                        boxpoints: 'all', jitter: 0.4, pointpos: 0,
+                                        marker: { color: GROUP_COLORS[ci % GROUP_COLORS.length] },
+                                    }
+                                })}
+                                layout={{
+                                    ...LAYOUT_BASE,
+                                    height: 340, margin: { t: 16, b: 50, l: 60, r: 16 },
+                                    xaxis: { title: colLabel(boxVar) },
+                                    yaxis: { title: `${dtiScalar} (${dtiMethodLabel})`, gridcolor: '#eee' },
+                                    showlegend: false,
+                                }}
+                                config={{ displayModeBar: false, responsive: true }}
+                                style={{ width: '100%' }}
+                                useResizeHandler
+                            />
+                        </div>
+                    ) : (
+                        <div className='dm-no-data'>No matched subjects have this category filled in.</div>
+                    )}
                 </div>
             )}
 
