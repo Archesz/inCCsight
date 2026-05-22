@@ -84,7 +84,7 @@ function ExpandableParcTable({ allSubjects, color }) {
     return (
         <div className='expandable-section'>
             <div className='expandable-header' onClick={() => setOpen(v => !v)}>
-                <span>Dados por Sujeito</span>
+                <span>Data by Subject</span>
                 <span className='expandable-toggle'>
                     {open ? '▲ Recolher' : '▼ Ver todos os sujeitos'}
                 </span>

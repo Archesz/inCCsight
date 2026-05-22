@@ -71,15 +71,16 @@ function spawnSSE(res, args, cwd) {
 
 // ── POST /api/run-pipeline ────────────────────────────────────────────────────
 app.post('/api/run-pipeline', (req, res) => {
-  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false } = req.body
+  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false, skipTract = false } = req.body
 
   const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
   try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
   catch (e) { console.warn('Could not save groups.json:', e.message) }
 
   const args = ['run.py', '-p', ...paths]
-  if (skipCnn)  args.push('--skip-cnn')
-  if (skipRoqs) args.push('--skip-roqs')
+  if (skipCnn)   args.push('--skip-cnn')
+  if (skipRoqs)  args.push('--skip-roqs')
+  if (skipTract) args.push('--skip-tract')
 
   spawnSSE(res, args, methodsDir)
 })
@@ -312,6 +313,17 @@ app.get('/api/demograph', (req, res) => {
     )
 
     res.json({ rows: allRows, presentCols })
+})
+
+// ── GET /api/tracts?path=<abs> — serve tracts.json for a subject ─────────────
+app.get('/api/tracts', (req, res) => {
+    const filePath = req.query.path
+    if (!filePath) return res.status(400).json({ error: 'Missing "path" parameter.' })
+    if (path.basename(filePath) !== 'tracts.json') {
+        return res.status(403).json({ error: 'Only tracts.json files are served by this endpoint.' })
+    }
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'tracts.json not found.' })
+    res.sendFile(filePath)
 })
 
 // ── GET /api/ping ─────────────────────────────────────────────────────────────

@@ -79,32 +79,29 @@ function Scatter({ data }) {
         }
     }), [grouped, methodKey, scalarX, colors])
 
-    // Violin: one trace per group → right panel (xaxis2 / yaxis)
-    const violinTraces = useMemo(() => grouped.map(({ name, subjects }) => {
+    // Histogram Y: one trace per group → right panel (xaxis2 / yaxis)
+    const histYTraces = useMemo(() => grouped.map(({ name, subjects }) => {
         const yVals = extractValues(subjects, methodKey, scalarY).filter(v => v !== null)
         return {
-            type: 'violin',
+            type: 'histogram',
             y: yVals,
+            orientation: 'h',
             name,
             xaxis: 'x2', yaxis: 'y',
-            box:      { visible: true },
-            meanline: { visible: true },
-            fillcolor: colors[name],
-            line:     { color: colors[name], width: 1.2 },
-            opacity:  0.72,
+            marker: { color: colors[name], opacity: 0.65 },
             showlegend: false,
-            points: false,
+            nbinsy: 20,
         }
     }), [grouped, methodKey, scalarY, colors])
 
     // ── Layout (subplot-style axes) ───────────────────────────────────────────
     const layout = useMemo(() => ({
-        height: 560,
+        height: 460,
         plot_bgcolor:  '#E5ECF6',
         paper_bgcolor: 'transparent',
         margin: { t: 20, l: 64, r: 24, b: 56 },
 
-        // Center scatter — X: 0–74 %, Y: 0–72 %
+        // Center scatter — X: 0–74 %, Y: 0–70 %
         xaxis: {
             domain:      [0, 0.74],
             title:       { text: scalarX, font: { size: 12 } },
@@ -114,7 +111,7 @@ function Scatter({ data }) {
             zeroline:    false,
         },
         yaxis: {
-            domain:      [0, 0.72],
+            domain:      [0, 0.70],
             title:       { text: scalarY, font: { size: 12 } },
             gridcolor:   '#fff',
             tickformat:  '.4f',
@@ -122,21 +119,22 @@ function Scatter({ data }) {
             zeroline:    false,
         },
 
-        // Top histogram — shares xaxis, own yaxis (76–100 %)
+        // Top histogram — shares xaxis, own yaxis (74–92 %)
         yaxis2: {
-            domain:      [0.76, 1.0],
+            domain:      [0.74, 0.92],
             gridcolor:   '#fff',
             tickfont:    { size: 9 },
             zeroline:    false,
             title:       { text: 'Count', font: { size: 9 } },
         },
 
-        // Right violin — shares yaxis, own xaxis (77–100 %)
+        // Right histogram — shares yaxis, own xaxis (77–100 %)
         xaxis2: {
-            domain:          [0.77, 1.0],
-            showticklabels:  false,
-            gridcolor:       '#fff',
-            zeroline:        false,
+            domain:    [0.77, 1.0],
+            gridcolor: '#fff',
+            tickfont:  { size: 9 },
+            zeroline:  false,
+            title:     { text: 'Count', font: { size: 9 } },
         },
 
         barmode: 'overlay',
@@ -151,8 +149,8 @@ function Scatter({ data }) {
     }), [scalarX, scalarY])
 
     const allTraces = useMemo(
-        () => [...scatterTraces, ...histTraces, ...violinTraces],
-        [scatterTraces, histTraces, violinTraces]
+        () => [...scatterTraces, ...histTraces, ...histYTraces],
+        [scatterTraces, histTraces, histYTraces]
     )
 
     const config = {

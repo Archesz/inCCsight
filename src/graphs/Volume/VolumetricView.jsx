@@ -248,6 +248,62 @@ function animateReset(s) {
     tick()
 }
 
+// ── Tract geometry builder ────────────────────────────────────────────────────
+// colorMode: 'direction' | 'fa' | 'region'
+const TRACT_REGION_COLORS = [
+    [0.39, 0.43, 0.98],  // W1 — anterior (blue)
+    [0.24, 0.80, 0.60],  // W2 — mid-anterior (teal)
+    [1.00, 0.63, 0.35],  // W3 — central (orange)
+    [0.67, 0.39, 0.98],  // W4 — mid-posterior (purple)
+    [0.94, 0.33, 0.23],  // W5 — posterior/splenium (red)
+]
+
+function buildTractLines(data, colorMode) {
+    const { nx, ny, nz, dx, dy, dz, streamlines, fa_along, regions } = data
+    const cx = nx * dx / 2, cy = ny * dy / 2, cz = nz * dz / 2
+
+    const positions = [], colors = []
+
+    streamlines.forEach((sl, si) => {
+        const faVals = fa_along[si]
+        const reg    = (regions[si] || 1) - 1  // 0-indexed
+        for (let p = 0; p < sl.length - 1; p++) {
+            const [i0, j0, k0] = sl[p]
+            const [i1, j1, k1] = sl[p + 1]
+            const wx0 = i0*dx - cx, wy0 = j0*dy - cy, wz0 = k0*dz - cz
+            const wx1 = i1*dx - cx, wy1 = j1*dy - cy, wz1 = k1*dz - cz
+            positions.push(wx0, wy0, wz0, wx1, wy1, wz1)
+
+            let r, g, b
+            if (colorMode === 'direction') {
+                const ddx = Math.abs(wx1-wx0), ddy = Math.abs(wy1-wy0), ddz = Math.abs(wz1-wz0)
+                const len = Math.sqrt(ddx*ddx + ddy*ddy + ddz*ddz) || 1
+                r = ddx/len; g = ddy/len; b = ddz/len
+            } else if (colorMode === 'fa') {
+                const t = Math.max(0, Math.min(1, ((faVals[p] || 0) - 0.2) / 0.8))
+                r = t; g = 1 - Math.abs(2*t - 1); b = 1 - t
+            } else {
+                ;[r, g, b] = TRACT_REGION_COLORS[reg % TRACT_REGION_COLORS.length]
+            }
+            colors.push(r, g, b, r, g, b)
+        }
+    })
+
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+    geo.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors),   3))
+    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, opacity: 0.85, transparent: true }))
+}
+
+function getTractsPath(fp) {
+    if (!fp) return null
+    // fp is like .../subject/inCCsight/cnnBased.nii.gz
+    // tracts.json sits at .../subject/tracts.json (one level above inCCsight/)
+    const parts = fp.replace(/\\/g, '/').split('/')
+    parts.splice(-2, 2, 'tracts.json')   // remove last 2 segments, add tracts.json
+    return parts.join('/')
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 function VolumetricView({ filePath }) {
     const canvasRef = useRef(null)
@@ -256,14 +312,21 @@ function VolumetricView({ filePath }) {
     const rafRef    = useRef(null)
     const workerRef = useRef(null)
 
-    const [status,     setStatus]     = useState('loading')
-    const [errMsg,     setErrMsg]     = useState('')
-    const [triCount,   setTriCount]   = useState(0)
-    const [opacity,    setOpacity]    = useState(1.0)
-    const [matName,    setMatName]    = useState('Anatomical')
-    const [wireframe,  setWireframe]  = useState(false)
-    const [showLabels, setShowLabels] = useState(true)
-    const [smoothIter, setSmoothIter] = useState(0)
+    const [status,       setStatus]       = useState('loading')
+    const [errMsg,       setErrMsg]       = useState('')
+    const [triCount,     setTriCount]     = useState(0)
+    const [opacity,      setOpacity]      = useState(1.0)
+    const [matName,      setMatName]      = useState('Anatomical')
+    const [wireframe,    setWireframe]    = useState(false)
+    const [showLabels,   setShowLabels]   = useState(true)
+    const [smoothIter,   setSmoothIter]   = useState(0)
+    const [customColor,  setCustomColor]  = useState('')
+    const customColorRef = useRef('')
+    const [tractsStatus, setTractsStatus] = useState('none')  // 'none'|'loading'|'ready'|'error'
+    const [showTracts,   setShowTracts]   = useState(true)
+    const [tractColor,   setTractColor]   = useState('direction')
+    const tractsDataRef  = useRef(null)
+    const tractLinesRef  = useRef(null)
 
     const destroyScene = useCallback(() => {
         if (rafRef.current)  { cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -288,6 +351,7 @@ function VolumetricView({ filePath }) {
         destroyScene()
         const { posArr, normArr, maxDim, bcx, bcy, bcz } = meshRef.current
         const s = createScene(canvasRef.current, posArr, normArr, bcx, bcy, bcz, maxDim, mat, op, smooth)
+        if (customColorRef.current) s.mat.color.set(customColorRef.current)
         s.wireMesh.visible = wf
         s.labels.forEach(l => { l.visible = labels })
         stateRef.current = s
@@ -302,6 +366,8 @@ function VolumetricView({ filePath }) {
     useEffect(() => {
         let cancelled = false
         setStatus('loading'); setErrMsg('')
+        setTractsStatus('none')
+        tractsDataRef.current = null
         destroyScene(); killWorker()
         meshRef.current = null
 
@@ -336,6 +402,26 @@ function VolumetricView({ filePath }) {
                     worker.terminate(); workerRef.current = null
                 }
                 worker.postMessage({ arrayBuffer: buf }, [buf])
+
+                // Check and load tracts.json alongside the NIfTI file
+                const tractsPath = getTractsPath(filePath)
+                if (tractsPath) {
+                    setTractsStatus('loading')
+                    fetch(`http://localhost:3001/api/exists?path=${encodeURIComponent(tractsPath)}`)
+                        .then(r => r.json())
+                        .then(({ exists }) => {
+                            if (!exists) { setTractsStatus('none'); return }
+                            return fetch(`http://localhost:3001/api/tracts?path=${encodeURIComponent(tractsPath)}`)
+                                .then(r => { if (!r.ok) throw new Error('tracts.json fetch failed'); return r.json() })
+                                .then(data => {
+                                    if (!cancelled) {
+                                        tractsDataRef.current = data
+                                        setTractsStatus('ready')
+                                    }
+                                })
+                        })
+                        .catch(() => { if (!cancelled) setTractsStatus('none') })
+                }
             } catch (e) {
                 if (!cancelled) { setErrMsg(e.message); setStatus('error') }
             }
@@ -373,6 +459,37 @@ function VolumetricView({ filePath }) {
         if (!stateRef.current) return
         stateRef.current.labels.forEach(l => { l.visible = showLabels })
     }, [showLabels])
+
+    // Keep ref in sync so spawnScene (inside useCallback) always sees latest value
+    useEffect(() => { customColorRef.current = customColor }, [customColor])
+
+    // Live color update — no scene rebuild needed
+    useEffect(() => {
+        if (!stateRef.current || !customColor) return
+        stateRef.current.mat.color.set(customColor)
+        stateRef.current.mat.needsUpdate = true
+    }, [customColor])
+
+    // ── Add / update tract lines whenever scene or tract settings change ─────
+    useEffect(() => {
+        if (!stateRef.current) return
+        const { scene } = stateRef.current
+
+        // Remove previous lines
+        if (tractLinesRef.current) {
+            scene.remove(tractLinesRef.current)
+            tractLinesRef.current.geometry.dispose()
+            tractLinesRef.current.material.dispose()
+            tractLinesRef.current = null
+        }
+
+        if (showTracts && tractsStatus === 'ready' && tractsDataRef.current) {
+            const lines = buildTractLines(tractsDataRef.current, tractColor)
+            scene.add(lines)
+            tractLinesRef.current = lines
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showTracts, tractColor, tractsStatus, status])
 
     useEffect(() => {
         const canvas = canvasRef.current
@@ -426,10 +543,22 @@ function VolumetricView({ filePath }) {
                         <div className='ctrl-pills'>
                             {Object.keys(MATERIAL_PRESETS).map(m => (
                                 <button key={m}
-                                    className={`ctrl-pill${matName === m ? ' active' : ''}`}
-                                    onClick={() => setMatName(m)}
+                                    className={`ctrl-pill${matName === m && !customColor ? ' active' : ''}`}
+                                    onClick={() => { setMatName(m); setCustomColor('') }}
                                 >{m}</button>
                             ))}
+                            <label
+                                className={`ctrl-color-swatch${customColor ? ' active' : ''}`}
+                                title='Custom color'
+                                style={customColor ? { background: customColor } : {}}
+                            >
+                                <input
+                                    type='color'
+                                    value={customColor || '#ddd0b8'}
+                                    onChange={e => setCustomColor(e.target.value)}
+                                />
+                                {!customColor && <span>+</span>}
+                            </label>
                         </div>
                     </div>
 
@@ -474,6 +603,45 @@ function VolumetricView({ filePath }) {
                             Orientation A/P/L/R/S/I
                         </label>
                     </div>
+
+                    {tractsStatus !== 'none' && (
+                        <div className='ctrl-group'>
+                            <label>Tractography
+                                {tractsStatus === 'loading' && <span style={{ fontWeight: 400, color: '#aaa', marginLeft: 6 }}>loading…</span>}
+                                {tractsStatus === 'ready'   && tractsDataRef.current && (
+                                    <span style={{ fontWeight: 400, color: '#aaa', marginLeft: 6 }}>
+                                        {tractsDataRef.current.streamlines.length} streamlines
+                                    </span>
+                                )}
+                            </label>
+                            {tractsStatus === 'ready' && (
+                                <>
+                                    <div className='ctrl-pills'>
+                                        <label className='ctrl-check'>
+                                            <input type='checkbox' checked={showTracts}
+                                                onChange={e => setShowTracts(e.target.checked)} />
+                                            Show tracts
+                                        </label>
+                                    </div>
+                                    {showTracts && (
+                                        <div className='ctrl-pills' style={{ marginTop: 4 }}>
+                                            {[
+                                                { id: 'direction', label: 'Direction' },
+                                                { id: 'fa',        label: 'FA'        },
+                                                { id: 'region',    label: 'Region'    },
+                                            ].map(({ id, label }) => (
+                                                <button key={id}
+                                                    className={`ctrl-pill${tractColor === id ? ' active' : ''}`}
+                                                    onClick={() => setTractColor(id)}
+                                                    title={`Color by ${label}`}
+                                                >{label}</button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     <div className='ctrl-group ctrl-group--right'>
                         <div className='ctrl-pills'>

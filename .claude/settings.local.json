@@ -55,7 +55,14 @@
       "Bash(/home/jovi/inccsight_final/methods/venv/bin/pip show *)",
       "Bash(/home/jovi/inccsight_final/methods/venv/bin/python --version)",
       "Bash(/home/jovi/inccsight_final/methods/venv/bin/python *)",
-      "Bash(/home/jovi/inccsight_final/methods/venv/bin/pip install *)"
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/pip install *)",
+      "Bash(git rm *)",
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(node *)",
+      "Bash(npx --yes acorn --ecma2020 --module server.js)",
+      "Bash(npx react-scripts *)",
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/python3 transformInJson.py)"
     ]
   }
 }

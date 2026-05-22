@@ -38,12 +38,13 @@ import time
 
 # ── Base directories ──────────────────────────────────────────────────────────
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROQS_DIR = os.path.join(BASE_DIR, "roqs")
-CNN_DIR  = os.path.join(BASE_DIR, "CNNBased")
-CSVS_DIR = os.path.join(BASE_DIR, "csvs")
-QC_DIR   = os.path.join(BASE_DIR, "qc")
-PYTHON   = sys.executable
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+ROQS_DIR  = os.path.join(BASE_DIR, "roqs")
+CNN_DIR   = os.path.join(BASE_DIR, "CNNBased")
+CSVS_DIR  = os.path.join(BASE_DIR, "csvs")
+QC_DIR    = os.path.join(BASE_DIR, "qc")
+TRACT_DIR = os.path.join(BASE_DIR, "tractography")
+PYTHON    = sys.executable
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ parser.add_argument("--skip-cnn",  action="store_true", help="Skip CNN step")
 parser.add_argument("--skip-roqs", action="store_true", help="Skip ROQS step")
 parser.add_argument("--skip-qc",   action="store_true", help="Skip ViT QC step")
 parser.add_argument("--skip-json", action="store_true", help="Skip JSON conversion step")
+parser.add_argument("--skip-tract", action="store_true", help="Skip tractography step")
 args = parser.parse_args()
 
 # ── Resolve folders ───────────────────────────────────────────────────────────
@@ -191,7 +193,21 @@ if not args.skip_qc:
 else:
     print("\n[--] ViT QC skipped (--skip-qc)", flush=True)
 
-# ── Step 4 — JSON conversion ──────────────────────────────────────────────────
+# ── Step 4 — Tractography ────────────────────────────────────────────────────
+
+if not args.skip_tract:
+    print(f"PROGRESS:0:{total_subjects}:Running tractography", flush=True)
+    ok = run_step(
+        "Tractography — Deterministic streamlines",
+        [PYTHON, "main.py", "-p"] + parent_folders,
+        cwd=TRACT_DIR
+    )
+    if not ok:
+        print("\n[WARNING] Tractography failed. Continuing anyway...", flush=True)
+else:
+    print("\n[--] Tractography skipped (--skip-tract)", flush=True)
+
+# ── Step 5 — JSON conversion ──────────────────────────────────────────────────
 
 if not args.skip_json:
     print(f"PROGRESS:{total_subjects}:{total_subjects}:Converting CSV to JSON", flush=True)

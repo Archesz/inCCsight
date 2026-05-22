@@ -44,6 +44,7 @@ function View({ type }) {
     ])
     // set of selected methods (multi-select)
     const [selectedMethods, setSelectedMethods] = useState(new Set(['roqs', 'watershed', 'cnn']))
+    const [skipTract, setSkipTract] = useState(false)
     const [filter, setFilter] = useState('')
 
     // ── DOM helpers ────────────────────────────────────────────────────────
@@ -221,7 +222,7 @@ function View({ type }) {
         const skipRoqs = !selectedMethods.has('roqs') && !selectedMethods.has('watershed')
         const skipCnn  = !selectedMethods.has('cnn')
 
-        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs })
+        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, skipTract })
     }
 
     async function loadLast() {
@@ -293,6 +294,25 @@ function View({ type }) {
                                 </label>
                             )
                         })}
+                    </div>
+                </div>
+
+                {/* Pipeline options */}
+                <div className='method-selector'>
+                    <span className='method-label'>Pipeline options</span>
+                    <div className='method-pills'>
+                        <label
+                            className={`method-pill${skipTract ? ' active' : ''}`}
+                            title='Skip deterministic tractography (faster — no tracts.json output)'
+                        >
+                            <input
+                                type='checkbox'
+                                checked={skipTract}
+                                onChange={e => setSkipTract(e.target.checked)}
+                                style={{ marginRight: 6 }}
+                            />
+                            Skip Tractography
+                        </label>
                     </div>
                 </div>
 
