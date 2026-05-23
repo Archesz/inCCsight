@@ -3,20 +3,28 @@
  * volumetric.worker.js
  *
  * Off-main-thread worker that handles:
- *   1. NIfTI-1 parsing (DataView)
- *   2. Marching Cubes surface extraction (isosurface)
- *   3. Flattening positions + face normals into Float32Arrays
+ *   1. NIfTI-1 parsing (3D scalar and 4D vector)
+ *   2. Marching Cubes surface extraction (isosurface) on the CC mask
+ *   3. Optional per-vertex coloring from DTI eigenvalues / principal eigenvector:
+ *        - Color-FA  : RGB = |V1| · FA  (classic direction-encoded DTI map)
+ *        - FA heat   : cold→warm gradient by FA magnitude
+ *   4. Flattening positions + face normals into Float32Arrays
  *
  * The heavy Float32Arrays are transferred (zero-copy) back to the main thread.
  *
- * Message in:  { arrayBuffer: ArrayBuffer }
- * Message out (success): { posArr, normArr, triCount, maxDim, cx, cy, cz }
- * Message out (error):   { error: string }
+ * Message in:
+ *   { arrayBuffer: ArrayBuffer,                                  // CC mask NIfTI
+ *     dtiBuffers : { L1, L2, L3, V1? } | null }                 // optional DTI
+ * Message out (success):
+ *   { posArr, normArr, triCount, maxDim, bcx, bcy, bcz,
+ *     colorFA, colorHeat }                                       // last two: null if no DTI
+ * Message out (error):
+ *   { error: string }
  */
 
 import { marchingCubes } from 'isosurface'
 
-// ── NIfTI-1 parser ────────────────────────────────────────────────────────────
+// ── NIfTI-1 parser (handles 3D scalar and 4D vector fields) ──────────────────
 function parseNifti1(buf) {
     const v          = new DataView(buf)
     const nx         = v.getInt16(42, true)
@@ -27,7 +35,13 @@ function parseNifti1(buf) {
     const dz         = Math.abs(v.getFloat32(88, true)) || 1
     const datatype   = v.getInt16(70, true)
     const vox_offset = Math.max(352, Math.floor(v.getFloat32(108, true)))
-    const n          = nx * ny * nz
+
+    // Infer the component dimension (1 for scalars, 3 for V1/V2/V3) from file size
+    const bytesPerValue = { 2: 1, 4: 2, 8: 4, 16: 4, 64: 8 }[datatype] || 1
+    const nxyz         = nx * ny * nz
+    const totalValues  = Math.floor((buf.byteLength - vox_offset) / bytesPerValue)
+    const ncomp        = Math.max(1, Math.round(totalValues / nxyz))
+    const n            = nxyz * ncomp
 
     let voxels
     if      (datatype === 2)  voxels = new Uint8Array   (buf, vox_offset, n)
@@ -37,12 +51,38 @@ function parseNifti1(buf) {
     else if (datatype === 64) voxels = Float32Array.from(new Float64Array(buf.slice(vox_offset, vox_offset + n * 8)))
     else                      voxels = new Uint8Array   (buf, vox_offset, n)
 
-    return { nx, ny, nz, dx, dy, dz, voxels }
+    return { nx, ny, nz, dx, dy, dz, ncomp, voxels }
 }
 
-// ── Marching Cubes + geometry flattening ──────────────────────────────────────
-function buildMeshArrays(nifti) {
-    const { nx, ny, nz, dx, dy, dz, voxels } = nifti
+// ── Trilinear interpolation for a single scalar component ────────────────────
+function trilerpScalar(vol, nx, ny, nz, fx, fy, fz, compOffset = 0) {
+    const i0 = Math.floor(fx), j0 = Math.floor(fy), k0 = Math.floor(fz)
+    const i1 = i0 + 1, j1 = j0 + 1, k1 = k0 + 1
+    if (i0 < 0 || j0 < 0 || k0 < 0 || i1 >= nx || j1 >= ny || k1 >= nz) {
+        // Out of bounds — fall back to nearest in-bounds voxel
+        const ix = Math.min(nx - 1, Math.max(0, Math.round(fx)))
+        const iy = Math.min(ny - 1, Math.max(0, Math.round(fy)))
+        const iz = Math.min(nz - 1, Math.max(0, Math.round(fz)))
+        return vol[compOffset + ix + iy * nx + iz * nx * ny]
+    }
+    const di = fx - i0, dj = fy - j0, dk = fz - k0
+    const sx = nx, sy = nx * ny
+    const o = compOffset
+    return (
+        vol[o + i0 + j0 * sx + k0 * sy] * (1 - di) * (1 - dj) * (1 - dk) +
+        vol[o + i1 + j0 * sx + k0 * sy] *      di  * (1 - dj) * (1 - dk) +
+        vol[o + i0 + j1 * sx + k0 * sy] * (1 - di) *      dj  * (1 - dk) +
+        vol[o + i1 + j1 * sx + k0 * sy] *      di  *      dj  * (1 - dk) +
+        vol[o + i0 + j0 * sx + k1 * sy] * (1 - di) * (1 - dj) *      dk  +
+        vol[o + i1 + j0 * sx + k1 * sy] *      di  * (1 - dj) *      dk  +
+        vol[o + i0 + j1 * sx + k1 * sy] * (1 - di) *      dj  *      dk  +
+        vol[o + i1 + j1 * sx + k1 * sy] *      di  *      dj  *      dk
+    )
+}
+
+// ── Marching Cubes + geometry flattening (+ optional per-vertex colors) ──────
+function buildMeshArrays(maskNifti, dtiVolumes) {
+    const { nx, ny, nz, dx, dy, dz, voxels } = maskNifti
 
     const sdf = (x, y, z) => {
         if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) return -1
@@ -64,6 +104,55 @@ function buildMeshArrays(nifti) {
     const posArr  = new Float32Array(triCount * 9)
     const normArr = new Float32Array(triCount * 9)
 
+    // ── DTI sampling setup (only if all required volumes are present) ───────
+    const dti = dtiVolumes
+    const nxyz = nx * ny * nz
+    let colorFA = null, colorHeat = null
+    if (dti && dti.L1 && dti.L2 && dti.L3) {
+        // Sanity check: L1 dimensions must match mask
+        if (dti.L1.nx === nx && dti.L1.ny === ny && dti.L1.nz === nz) {
+            colorHeat = new Float32Array(triCount * 9)
+            if (dti.V1 && dti.V1.ncomp >= 3) colorFA = new Float32Array(triCount * 9)
+        }
+    }
+    const hasColor = colorHeat !== null
+
+    // ── Helpers to sample DTI at a fractional voxel position ────────────────
+    const sampleColors = (fx, fy, fz, outRGB) => {
+        // Trilerp the three eigenvalues
+        const l1 = trilerpScalar(dti.L1.voxels, nx, ny, nz, fx, fy, fz)
+        const l2 = trilerpScalar(dti.L2.voxels, nx, ny, nz, fx, fy, fz)
+        const l3 = trilerpScalar(dti.L3.voxels, nx, ny, nz, fx, fy, fz)
+        const md = (l1 + l2 + l3) / 3
+        const num = (l1 - md) ** 2 + (l2 - md) ** 2 + (l3 - md) ** 2
+        const den = l1 * l1 + l2 * l2 + l3 * l3
+        let fa = den > 1e-12 ? Math.sqrt(1.5 * num / den) : 0
+        fa = Math.max(0, Math.min(1, fa))
+
+        // FA heat: cold (low) → warm (high). Same palette as tract FA in VolumetricView.
+        const t = fa
+        outRGB.heatR = t
+        outRGB.heatG = 1 - Math.abs(2 * t - 1)
+        outRGB.heatB = 1 - t
+
+        if (colorFA && dti.V1) {
+            // V1 stored as (nx,ny,nz,3) with vector component as outermost dim.
+            // Nearest-neighbor on V1 (sign flips between adjacent voxels can hurt trilerp).
+            const ix = Math.min(nx - 1, Math.max(0, Math.round(fx)))
+            const iy = Math.min(ny - 1, Math.max(0, Math.round(fy)))
+            const iz = Math.min(nz - 1, Math.max(0, Math.round(fz)))
+            const idx = ix + iy * nx + iz * nx * ny
+            const vx = dti.V1.voxels[idx + 0 * nxyz]
+            const vy = dti.V1.voxels[idx + 1 * nxyz]
+            const vz = dti.V1.voxels[idx + 2 * nxyz]
+            outRGB.faR = Math.abs(vx) * fa
+            outRGB.faG = Math.abs(vy) * fa
+            outRGB.faB = Math.abs(vz) * fa
+        }
+    }
+
+    const rgb = { heatR: 0, heatG: 0, heatB: 0, faR: 0, faG: 0, faB: 0 }
+
     let p = 0
     for (const [i, j, k] of rawCells) {
         const a = rawPos[i], b = rawPos[j], c = rawPos[k]
@@ -77,23 +166,39 @@ function buildMeshArrays(nifti) {
         posArr[p+6] = cx_; posArr[p+7] = cy_; posArr[p+8] = cz_
 
         // Face normal
-        const ux = bx-ax, uy = by-ay, uz = bz-az
-        const vx = cx_-ax, vy = cy_-ay, vz = cz_-az
+        const ux = bx - ax,  uy = by - ay,  uz = bz - az
+        const vx = cx_ - ax, vy = cy_ - ay, vz = cz_ - az
         let nx_ = uy*vz - uz*vy
         let ny_ = uz*vx - ux*vz
         let nz_ = ux*vy - uy*vx
-        const len = Math.sqrt(nx_*nx_ + ny_*ny_ + nz_*nz_) || 1
-        nx_ /= len; ny_ /= len; nz_ /= len
+        const nlen = Math.sqrt(nx_*nx_ + ny_*ny_ + nz_*nz_) || 1
+        nx_ /= nlen; ny_ /= nlen; nz_ /= nlen
 
         for (let s = 0; s < 3; s++) {
-            normArr[p + s*3]   = nx_
-            normArr[p + s*3+1] = ny_
-            normArr[p + s*3+2] = nz_
+            normArr[p + s*3]     = nx_
+            normArr[p + s*3 + 1] = ny_
+            normArr[p + s*3 + 2] = nz_
         }
+
+        if (hasColor) {
+            const verts = [a, b, c]
+            for (let s = 0; s < 3; s++) {
+                sampleColors(verts[s][0], verts[s][1], verts[s][2], rgb)
+                colorHeat[p + s*3]     = rgb.heatR
+                colorHeat[p + s*3 + 1] = rgb.heatG
+                colorHeat[p + s*3 + 2] = rgb.heatB
+                if (colorFA) {
+                    colorFA[p + s*3]     = rgb.faR
+                    colorFA[p + s*3 + 1] = rgb.faG
+                    colorFA[p + s*3 + 2] = rgb.faB
+                }
+            }
+        }
+
         p += 9
     }
 
-    // Bounding box for maxDim (used by camera placement)
+    // Bounding box for maxDim (camera placement)
     let minX = Infinity, minY = Infinity, minZ = Infinity
     let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
     for (let i = 0; i < posArr.length; i += 3) {
@@ -105,29 +210,50 @@ function buildMeshArrays(nifti) {
         if (posArr[i+2] > maxZ) maxZ = posArr[i+2]
     }
     const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ)
-    // Geometric center of bounding box (will be 0,0,0 since we centered on cx/cy/cz)
     const bcx = (minX + maxX) / 2
     const bcy = (minY + maxY) / 2
     const bcz = (minZ + maxZ) / 2
 
-    return { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+    return { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat }
 }
 
 // ── Worker message handler ────────────────────────────────────────────────────
 self.onmessage = function (e) {
-    const { arrayBuffer } = e.data
+    const { arrayBuffer, dtiBuffers } = e.data
     try {
-        const nifti = parseNifti1(arrayBuffer)
-        const result = buildMeshArrays(nifti)
+        const mask = parseNifti1(arrayBuffer)
+
+        // Parse optional DTI buffers
+        let dtiVolumes = null
+        if (dtiBuffers && dtiBuffers.L1 && dtiBuffers.L2 && dtiBuffers.L3) {
+            try {
+                dtiVolumes = {
+                    L1: parseNifti1(dtiBuffers.L1),
+                    L2: parseNifti1(dtiBuffers.L2),
+                    L3: parseNifti1(dtiBuffers.L3),
+                    V1: dtiBuffers.V1 ? parseNifti1(dtiBuffers.V1) : null,
+                }
+            } catch (e) {
+                dtiVolumes = null
+            }
+        }
+
+        const result = buildMeshArrays(mask, dtiVolumes)
         if (!result) {
             self.postMessage({ error: 'Marching Cubes produced no surface — check the mask.' })
             return
         }
-        const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = result
-        // Transfer buffers for zero-copy
+
+        const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat } = result
+
+        // Build transferables list dynamically (omit null entries)
+        const transfer = [posArr.buffer, normArr.buffer]
+        if (colorHeat) transfer.push(colorHeat.buffer)
+        if (colorFA)   transfer.push(colorFA.buffer)
+
         self.postMessage(
-            { posArr, normArr, triCount, maxDim, bcx, bcy, bcz },
-            [posArr.buffer, normArr.buffer]
+            { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat },
+            transfer
         )
     } catch (err) {
         self.postMessage({ error: err.message })

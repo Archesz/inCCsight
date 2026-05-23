@@ -304,6 +304,54 @@ function getTractsPath(fp) {
     return parts.join('/')
 }
 
+// ── DTI eigenvalue / eigenvector NIfTI loading (for vertex coloring) ─────────
+function dtiSubjectPath(fp, niftiName) {
+    // .../subject/inCCsight/cnnBased.nii.gz → .../subject/<niftiName>.nii.gz
+    const parts = fp.replace(/\\/g, '/').split('/')
+    parts.splice(-2, 2, `${niftiName}.nii.gz`)
+    return parts.join('/')
+}
+
+async function fetchAndDecompress(path) {
+    const res = await fetch(`/api/file?path=${encodeURIComponent(path)}`)
+    if (!res.ok) throw new Error(`File not found (HTTP ${res.status}): ${path}`)
+    if (path.endsWith('.gz')) {
+        const ds = new DecompressionStream('gzip')
+        return await new Response(res.body.pipeThrough(ds)).arrayBuffer()
+    }
+    return await res.arrayBuffer()
+}
+
+async function checkFileExists(path) {
+    try {
+        const res  = await fetch(`/api/exists?path=${encodeURIComponent(path)}`)
+        const json = await res.json()
+        return Boolean(json.exists)
+    } catch (_) { return false }
+}
+
+// Returns { L1, L2, L3, V1? } of ArrayBuffers, or null if L1/L2/L3 not all present.
+async function fetchDtiBuffers(filePath) {
+    const paths = {
+        L1: dtiSubjectPath(filePath, 'dti_L1'),
+        L2: dtiSubjectPath(filePath, 'dti_L2'),
+        L3: dtiSubjectPath(filePath, 'dti_L3'),
+        V1: dtiSubjectPath(filePath, 'dti_V1'),
+    }
+    const [e1, e2, e3, eV1] = await Promise.all([
+        checkFileExists(paths.L1), checkFileExists(paths.L2),
+        checkFileExists(paths.L3), checkFileExists(paths.V1),
+    ])
+    if (!e1 || !e2 || !e3) return null
+    const [L1, L2, L3] = await Promise.all([
+        fetchAndDecompress(paths.L1),
+        fetchAndDecompress(paths.L2),
+        fetchAndDecompress(paths.L3),
+    ])
+    const V1 = eV1 ? await fetchAndDecompress(paths.V1) : null
+    return { L1, L2, L3, V1 }
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 function VolumetricView({ filePath }) {
     const canvasRef = useRef(null)
@@ -325,6 +373,8 @@ function VolumetricView({ filePath }) {
     const [tractsStatus, setTractsStatus] = useState('none')  // 'none'|'loading'|'ready'|'error'
     const [showTracts,   setShowTracts]   = useState(true)
     const [tractColor,   setTractColor]   = useState('direction')
+    const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'color-fa' | 'fa'
+    const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'|'full'
     const tractsDataRef  = useRef(null)
     const tractLinesRef  = useRef(null)
 
@@ -373,15 +423,12 @@ function VolumetricView({ filePath }) {
 
         const load = async () => {
             try {
-                const res = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`)
-                if (!res.ok) throw new Error(`File not found (HTTP ${res.status})`)
-                let buf
-                if (filePath.endsWith('.gz')) {
-                    const ds = new DecompressionStream('gzip')
-                    buf = await new Response(res.body.pipeThrough(ds)).arrayBuffer()
-                } else {
-                    buf = await res.arrayBuffer()
-                }
+                setDtiStatus('loading')
+                // Fetch mask and DTI eigenmaps in parallel — DTI is optional.
+                const [maskBuf, dtiBufs] = await Promise.all([
+                    fetchAndDecompress(filePath),
+                    fetchDtiBuffers(filePath).catch(() => null),
+                ])
                 if (cancelled) return
 
                 const worker = new Worker(new URL('./volumetric.worker.js', import.meta.url))
@@ -391,9 +438,12 @@ function VolumetricView({ filePath }) {
                     if (cancelled) { worker.terminate(); return }
                     const data = e.data
                     if (data.error) { setErrMsg(data.error); setStatus('error'); worker.terminate(); workerRef.current = null; return }
-                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz } = data
-                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz }
+                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat } = data
+                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat }
                     setTriCount(triCount)
+                    if      (colorFA)   setDtiStatus('full')
+                    else if (colorHeat) setDtiStatus('fa-only')
+                    else                setDtiStatus('no-data')
                     setStatus('ready')
                     worker.terminate(); workerRef.current = null
                 }
@@ -401,7 +451,16 @@ function VolumetricView({ filePath }) {
                     if (!cancelled) { setErrMsg(err.message || 'Worker error'); setStatus('error') }
                     worker.terminate(); workerRef.current = null
                 }
-                worker.postMessage({ arrayBuffer: buf }, [buf])
+
+                // Transferables: every ArrayBuffer we send must be listed so the worker takes ownership.
+                const transfer = [maskBuf]
+                const payload  = { arrayBuffer: maskBuf, dtiBuffers: null }
+                if (dtiBufs) {
+                    payload.dtiBuffers = dtiBufs
+                    transfer.push(dtiBufs.L1, dtiBufs.L2, dtiBufs.L3)
+                    if (dtiBufs.V1) transfer.push(dtiBufs.V1)
+                }
+                worker.postMessage(payload, transfer)
 
                 // Check and load tracts.json alongside the NIfTI file
                 const tractsPath = getTractsPath(filePath)
@@ -463,12 +522,41 @@ function VolumetricView({ filePath }) {
     // Keep ref in sync so spawnScene (inside useCallback) always sees latest value
     useEffect(() => { customColorRef.current = customColor }, [customColor])
 
-    // Live color update — no scene rebuild needed
+    // Live color update — no scene rebuild needed (ignored when in DTI color mode)
     useEffect(() => {
-        if (!stateRef.current || !customColor) return
+        if (!stateRef.current || !customColor || colorMode !== 'preset') return
         stateRef.current.mat.color.set(customColor)
         stateRef.current.mat.needsUpdate = true
-    }, [customColor])
+    }, [customColor, colorMode])
+
+    // ── Live vertex-color attribute swap when colorMode changes ──────────────
+    // Also re-runs whenever the scene is rebuilt (matName/smoothIter) so the
+    // freshly created material picks up the active DTI coloring again.
+    useEffect(() => {
+        if (status !== 'ready' || !stateRef.current || !meshRef.current) return
+        const { mesh, mat } = stateRef.current
+        const { colorFA, colorHeat } = meshRef.current
+
+        if (colorMode === 'color-fa' && colorFA) {
+            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorFA, 3))
+            mat.vertexColors = true
+            mat.color.set(0xffffff)
+            mat.emissive.set(0x000000)
+        } else if (colorMode === 'fa' && colorHeat) {
+            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorHeat, 3))
+            mat.vertexColors = true
+            mat.color.set(0xffffff)
+            mat.emissive.set(0x000000)
+        } else {
+            if (mesh.geometry.attributes.color) mesh.geometry.deleteAttribute('color')
+            mat.vertexColors = false
+            const preset = MATERIAL_PRESETS[matName] || MATERIAL_PRESETS['Anatomical']
+            mat.color.set(customColorRef.current || preset.color)
+            mat.emissive.set(preset.emissive)
+        }
+        mat.needsUpdate = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [colorMode, status, matName, smoothIter])
 
     // ── Add / update tract lines whenever scene or tract settings change ─────
     useEffect(() => {
@@ -539,26 +627,45 @@ function VolumetricView({ filePath }) {
                 <div className='volumetric-controls'>
 
                     <div className='ctrl-group'>
-                        <label>Material</label>
+                        <label>
+                            Color
+                            {dtiStatus === 'loading' && (
+                                <span style={{ fontWeight: 400, color: '#aaa', marginLeft: 6 }}>loading DTI…</span>
+                            )}
+                        </label>
                         <div className='ctrl-pills'>
                             {Object.keys(MATERIAL_PRESETS).map(m => (
                                 <button key={m}
-                                    className={`ctrl-pill${matName === m && !customColor ? ' active' : ''}`}
-                                    onClick={() => { setMatName(m); setCustomColor('') }}
+                                    className={`ctrl-pill${colorMode === 'preset' && matName === m && !customColor ? ' active' : ''}`}
+                                    onClick={() => { setColorMode('preset'); setMatName(m); setCustomColor('') }}
                                 >{m}</button>
                             ))}
                             <label
-                                className={`ctrl-color-swatch${customColor ? ' active' : ''}`}
+                                className={`ctrl-color-swatch${colorMode === 'preset' && customColor ? ' active' : ''}`}
                                 title='Custom color'
                                 style={customColor ? { background: customColor } : {}}
                             >
                                 <input
                                     type='color'
                                     value={customColor || '#ddd0b8'}
-                                    onChange={e => setCustomColor(e.target.value)}
+                                    onChange={e => { setCustomColor(e.target.value); setColorMode('preset') }}
                                 />
                                 {!customColor && <span>+</span>}
                             </label>
+                            {(dtiStatus === 'full' || dtiStatus === 'fa-only') && (
+                                <button
+                                    className={`ctrl-pill${colorMode === 'fa' ? ' active' : ''}`}
+                                    onClick={() => setColorMode('fa')}
+                                    title='Color by FA magnitude (cold → warm)'
+                                >FA heat</button>
+                            )}
+                            {dtiStatus === 'full' && (
+                                <button
+                                    className={`ctrl-pill${colorMode === 'color-fa' ? ' active' : ''}`}
+                                    onClick={() => setColorMode('color-fa')}
+                                    title='Color-FA: |V1|·FA encodes principal direction (R=L/R · G=A/P · B=S/I)'
+                                >Color-FA</button>
+                            )}
                         </div>
                     </div>
 
