@@ -5,14 +5,15 @@ For each subject folder:
   1. Load eigenvalues (L1/L2/L3) and compute FA
   2. Load principal eigenvector (V1)
   3. Build CC mask — prefer cnnBased.nii.gz, fallback to FA threshold
-  4. Seed uniformly from mask voxels
-  5. Run bidirectional deterministic tracking
+  4. Seed uniformly from mask voxels (with sub-voxel jitter)
+  5. Run bidirectional probabilistic tracking (numba-accelerated)
   6. Filter callosal streamlines (endpoints span midsagittal plane)
   7. Assign Witelson regions (5 regions along AP axis)
   8. Save tracts.json and tract_stats.csv per subject
 
 Usage:
-    python main.py -p /data/group_folder [--max-seeds 600]
+    python main.py -p /data/group_folder \\
+        [--max-seeds 2000] [--samples-per-seed 10] [--sigma-scale 0.6]
 """
 import argparse
 import csv
@@ -20,6 +21,7 @@ import glob
 import json
 import os
 import sys
+import time
 
 import numpy as np
 
@@ -124,7 +126,9 @@ def _stats(streamlines, fa_along, regions):
     return s
 
 
-def process_subject(subj_folder, max_seeds=600):
+def process_subject(subj_folder, max_seeds=2000, samples_per_seed=10,
+                    sigma_scale=0.6, fa_thresh=0.15, max_angle=65.0,
+                    max_save_streamlines=10000):
     name = os.path.basename(subj_folder)
     print(f"  {name}", flush=True)
 
@@ -160,10 +164,21 @@ def process_subject(subj_folder, max_seeds=600):
     n = min(max_seeds, len(mask_vox))
     seeds = mask_vox[rng.choice(len(mask_vox), n, replace=False)].astype(float)
     seeds += rng.uniform(-0.4, 0.4, seeds.shape)
-    print(f"    [track] {n} seeds / {len(mask_vox)} mask voxels", flush=True)
+    print(f"    [track] {n} seeds x {samples_per_seed} samples "
+          f"(sigma={sigma_scale}, FA>={fa_thresh}, max_angle={max_angle}deg) / "
+          f"{len(mask_vox)} mask voxels", flush=True)
 
-    streamlines, fa_along = track(v1, fa, seeds)
-    print(f"    [track] {len(streamlines)} raw streamlines", flush=True)
+    t0 = time.time()
+    streamlines, fa_along = track(
+        v1, fa, seeds,
+        fa_thresh=fa_thresh,
+        max_angle_deg=max_angle,
+        samples_per_seed=samples_per_seed,
+        sigma_scale=sigma_scale,
+    )
+    dt = time.time() - t0
+    print(f"    [track] {len(streamlines)} raw streamlines in {dt:.1f}s "
+          f"({len(streamlines)/max(dt, 1e-6):.0f}/s)", flush=True)
 
     streamlines, fa_along = _filter_callosal(streamlines, fa_along, nx)
     print(f"    [track] {len(streamlines)} callosal streamlines", flush=True)
@@ -176,16 +191,32 @@ def process_subject(subj_folder, max_seeds=600):
     stats = _stats(streamlines, fa_along, regions)
     stats['subject'] = name
 
+    # Stats are computed on ALL surviving streamlines; the JSON we ship to the
+    # frontend is capped so the browser stays responsive on the volumetric view.
+    n_total = len(streamlines)
+    if n_total > max_save_streamlines:
+        sel = np.random.default_rng(7).choice(n_total, max_save_streamlines, replace=False)
+        sel.sort()
+        streamlines_vis = [streamlines[i] for i in sel]
+        fa_along_vis    = [fa_along[i]    for i in sel]
+        regions_vis     = [regions[i]     for i in sel]
+        print(f"    [save] sub-sampled {max_save_streamlines}/{n_total} "
+              f"streamlines for visualization", flush=True)
+    else:
+        streamlines_vis = streamlines
+        fa_along_vis    = fa_along
+        regions_vis     = regions
+
     tracts_path = os.path.join(subj_folder, 'tracts.json')
     with open(tracts_path, 'w') as f:
         json.dump({
             'nx': int(nx), 'ny': int(ny), 'nz': int(nz),
             'dx': float(dx), 'dy': float(dy), 'dz': float(dz),
-            'streamlines': [sl.tolist() for sl in streamlines],
-            'fa_along':    [fa.tolist() for fa in fa_along],
-            'regions':     regions,
+            'streamlines': [sl.tolist() for sl in streamlines_vis],
+            'fa_along':    [fa.tolist() for fa in fa_along_vis],
+            'regions':     regions_vis,
         }, f, separators=(',', ':'))
-    print(f"    [save] tracts.json ({len(streamlines)} streamlines)", flush=True)
+    print(f"    [save] tracts.json ({len(streamlines_vis)} streamlines)", flush=True)
 
     csv_path = os.path.join(subj_folder, 'tract_stats.csv')
     row = {k: v for k, v in stats.items() if k != 'subject'}
@@ -205,9 +236,21 @@ def is_subject_folder(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Deterministic tractography pipeline')
+    parser = argparse.ArgumentParser(description='Probabilistic tractography pipeline')
     parser.add_argument('-p', '--path', nargs='+', required=True)
-    parser.add_argument('--max-seeds', type=int, default=600)
+    parser.add_argument('--max-seeds',        type=int,   default=2000,
+                        help='Maximum number of unique seed voxels to sample (default: 2000)')
+    parser.add_argument('--samples-per-seed', type=int,   default=10,
+                        help='Probabilistic samples per seed (default: 10). Use 1 for deterministic.')
+    parser.add_argument('--sigma-scale',      type=float, default=0.6,
+                        help='Tangent-plane perturbation sigma at FA=0 (default: 0.6). 0 = deterministic.')
+    parser.add_argument('--fa-thresh',        type=float, default=0.15,
+                        help='Minimum FA to keep tracking (default: 0.15)')
+    parser.add_argument('--max-angle',        type=float, default=65.0,
+                        help='Maximum curvature per step, degrees (default: 65)')
+    parser.add_argument('--max-save-streamlines', type=int, default=10000,
+                        help='Cap streamlines written to tracts.json (default: 10000). '
+                             'Stats are still computed on the full set.')
     args = parser.parse_args()
 
     subjects = []
@@ -230,7 +273,15 @@ def main():
 
     done = 0
     for subj in subjects:
-        process_subject(subj, args.max_seeds)
+        process_subject(
+            subj,
+            max_seeds=args.max_seeds,
+            samples_per_seed=args.samples_per_seed,
+            sigma_scale=args.sigma_scale,
+            fa_thresh=args.fa_thresh,
+            max_angle=args.max_angle,
+            max_save_streamlines=args.max_save_streamlines,
+        )
         done += 1
         print(f"PROGRESS:{done}:{total}:Tractography", flush=True)
 
