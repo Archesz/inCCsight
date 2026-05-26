@@ -248,6 +248,24 @@ $text    : #1a1f36;
             color: rgba($muted, 0.7);
             font-size: 9px;
         }
+
+        .qcg-download-btn {
+            margin-left: auto;
+            font-family: inherit;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: none;
+            letter-spacing: 0;
+            padding: 4px 10px;
+            border-radius: 14px;
+            border: 1.5px solid $border;
+            background: $surface;
+            color: $primary;
+            cursor: pointer;
+            transition: all 0.15s;
+
+            &:hover { border-color: $accent; color: $accent; }
+        }
     }
 }
 
@@ -361,7 +379,7 @@ $text    : #1a1f36;
     &.shape-fail { background: rgba($red,    0.12); color: $red;    }
     &.shape-pass { background: rgba($green,  0.12); color: darken($green, 10%); }
     &.z-fail     { background: rgba($orange, 0.14); color: darken($orange, 10%); }
-    &.z-pass     { background: rgba($accent, 0.10); color: $accent; }
+    &.z-pass     { background: rgba($green,  0.12); color: darken($green, 10%); }
 }
 
 .qcc-check {

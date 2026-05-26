@@ -21,6 +21,62 @@ function imgPathForMethod(subject, method) {
     return subject.img_path
 }
 
+// CSV cell escaping (RFC 4180): quote if the value contains a delimiter,
+// quote, CR or LF; double any embedded quote.
+function csvCell(v) {
+    if (v == null) return ''
+    const s = String(v)
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+// Build a CSV with the metadata that lets the user trace a removed subject
+// back to its source files and inspect why it was dropped.
+function downloadRemovedCsv(subjects) {
+    if (!subjects.length) return
+    const cols = [
+        'Id', 'group', 'img_path',
+        'ROQS_qc_flag',      'ROQS_qc_prob',
+        'Watershed_qc_flag', 'Watershed_qc_prob',
+        'ROQS_FA',      'ROQS_MD',      'ROQS_RD',      'ROQS_AD',
+        'Watershed_FA', 'Watershed_MD', 'Watershed_RD', 'Watershed_AD',
+        'CNN_FA',       'CNN_MD',       'CNN_RD',       'CNN_AD',
+    ]
+    const rows = subjects.map(s => [
+        s.Id,
+        s.group ?? '',
+        s.img_path ?? '',
+        s.qc?.ROQS?.flag      ?? '',
+        s.qc?.ROQS?.prob      ?? '',
+        s.qc?.Watershed?.flag ?? '',
+        s.qc?.Watershed?.prob ?? '',
+        s.ROQS_scalar?.FA      ?? '',
+        s.ROQS_scalar?.MD      ?? '',
+        s.ROQS_scalar?.RD      ?? '',
+        s.ROQS_scalar?.AD      ?? '',
+        s.Watershed_scalar?.FA ?? '',
+        s.Watershed_scalar?.MD ?? '',
+        s.Watershed_scalar?.RD ?? '',
+        s.Watershed_scalar?.AD ?? '',
+        s.CNN_scalar?.FA       ?? '',
+        s.CNN_scalar?.MD       ?? '',
+        s.CNN_scalar?.RD       ?? '',
+        s.CNN_scalar?.AD       ?? '',
+    ].map(csvCell).join(','))
+
+    // Prepend a UTF-8 BOM so Excel opens accented characters correctly.
+    const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `removed_subjects_${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+}
+
 function computeZScores(subjects, scalar, methodKey) {
     // Returns {subjectId: z | null}
     const vals = subjects.map(s => {
@@ -345,7 +401,14 @@ export default function QualityControl({ allSubjects, onReload }) {
                 {removedSubjects.length > 0 && (
                     <section className='qcg-section'>
                         <div className='qcg-section-hd qcg-section-hd--rm'>
-                            Removed from Analysis — {removedSubjects.length} subject{removedSubjects.length !== 1 ? 's' : ''}
+                            <span>Removed from Analysis — {removedSubjects.length} subject{removedSubjects.length !== 1 ? 's' : ''}</span>
+                            <button
+                                className='qcg-download-btn'
+                                onClick={() => downloadRemovedCsv(removedSubjects)}
+                                title='Download a CSV with the removed subjects + their QC flags and scalars'
+                            >
+                                ⬇ Download CSV
+                            </button>
                         </div>
                         <div className='qcg'>
                             {removedSubjects.map(s => (

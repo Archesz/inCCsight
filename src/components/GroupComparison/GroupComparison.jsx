@@ -255,7 +255,7 @@ function ParcellationBar({ allSubjects, allGroups, segMethod }) {
 
 // ── Shape metrics (ROQS only) ─────────────────────────────────────────────
 
-function ShapeMetrics({ allSubjects, allGroups }) {
+function ShapeMetrics({ allSubjects, allGroups, chartType }) {
     return (
         <div className='gc-shape-grid'>
             {SHAPE_METRICS.map(({ key, label }) => {
@@ -265,11 +265,18 @@ function ShapeMetrics({ allSubjects, allGroups }) {
                         .filter(s => s.group === group)
                         .map(s => s?.ROQS_shape?.[key])
                         .filter(v => typeof v === 'number' && !isNaN(v))
+                    if (chartType === 'violin') {
+                        return {
+                            type: 'violin', y: values, name: group,
+                            box: { visible: true }, meanline: { visible: true },
+                            marker: { color, opacity: 0.8 }, line: { color },
+                            fillcolor: color + '44', showlegend: false,
+                        }
+                    }
                     return {
-                        type: 'violin', y: values, name: group,
-                        box: { visible: true }, meanline: { visible: true },
-                        marker: { color, opacity: 0.8 }, line: { color },
-                        fillcolor: color + '44', showlegend: false,
+                        type: 'box', y: values, name: group,
+                        boxmean: 'sd',
+                        marker: { color, opacity: 0.85 }, line: { width: 1.5 },
                     }
                 })
                 return (
@@ -473,7 +480,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                     Shape Metrics
                     <span className='gc-badge'>ROQS</span>
                 </span>
-                <ShapeMetrics allSubjects={allSubjects} allGroups={allGroups} />
+                <ShapeMetrics allSubjects={allSubjects} allGroups={allGroups} chartType={chartType} />
             </div>
 
             {/* Radar */}
