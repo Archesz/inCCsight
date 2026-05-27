@@ -154,16 +154,16 @@ print(f"PROGRESS:0:{total_subjects}:Starting pipeline", flush=True)
 # ── Step 1 — ROQS ─────────────────────────────────────────────────────────────
 
 if not args.skip_roqs:
-    print(f"PROGRESS:0:{total_subjects}:Running ROQS 2D segmentation", flush=True)
+    print(f"PROGRESS:0:{total_subjects}:Running ROQS + Watershed 2D segmentation", flush=True)
     ok = run_step(
-        "ROQS — 2D Segmentation",
+        "ROQS + Watershed — 2D Segmentation",
         [PYTHON, "main.py", "-p"] + parent_folders,
         cwd=ROQS_DIR
     )
     if not ok:
-        print("\n[WARNING] ROQS failed. Continuing anyway...", flush=True)
+        print("\n[WARNING] ROQS + Watershed failed. Continuing anyway...", flush=True)
 else:
-    print("\n[--] ROQS skipped (--skip-roqs)", flush=True)
+    print("\n[--] ROQS + Watershed skipped (--skip-roqs)", flush=True)
 
 # ── Step 2 — CNN ──────────────────────────────────────────────────────────────
 
@@ -198,7 +198,7 @@ else:
 if not args.skip_tract:
     print(f"PROGRESS:0:{total_subjects}:Running tractography", flush=True)
     ok = run_step(
-        "Tractography — Deterministic streamlines",
+        "Tractography — Probabilistic streamlines",
         [PYTHON, "main.py", "-p"] + parent_folders,
         cwd=TRACT_DIR
     )

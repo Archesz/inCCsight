@@ -271,3 +271,47 @@
     tr:nth-child(even) td { background: #fafbff; }
     tr:hover td { background: #f0f3ff; }
 }
+
+/* Overall / total row in statistics table */
+.gc-table-total {
+    td {
+        background: #eef1ff !important;
+        border-top: 2px solid #1F2C56;
+        color: #1F2C56;
+    }
+    &:hover td { background: #e4e9ff !important; }
+}
+
+/* Per-subject table toolbar */
+.gc-table-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 12px 4px;
+}
+
+.gc-table-sort-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    white-space: nowrap;
+}
+
+.gc-download-btn {
+    margin-left: auto;
+    padding: 3px 12px;
+    border-radius: 12px;
+    border: 1.5px solid #ccd0e0;
+    background: white;
+    color: #4C6EF5;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+        border-color: #4C6EF5;
+        background: rgba(#4C6EF5, 0.07);
+    }
+}

@@ -58,6 +58,13 @@ function bandTraces(xArr, stats, color, name) {
     ]
 }
 
+// CSV cell escaping (RFC 4180)
+function csvCell(v) {
+    if (v == null) return ''
+    const s = String(v)
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
 const CHART_LAYOUT_BASE = {
     margin: { t: 12, b: 48, l: 56, r: 16 },
     paper_bgcolor: 'transparent',
@@ -330,7 +337,100 @@ function GroupRadar({ allSubjects, allGroups, segMethod }) {
     )
 }
 
-// ── Statistics table ──────────────────────────────────────────────────────
+// ── Per-subject values table ───────────────────────────────────────────────
+
+function SubjectTable({ allSubjects, allGroups, segMethod }) {
+    const [sortBy, setSortBy] = useState('group')
+
+    const sorted = [...allSubjects].sort((a, b) => {
+        if (sortBy === 'group') return (a.group ?? '').localeCompare(b.group ?? '')
+        const va = parseFloat(a?.[segMethod]?.[sortBy])
+        const vb = parseFloat(b?.[segMethod]?.[sortBy])
+        if (isNaN(va) && isNaN(vb)) return 0
+        if (isNaN(va)) return 1
+        if (isNaN(vb)) return -1
+        return vb - va
+    })
+
+    function downloadCsv() {
+        const methodLabel = segMethod.replace('_scalar', '')
+        const cols = ['Subject', 'Group', ...SCALARS]
+        const rows = sorted.map(s => [
+            s.Id ?? s['Id'],
+            s.group ?? '',
+            ...SCALARS.map(sc => {
+                const v = s?.[segMethod]?.[sc]
+                const n = typeof v === 'number' ? v : parseFloat(v)
+                return !isNaN(n) ? n.toFixed(6) : ''
+            }),
+        ].map(csvCell).join(','))
+
+        const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const url  = URL.createObjectURL(blob)
+        const a    = document.createElement('a')
+        a.href     = url
+        a.download = `subjects_${methodLabel}_${new Date().toISOString().slice(0, 10)}.csv`
+        document.body.appendChild(a); a.click()
+        document.body.removeChild(a); URL.revokeObjectURL(url)
+    }
+
+    return (
+        <div>
+            <div className='gc-table-toolbar'>
+                <span className='gc-table-sort-label'>Sort by:</span>
+                {['group', ...SCALARS].map(col => (
+                    <button key={col}
+                        className={`gc-pill-sm${sortBy === col ? ' active' : ''}`}
+                        onClick={() => setSortBy(col)}
+                    >{col === 'group' ? 'Group' : col}</button>
+                ))}
+                <button className='gc-download-btn' onClick={downloadCsv} title='Download CSV'>
+                    ⬇ CSV
+                </button>
+            </div>
+
+            <div className='gc-table-wrap'>
+                <table className='gc-table'>
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Group</th>
+                            {SCALARS.map(sc => <th key={sc}>{sc}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sorted.map(s => {
+                            const id   = s.Id ?? s['Id']
+                            const gIdx = allGroups.indexOf(s.group)
+                            const color = GROUP_COLORS[gIdx >= 0 ? gIdx % GROUP_COLORS.length : 0]
+                            return (
+                                <tr key={id}>
+                                    <td style={{ fontWeight: 700, fontSize: 12 }}>{id}</td>
+                                    <td>
+                                        <span className='gc-dot' style={{ background: gIdx >= 0 ? color : '#ccc' }} />
+                                        {s.group ?? '—'}
+                                    </td>
+                                    {SCALARS.map(sc => {
+                                        const v = s?.[segMethod]?.[sc]
+                                        const n = typeof v === 'number' ? v : parseFloat(v)
+                                        return (
+                                            <td key={sc} style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                                                {!isNaN(n) ? n.toFixed(4) : '—'}
+                                            </td>
+                                        )
+                                    })}
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
+
+// ── Statistics table (group means + overall) ──────────────────────────────
 
 function MeanTable({ allSubjects, allGroups, segMethod }) {
     return (
@@ -369,6 +469,24 @@ function MeanTable({ allSubjects, allGroups, segMethod }) {
                             </tr>
                         )
                     })}
+
+                    {/* Overall CC mean row — across all subjects */}
+                    <tr className='gc-table-total'>
+                        <td><strong>Overall CC mean</strong></td>
+                        <td><strong>{allSubjects.length}</strong></td>
+                        {SCALARS.map(sc => {
+                            const { mean, std } = calcStats(getValues(allSubjects, segMethod, sc))
+                            return (
+                                <td key={sc}>
+                                    <strong>
+                                        {mean !== null
+                                            ? `${mean.toFixed(4)} ± ${std.toFixed(4)}`
+                                            : '—'}
+                                    </strong>
+                                </td>
+                            )
+                        })}
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -442,6 +560,16 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
+            {/* Per-subject values table */}
+            <div className='gc-section'>
+                <span className='gc-section-title'>Per-subject scalar values</span>
+                <div className='gc-chart-card'>
+                    <SubjectTable
+                        allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
+                    />
+                </div>
+            </div>
+
             {/* CC Thickness Profile + Scalar along midline — side by side */}
             <div className='gc-section'>
                 <div className='gc-profiles-row'>
@@ -491,9 +619,9 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
-            {/* Statistics table */}
+            {/* Statistics table — group means + overall CC mean */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Statistics per group</span>
+                <span className='gc-section-title'>CC scalar statistics per group</span>
                 <MeanTable allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod} />
             </div>
 
