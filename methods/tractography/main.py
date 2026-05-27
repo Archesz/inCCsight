@@ -112,17 +112,30 @@ def _filter_callosal(streamlines, fa_along, nx, mask, margin=5):
     return sl_out, fa_out
 
 
-def _assign_witelson(streamlines, ny):
-    """Assign each streamline to Witelson region 1–5 by mean AP (y) coordinate."""
-    bounds = [b * ny for b in _W_BOUNDS]
+def _assign_witelson(streamlines, ny):          # ny kept for API compatibility but unused
+    """Assign each streamline to Witelson region 1–5.
+
+    Normalises by the CC's own AP (Y) extent — the same approach used by the
+    3D surface parcellation in the browser — so all 5 regions are always
+    populated and the colour assignment is consistent between surface and tracts.
+
+    This matches the spirit of Witelson (1989), which divides the CC into
+    fractions of its *own* anterior-to-posterior length, not the image extent.
+    """
+    if not streamlines:
+        return []
+    all_y = np.concatenate([sl[:, 1] for sl in streamlines])
+    y_min, y_max = float(all_y.min()), float(all_y.max())
+    y_range = y_max - y_min or 1.0
+
     regions = []
     for sl in streamlines:
-        my = float(np.mean(sl[:, 1]))
-        reg = 5
-        for r, (lo, hi) in enumerate(zip(bounds[:-1], bounds[1:])):
-            if lo <= my < hi:
-                reg = r + 1
-                break
+        f = (float(np.mean(sl[:, 1])) - y_min) / y_range
+        if   f < 1/3: reg = 1
+        elif f < 1/2: reg = 2
+        elif f < 2/3: reg = 3
+        elif f < 4/5: reg = 4
+        else:         reg = 5
         regions.append(reg)
     return regions
 

@@ -91,8 +91,8 @@ const W_COLORS = [
     [0.94, 0.33, 0.23],  // W5 Posterior  (#EF553B)
 ]
 
-function witelsonRegion(yVox, ny) {
-    const f = yVox / ny
+// f is already normalised to [0, 1] over the CC's own AP extent.
+function witelsonRegion(f) {
     if (f < 1/3) return 0
     if (f < 1/2) return 1
     if (f < 2/3) return 2
@@ -174,6 +174,15 @@ function buildMeshArrays(maskNifti, dtiVolumes) {
     const rgb = { heatR: 0, heatG: 0, heatB: 0, faR: 0, faG: 0, faB: 0 }
 
     // Parcellation is always computed — no DTI required.
+    // Normalise Witelson bands to the CC's own AP (Y) extent so all 5 regions
+    // are always visible regardless of where the CC sits in the full image.
+    let minMeshY = Infinity, maxMeshY = -Infinity
+    for (const pos of rawPos) {
+        if (pos[1] < minMeshY) minMeshY = pos[1]
+        if (pos[1] > maxMeshY) maxMeshY = pos[1]
+    }
+    const meshYRange = maxMeshY - minMeshY || 1
+
     const colorParcellation = new Float32Array(triCount * 9)
 
     let p = 0
@@ -218,10 +227,10 @@ function buildMeshArrays(maskNifti, dtiVolumes) {
             }
         }
 
-        // Witelson parcellation — AP band per vertex, keyed by Y voxel coordinate
-        const pa = W_COLORS[witelsonRegion(a[1], ny)]
-        const pb = W_COLORS[witelsonRegion(b[1], ny)]
-        const pc = W_COLORS[witelsonRegion(c[1], ny)]
+        // Witelson parcellation — normalised AP fraction within the CC's own extent
+        const pa = W_COLORS[witelsonRegion((a[1] - minMeshY) / meshYRange)]
+        const pb = W_COLORS[witelsonRegion((b[1] - minMeshY) / meshYRange)]
+        const pc = W_COLORS[witelsonRegion((c[1] - minMeshY) / meshYRange)]
         colorParcellation[p]   = pa[0]; colorParcellation[p+1] = pa[1]; colorParcellation[p+2] = pa[2]
         colorParcellation[p+3] = pb[0]; colorParcellation[p+4] = pb[1]; colorParcellation[p+5] = pb[2]
         colorParcellation[p+6] = pc[0]; colorParcellation[p+7] = pc[1]; colorParcellation[p+8] = pc[2]
