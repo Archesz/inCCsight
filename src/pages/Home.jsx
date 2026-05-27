@@ -8,6 +8,7 @@ import Glossary              from '../components/Glossary/Glossary'
 import QualityControl        from '../components/QualityControl/QualityControl'
 import DemographicsDashboard  from '../components/Demographics/DemographicsDashboard'
 import TractographyDashboard from '../components/Tractography/TractographyDashboard'
+import VolumetricCompare    from '../components/VolumetricCompare/VolumetricCompare'
 
 import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
@@ -148,8 +149,9 @@ function Home() {
 
                 <div className='topbar-tabs'>
                     {[
-                        { id: '2D',      label: '2D Segmentation'  },
-                        { id: '3D',      label: '3D Volumetric'    },
+                        { id: '2D',         label: '2D Segmentation'  },
+                        { id: '3D',         label: '3D Volumetric'    },
+                        { id: '3d-compare', label: '3D Compare'        },
                         ...(allGroups.length >= 2
                             ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
                             : []),
@@ -303,6 +305,8 @@ function Home() {
                           />
                         : activeTab === 'tractography'
                         ? <TractographyDashboard subjects={activeSubjects} />
+                        : activeTab === '3d-compare'
+                        ? <VolumetricCompare subjects={activeSubjects} />
                         : <View
                             view={activeTab}
                             data={data}
