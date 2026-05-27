@@ -196,8 +196,8 @@ def _track_one_dir(v1, fa, seed_x, seed_y, seed_z, dir_x, dir_y, dir_z,
 # ── Public entry point ──────────────────────────────────────────────────────
 
 def track(v1, fa, seeds, *,
-          step=0.5, fa_thresh=0.15, max_angle_deg=65.0, max_steps=400,
-          min_length=15.0, samples_per_seed=10, sigma_scale=0.6, rng_seed=42):
+          step=0.5, fa_thresh=0.15, max_angle_deg=55.0, max_steps=400,
+          min_length=25.0, samples_per_seed=10, sigma_scale=0.4, rng_seed=42):
     """
     Bidirectional probabilistic streamline tractography.
 
@@ -214,8 +214,8 @@ def track(v1, fa, seeds, *,
     samples_per_seed : int    streamlines per seed — each is a fresh sample of
                               the orientation distribution. Use 1 for deterministic.
     sigma_scale      : float  σ of the direction perturbation at FA=0.
-                              Roughly: 0 = deterministic, 0.4 = mild,
-                              0.6 = moderate, 0.8 = aggressive (default 0.6).
+                              Roughly: 0 = deterministic, 0.4 = mild (default),
+                              0.6 = moderate, 0.8 = aggressive.
     rng_seed         : int    seed for reproducibility (NumPy global state).
 
     Returns

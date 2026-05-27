@@ -84,15 +84,31 @@ def _build_mask(subj_folder, fa, nx):
     return m
 
 
-def _filter_callosal(streamlines, fa_along, nx, margin=5):
-    """Keep streamlines whose endpoints straddle the midsagittal plane."""
+def _filter_callosal(streamlines, fa_along, nx, mask, margin=5):
+    """Keep streamlines that:
+      1. Have endpoints straddling the midsagittal plane (x-axis), AND
+      2. Have their midpoint inside (or within 2 voxels of) the CC mask.
+
+    The midpoint check removes anatomically implausible streamlines that start
+    inside the CC but then diverge toward the brainstem or cerebellum.
+    """
     mid = nx / 2.0
+    mx, my, mz = mask.shape
     sl_out, fa_out = [], []
     for sl, fa_v in zip(streamlines, fa_along):
+        # --- criterion 1: endpoints span the midline ---
         xs = [sl[0, 0], sl[-1, 0]]
-        if min(xs) < mid - margin and max(xs) > mid + margin:
-            sl_out.append(sl)
-            fa_out.append(fa_v)
+        if not (min(xs) < mid - margin and max(xs) > mid + margin):
+            continue
+        # --- criterion 2: midpoint lies in the CC mask ---
+        mid_pt = sl[len(sl) // 2]
+        ix = int(np.clip(np.round(mid_pt[0]), 0, mx - 1))
+        iy = int(np.clip(np.round(mid_pt[1]), 0, my - 1))
+        iz = int(np.clip(np.round(mid_pt[2]), 0, mz - 1))
+        if not mask[ix, iy, iz]:
+            continue
+        sl_out.append(sl)
+        fa_out.append(fa_v)
     return sl_out, fa_out
 
 
@@ -127,7 +143,7 @@ def _stats(streamlines, fa_along, regions):
 
 
 def process_subject(subj_folder, max_seeds=2000, samples_per_seed=10,
-                    sigma_scale=0.6, fa_thresh=0.15, max_angle=65.0,
+                    sigma_scale=0.4, fa_thresh=0.15, max_angle=55.0,
                     max_save_streamlines=10000):
     name = os.path.basename(subj_folder)
     print(f"  {name}", flush=True)
@@ -165,7 +181,8 @@ def process_subject(subj_folder, max_seeds=2000, samples_per_seed=10,
     seeds = mask_vox[rng.choice(len(mask_vox), n, replace=False)].astype(float)
     seeds += rng.uniform(-0.4, 0.4, seeds.shape)
     print(f"    [track] {n} seeds x {samples_per_seed} samples "
-          f"(sigma={sigma_scale}, FA>={fa_thresh}, max_angle={max_angle}deg) / "
+          f"(sigma={sigma_scale}, FA>={fa_thresh}, max_angle={max_angle}deg, "
+          f"min_length=25vox, midpoint_mask_filter=ON) / "
           f"{len(mask_vox)} mask voxels", flush=True)
 
     t0 = time.time()
@@ -180,7 +197,7 @@ def process_subject(subj_folder, max_seeds=2000, samples_per_seed=10,
     print(f"    [track] {len(streamlines)} raw streamlines in {dt:.1f}s "
           f"({len(streamlines)/max(dt, 1e-6):.0f}/s)", flush=True)
 
-    streamlines, fa_along = _filter_callosal(streamlines, fa_along, nx)
+    streamlines, fa_along = _filter_callosal(streamlines, fa_along, nx, mask)
     print(f"    [track] {len(streamlines)} callosal streamlines", flush=True)
 
     if not streamlines:
@@ -242,12 +259,12 @@ def main():
                         help='Maximum number of unique seed voxels to sample (default: 2000)')
     parser.add_argument('--samples-per-seed', type=int,   default=10,
                         help='Probabilistic samples per seed (default: 10). Use 1 for deterministic.')
-    parser.add_argument('--sigma-scale',      type=float, default=0.6,
-                        help='Tangent-plane perturbation sigma at FA=0 (default: 0.6). 0 = deterministic.')
+    parser.add_argument('--sigma-scale',      type=float, default=0.4,
+                        help='Tangent-plane perturbation sigma at FA=0 (default: 0.4). 0 = deterministic.')
     parser.add_argument('--fa-thresh',        type=float, default=0.15,
                         help='Minimum FA to keep tracking (default: 0.15)')
-    parser.add_argument('--max-angle',        type=float, default=65.0,
-                        help='Maximum curvature per step, degrees (default: 65)')
+    parser.add_argument('--max-angle',        type=float, default=55.0,
+                        help='Maximum curvature per step, degrees (default: 55)')
     parser.add_argument('--max-save-streamlines', type=int, default=10000,
                         help='Cap streamlines written to tracts.json (default: 10000). '
                              'Stats are still computed on the full set.')

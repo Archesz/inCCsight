@@ -4,6 +4,7 @@ import VolumetricView from '../../graphs/Volume/VolumetricView'
 import './TractographyDashboard.scss'
 
 const GROUP_COLORS    = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+// Keep in sync with WITELSON_REGION_META in VolumetricView.jsx
 const WITELSON_LABELS = ['W1 Anterior', 'W2 Mid-ant.', 'W3 Central', 'W4 Mid-post.', 'W5 Posterior']
 const WITELSON_COLORS = ['#636EFA', '#00CC96', '#FFA15A', '#AB63FA', '#EF553B']
 

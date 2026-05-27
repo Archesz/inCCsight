@@ -250,13 +250,16 @@ function animateReset(s) {
 
 // ── Tract geometry builder ────────────────────────────────────────────────────
 // colorMode: 'direction' | 'fa' | 'region'
-const TRACT_REGION_COLORS = [
-    [0.39, 0.43, 0.98],  // W1 — anterior (blue)
-    [0.24, 0.80, 0.60],  // W2 — mid-anterior (teal)
-    [1.00, 0.63, 0.35],  // W3 — central (orange)
-    [0.67, 0.39, 0.98],  // W4 — mid-posterior (purple)
-    [0.94, 0.33, 0.23],  // W5 — posterior/splenium (red)
+
+// Witelson 5-region colors — kept in sync with TractographyDashboard.jsx
+const WITELSON_REGION_META = [
+    { label: 'W1 Anterior',    rgb: [0.39, 0.43, 0.98], hex: '#636EFA' },
+    { label: 'W2 Mid-ant.',    rgb: [0.00, 0.80, 0.59], hex: '#00CC96' },
+    { label: 'W3 Central',     rgb: [1.00, 0.63, 0.35], hex: '#FFA15A' },
+    { label: 'W4 Mid-post.',   rgb: [0.67, 0.39, 0.98], hex: '#AB63FA' },
+    { label: 'W5 Posterior',   rgb: [0.94, 0.33, 0.23], hex: '#EF553B' },
 ]
+const TRACT_REGION_COLORS = WITELSON_REGION_META.map(m => m.rgb)
 
 function buildTractLines(data, colorMode) {
     const { nx, ny, nz, dx, dy, dz, streamlines, fa_along, regions } = data
@@ -372,7 +375,7 @@ function VolumetricView({ filePath }) {
     const customColorRef = useRef('')
     const [tractsStatus, setTractsStatus] = useState('none')  // 'none'|'loading'|'ready'|'error'
     const [showTracts,   setShowTracts]   = useState(true)
-    const [tractColor,   setTractColor]   = useState('direction')
+    const [tractColor,   setTractColor]   = useState('region')  // default: Witelson region coloring
     const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'color-fa' | 'fa'
     const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'|'full'
     const tractsDataRef  = useRef(null)
@@ -731,19 +734,34 @@ function VolumetricView({ filePath }) {
                                         </label>
                                     </div>
                                     {showTracts && (
-                                        <div className='ctrl-pills' style={{ marginTop: 4 }}>
-                                            {[
-                                                { id: 'direction', label: 'Direction' },
-                                                { id: 'fa',        label: 'FA'        },
-                                                { id: 'region',    label: 'Region'    },
-                                            ].map(({ id, label }) => (
-                                                <button key={id}
-                                                    className={`ctrl-pill${tractColor === id ? ' active' : ''}`}
-                                                    onClick={() => setTractColor(id)}
-                                                    title={`Color by ${label}`}
-                                                >{label}</button>
-                                            ))}
-                                        </div>
+                                        <>
+                                            <div className='ctrl-pills' style={{ marginTop: 4 }}>
+                                                {[
+                                                    { id: 'region',    label: 'Region (Witelson)' },
+                                                    { id: 'direction', label: 'Direction'         },
+                                                    { id: 'fa',        label: 'FA'                },
+                                                ].map(({ id, label }) => (
+                                                    <button key={id}
+                                                        className={`ctrl-pill${tractColor === id ? ' active' : ''}`}
+                                                        onClick={() => setTractColor(id)}
+                                                        title={`Color by ${label}`}
+                                                    >{label}</button>
+                                                ))}
+                                            </div>
+                                            {tractColor === 'region' && (
+                                                <div className='tract-legend'>
+                                                    {WITELSON_REGION_META.map((w, i) => (
+                                                        <span key={i} className='tract-legend-item'>
+                                                            <span
+                                                                className='tract-legend-dot'
+                                                                style={{ background: w.hex }}
+                                                            />
+                                                            {w.label}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </>
                             )}
