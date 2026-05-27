@@ -441,8 +441,8 @@ function VolumetricView({ filePath }) {
                     if (cancelled) { worker.terminate(); return }
                     const data = e.data
                     if (data.error) { setErrMsg(data.error); setStatus('error'); worker.terminate(); workerRef.current = null; return }
-                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat } = data
-                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat }
+                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation } = data
+                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation }
                     setTriCount(triCount)
                     if      (colorFA)   setDtiStatus('full')
                     else if (colorHeat) setDtiStatus('fa-only')
@@ -538,7 +538,7 @@ function VolumetricView({ filePath }) {
     useEffect(() => {
         if (status !== 'ready' || !stateRef.current || !meshRef.current) return
         const { mesh, mat } = stateRef.current
-        const { colorFA, colorHeat } = meshRef.current
+        const { colorFA, colorHeat, colorParcellation } = meshRef.current
 
         if (colorMode === 'color-fa' && colorFA) {
             mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorFA, 3))
@@ -547,6 +547,11 @@ function VolumetricView({ filePath }) {
             mat.emissive.set(0x000000)
         } else if (colorMode === 'fa' && colorHeat) {
             mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorHeat, 3))
+            mat.vertexColors = true
+            mat.color.set(0xffffff)
+            mat.emissive.set(0x000000)
+        } else if (colorMode === 'parcellation' && colorParcellation) {
+            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorParcellation, 3))
             mat.vertexColors = true
             mat.color.set(0xffffff)
             mat.emissive.set(0x000000)
@@ -669,7 +674,22 @@ function VolumetricView({ filePath }) {
                                     title='Color-FA: |V1|·FA encodes principal direction (R=L/R · G=A/P · B=S/I)'
                                 >Color-FA</button>
                             )}
+                            <button
+                                className={`ctrl-pill${colorMode === 'parcellation' ? ' active' : ''}`}
+                                onClick={() => setColorMode('parcellation')}
+                                title='Color surface by Witelson 5-region AP parcellation (same scheme as tractography)'
+                            >Witelson</button>
                         </div>
+                        {colorMode === 'parcellation' && (
+                            <div className='tract-legend'>
+                                {WITELSON_REGION_META.map((w, i) => (
+                                    <span key={i} className='tract-legend-item'>
+                                        <span className='tract-legend-dot' style={{ background: w.hex }} />
+                                        {w.label}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className='ctrl-group'>

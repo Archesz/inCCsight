@@ -80,6 +80,26 @@ function trilerpScalar(vol, nx, ny, nz, fx, fy, fz, compOffset = 0) {
     )
 }
 
+// ── Witelson parcellation ─────────────────────────────────────────────────────
+// AP-band colours kept in sync with WITELSON_REGION_META in VolumetricView.jsx
+// and _W_BOUNDS in methods/tractography/main.py.
+const W_COLORS = [
+    [0.39, 0.43, 0.98],  // W1 Anterior   (#636EFA)
+    [0.00, 0.80, 0.59],  // W2 Mid-ant.   (#00CC96)
+    [1.00, 0.63, 0.35],  // W3 Central    (#FFA15A)
+    [0.67, 0.39, 0.98],  // W4 Mid-post.  (#AB63FA)
+    [0.94, 0.33, 0.23],  // W5 Posterior  (#EF553B)
+]
+
+function witelsonRegion(yVox, ny) {
+    const f = yVox / ny
+    if (f < 1/3) return 0
+    if (f < 1/2) return 1
+    if (f < 2/3) return 2
+    if (f < 4/5) return 3
+    return 4
+}
+
 // ── Marching Cubes + geometry flattening (+ optional per-vertex colors) ──────
 function buildMeshArrays(maskNifti, dtiVolumes) {
     const { nx, ny, nz, dx, dy, dz, voxels } = maskNifti
@@ -153,6 +173,9 @@ function buildMeshArrays(maskNifti, dtiVolumes) {
 
     const rgb = { heatR: 0, heatG: 0, heatB: 0, faR: 0, faG: 0, faB: 0 }
 
+    // Parcellation is always computed — no DTI required.
+    const colorParcellation = new Float32Array(triCount * 9)
+
     let p = 0
     for (const [i, j, k] of rawCells) {
         const a = rawPos[i], b = rawPos[j], c = rawPos[k]
@@ -195,6 +218,14 @@ function buildMeshArrays(maskNifti, dtiVolumes) {
             }
         }
 
+        // Witelson parcellation — AP band per vertex, keyed by Y voxel coordinate
+        const pa = W_COLORS[witelsonRegion(a[1], ny)]
+        const pb = W_COLORS[witelsonRegion(b[1], ny)]
+        const pc = W_COLORS[witelsonRegion(c[1], ny)]
+        colorParcellation[p]   = pa[0]; colorParcellation[p+1] = pa[1]; colorParcellation[p+2] = pa[2]
+        colorParcellation[p+3] = pb[0]; colorParcellation[p+4] = pb[1]; colorParcellation[p+5] = pb[2]
+        colorParcellation[p+6] = pc[0]; colorParcellation[p+7] = pc[1]; colorParcellation[p+8] = pc[2]
+
         p += 9
     }
 
@@ -214,7 +245,7 @@ function buildMeshArrays(maskNifti, dtiVolumes) {
     const bcy = (minY + maxY) / 2
     const bcz = (minZ + maxZ) / 2
 
-    return { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat }
+    return { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation }
 }
 
 // ── Worker message handler ────────────────────────────────────────────────────
@@ -244,15 +275,15 @@ self.onmessage = function (e) {
             return
         }
 
-        const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat } = result
+        const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation } = result
 
-        // Build transferables list dynamically (omit null entries)
-        const transfer = [posArr.buffer, normArr.buffer]
+        // Build transferables list (colorParcellation always present; colorFA/colorHeat optional)
+        const transfer = [posArr.buffer, normArr.buffer, colorParcellation.buffer]
         if (colorHeat) transfer.push(colorHeat.buffer)
         if (colorFA)   transfer.push(colorFA.buffer)
 
         self.postMessage(
-            { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat },
+            { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation },
             transfer
         )
     } catch (err) {
