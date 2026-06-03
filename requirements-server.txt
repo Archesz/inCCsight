@@ -1,0 +1,10 @@
+# inCCsight — Python server dependencies
+# Install with:  pip install -r requirements-server.txt
+#
+# These are ONLY the web-server deps.
+# The analysis deps (nibabel, numpy, scipy, numba…) live in methods/requirements.txt
+
+fastapi>=0.104
+uvicorn[standard]>=0.24
+sse-starlette>=1.6
+pydantic>=2.0

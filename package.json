@@ -33,7 +33,10 @@
     "eject": "react-scripts eject",
     "server": "node server.js",
     "start:prod": "NODE_ENV=production node server.js",
-    "dev": "concurrently -k \"node server.js\" \"react-scripts start\""
+    "dev": "concurrently -k \"node server.js\" \"react-scripts start\"",
+    "server:py": "python server.py",
+    "start:prod:py": "python server.py --prod",
+    "dev:py": "concurrently -k \"python server.py\" \"react-scripts start\""
   },
   "eslintConfig": {
     "extends": [

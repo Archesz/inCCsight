@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+# ── Package metadata ──────────────────────────────────────────────────────────
+[project]
+name            = "inccsight"
+version         = "0.2.0.dev0"
+description     = "DTI Corpus Callosum analysis and visualization tool"
+requires-python = ">=3.9"
+authors         = [{name = "Miclab", email = "inccsight@miclab.dev"}]
+license         = {text = "MIT"}
+keywords        = ["DTI", "MRI", "corpus callosum", "neuroimaging"]
+classifiers     = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+# Web-server runtime deps (analysis deps live in methods/requirements.txt)
+dependencies = [
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "sse-starlette>=1.6",
+    "pydantic>=2.0",
+]
+
+# ── Console entry point ───────────────────────────────────────────────────────
+# TODO: create inccsight/__main__.py that calls uvicorn.run(app) + opens browser,
+#       then uncomment the lines below to enable `pip install . && inccsight`.
+#
+# [project.scripts]
+# inccsight = "inccsight.__main__:main"
+
+# ── Package discovery ─────────────────────────────────────────────────────────
+# TODO: move server.py into inccsight/ package and add inccsight/static/ (React build).
+# For now, server.py runs from the repo root via `python server.py`.
+#
+# [tool.setuptools.packages.find]
+# where   = ["."]
+# include = ["inccsight*"]
+#
+# [tool.setuptools.package-data]
+# inccsight = ["static/**/*"]
