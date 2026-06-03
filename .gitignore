@@ -24,3 +24,6 @@ Thumbs.db
 
 # Worktrees
 .claude/worktrees/
+inccsight/static/
+inccsight.egg-info/
+dist/

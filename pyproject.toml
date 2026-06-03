@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 # ── Package metadata ──────────────────────────────────────────────────────────
 [project]
 name            = "inccsight"
-version         = "0.2.0.dev0"
+version         = "0.2.0"
 description     = "DTI Corpus Callosum analysis and visualization tool"
 requires-python = ">=3.9"
 authors         = [{name = "Miclab", email = "inccsight@miclab.dev"}]
@@ -17,7 +17,8 @@ classifiers     = [
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 
-# Web-server runtime deps (analysis deps live in methods/requirements.txt)
+# Web-server runtime dependencies
+# Analysis deps (nibabel, numpy, scipy, numba…) live in methods/requirements.txt
 dependencies = [
     "fastapi>=0.104",
     "uvicorn[standard]>=0.24",
@@ -25,20 +26,16 @@ dependencies = [
     "pydantic>=2.0",
 ]
 
-# ── Console entry point ───────────────────────────────────────────────────────
-# TODO: create inccsight/__main__.py that calls uvicorn.run(app) + opens browser,
-#       then uncomment the lines below to enable `pip install . && inccsight`.
-#
-# [project.scripts]
-# inccsight = "inccsight.__main__:main"
+# ── CLI entry point ───────────────────────────────────────────────────────────
+# After `pip install .`:  run `inccsight` from your project directory.
+[project.scripts]
+inccsight = "inccsight.__main__:main"
 
 # ── Package discovery ─────────────────────────────────────────────────────────
-# TODO: move server.py into inccsight/ package and add inccsight/static/ (React build).
-# For now, server.py runs from the repo root via `python server.py`.
-#
-# [tool.setuptools.packages.find]
-# where   = ["."]
-# include = ["inccsight*"]
-#
-# [tool.setuptools.package-data]
-# inccsight = ["static/**/*"]
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["inccsight*"]
+
+# Bundle the pre-built React app (populated by scripts/build_package.sh)
+[tool.setuptools.package-data]
+inccsight = ["static/**/*", "static/*"]
