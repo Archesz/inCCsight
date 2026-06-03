@@ -137,7 +137,7 @@ function Scatter({ data }) {
             title:     { text: 'Count', font: { size: 9 } },
         },
 
-        barmode: 'overlay',
+        barmode: 'group',
 
         legend: {
             orientation: 'h',

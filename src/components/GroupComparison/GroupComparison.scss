@@ -218,7 +218,7 @@
 /* Parcellation chart + Statistics table — side by side */
 .gc-parc-stats-row {
     display: grid;
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: 1fr 300px;
     gap: 20px;
     align-items: start;
 

@@ -320,35 +320,6 @@ function ShapeMetrics({ allSubjects, allGroups, chartType }) {
     )
 }
 
-// ── Radar ─────────────────────────────────────────────────────────────────
-
-function GroupRadar({ allSubjects, allGroups, segMethod }) {
-    const traces = allGroups.map((group, gi) => {
-        const subs = allSubjects.filter(s => s.group === group)
-        const r    = SCALARS.map(sc => calcStats(getValues(subs, segMethod, sc)).mean ?? 0)
-        return {
-            type: 'scatterpolar',
-            r: [...r, r[0]], theta: [...SCALARS, SCALARS[0]],
-            fill: 'toself', name: group,
-            line: { color: GROUP_COLORS[gi % GROUP_COLORS.length] },
-            fillcolor: GROUP_COLORS[gi % GROUP_COLORS.length] + '33',
-        }
-    })
-    return (
-        <Plot
-            data={traces}
-            layout={{
-                polar: { radialaxis: { visible: true, gridcolor: '#ddd' } },
-                height: 320, margin: { t: 20, b: 20, l: 20, r: 20 },
-                showlegend: true, legend: { orientation: 'h', y: -0.1 },
-                paper_bgcolor: 'transparent',
-            }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: '100%' }} useResizeHandler
-        />
-    )
-}
-
 // ── Per-subject values table ───────────────────────────────────────────────
 
 function SubjectTable({ allSubjects, allGroups, segMethod }) {
@@ -647,14 +618,6 @@ function GroupComparison({ allSubjects, allGroups }) {
                     <span className='gc-badge'>ROQS</span>
                 </span>
                 <ShapeMetrics allSubjects={allSubjects} allGroups={allGroups} chartType={chartType} />
-            </div>
-
-            {/* Radar */}
-            <div className='gc-section'>
-                <span className='gc-section-title'>Mean scalar profile — radar</span>
-                <div className='gc-radar-wrap'>
-                    <GroupRadar allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod} />
-                </div>
             </div>
 
         </div>

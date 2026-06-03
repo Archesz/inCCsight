@@ -367,7 +367,7 @@ function VolumetricView({ filePath }) {
     const [errMsg,       setErrMsg]       = useState('')
     const [triCount,     setTriCount]     = useState(0)
     const [opacity,      setOpacity]      = useState(1.0)
-    const [matName,      setMatName]      = useState('Anatomical')
+    const [matName,      setMatName]      = useState('White')
     const [wireframe,    setWireframe]    = useState(false)
     const [showLabels,   setShowLabels]   = useState(true)
     const [smoothIter,   setSmoothIter]   = useState(0)
@@ -558,7 +558,7 @@ function VolumetricView({ filePath }) {
         } else {
             if (mesh.geometry.attributes.color) mesh.geometry.deleteAttribute('color')
             mat.vertexColors = false
-            const preset = MATERIAL_PRESETS[matName] || MATERIAL_PRESETS['Anatomical']
+            const preset = MATERIAL_PRESETS[matName] || MATERIAL_PRESETS['White']
             mat.color.set(customColorRef.current || preset.color)
             mat.emissive.set(preset.emissive)
         }
