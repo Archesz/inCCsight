@@ -521,7 +521,13 @@ function GroupComparison({ allSubjects, allGroups }) {
     if (allGroups.length < 2) {
         return (
             <div className='gc-empty'>
-                <span>Add at least <strong>2 groups</strong> during analysis to enable comparison.</span>
+                {allGroups.length === 1
+                    ? <span>
+                        Showing only group <strong>{allGroups[0]}</strong>.
+                        Select <strong>All</strong> in the sidebar to compare all groups.
+                      </span>
+                    : <span>Add at least <strong>2 groups</strong> during analysis to enable comparison.</span>
+                }
             </div>
         )
     }

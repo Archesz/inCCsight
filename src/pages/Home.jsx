@@ -331,7 +331,12 @@ function Home() {
                             onReload={reloadData}
                           />
                         : activeTab === 'compare'
-                        ? <GroupComparison allSubjects={activeSubjects} allGroups={allGroups} />
+                        ? <GroupComparison
+                            allSubjects={activeSubjects.filter(s => !groupFilter || s.group === groupFilter)}
+                            allGroups={allGroups.filter(g =>
+                                activeSubjects.some(s => s.group === g && (!groupFilter || g === groupFilter))
+                            )}
+                          />
                         : activeTab === 'demograph'
                         ? demographData
                             ? <DemographicsDashboard
