@@ -74,9 +74,17 @@ const CHART_LAYOUT_BASE = {
 
 // ── Distribution (box, violin, or grouped bar) ────────────────────────────
 
-function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartType, yRange }) {
+function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartType, yRange, normalize, normFactor }) {
+    // If normalize=true, map each value to [0,1] within its scalar's global range
+    const applyNorm = v => {
+        if (!normalize || !normFactor) return v
+        const { mn, mx } = normFactor
+        return mx === mn ? 0 : (v - mn) / (mx - mn)
+    }
+
     const traces = allGroups.map((group, gi) => {
-        const values = getValues(allSubjects.filter(s => s.group === group), segMethod, scalar)
+        const raw    = getValues(allSubjects.filter(s => s.group === group), segMethod, scalar)
+        const values = raw.map(applyNorm)
         const color  = GROUP_COLORS[gi % GROUP_COLORS.length]
         if (chartType === 'violin') {
             return {
@@ -102,6 +110,8 @@ function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartTy
         }
     })
 
+    const effectiveRange = normalize ? [0, 1] : yRange
+
     return (
         <Plot
             data={traces}
@@ -110,7 +120,11 @@ function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartTy
                 height: 260, margin: { t: 36, b: 36, l: 44, r: 10 },
                 showlegend: false,
                 barmode: chartType === 'bar' ? 'group' : undefined,
-                yaxis: { gridcolor: '#eee', zeroline: false, ...(yRange ? { range: yRange } : {}) },
+                yaxis: {
+                    gridcolor: '#eee', zeroline: false,
+                    ...(effectiveRange ? { range: effectiveRange } : {}),
+                    ...(normalize ? { title: { text: 'normalized [0–1]', font: { size: 9, color: '#aaa' } } } : {}),
+                },
                 xaxis: { showgrid: false },
                 paper_bgcolor: 'transparent', plot_bgcolor: '#fafbff',
             }}
@@ -482,17 +496,27 @@ function GroupComparison({ allSubjects, allGroups }) {
     const [segMethod,       setSegMethod]       = useState('ROQS_scalar')
     const [chartType,       setChartType]       = useState('box')
     const [perSubjectOpen,  setPerSubjectOpen]  = useState(false)
+    const [normalize,       setNormalize]       = useState(false)
 
-    // ── Per-scalar Y-axis ranges (global, so all distribution plots share the same scale) ──
+    // ── Per-scalar Y-axis ranges — computed across ALL methods so scale is stable when switching ──
     const yRanges = useMemo(() => Object.fromEntries(SCALARS.map(sc => {
-        const vals = allSubjects
-            .map(s => { const v = s?.[segMethod]?.[sc]; return typeof v === 'number' ? v : parseFloat(v) })
-            .filter(v => !isNaN(v))
+        const vals = METHODS_SEG.flatMap(method =>
+            allSubjects.map(s => { const v = s?.[method]?.[sc]; return typeof v === 'number' ? v : parseFloat(v) })
+        ).filter(v => !isNaN(v))
         if (!vals.length) return [sc, null]
         const mn = Math.min(...vals), mx = Math.max(...vals)
         const pad = (mx - mn) * 0.15 || 0.01
         return [sc, [mn - pad, mx + pad]]
-    })), [allSubjects, segMethod])
+    })), [allSubjects])
+
+    // ── Min/max per scalar (for 0–1 normalization) ──────────────────────────
+    const normFactors = useMemo(() => Object.fromEntries(SCALARS.map(sc => {
+        const vals = METHODS_SEG.flatMap(method =>
+            allSubjects.map(s => { const v = s?.[method]?.[sc]; return typeof v === 'number' ? v : parseFloat(v) })
+        ).filter(v => !isNaN(v))
+        if (!vals.length) return [sc, null]
+        return [sc, { mn: Math.min(...vals), mx: Math.max(...vals) }]
+    })), [allSubjects])
 
     if (allGroups.length < 2) {
         return (
@@ -532,6 +556,21 @@ function GroupComparison({ allSubjects, allGroups }) {
                         </button>
                     ))}
                 </div>
+                <div className='gc-seg-picker'>
+                    <label>Scale:</label>
+                    <button
+                        className={`gc-pill${!normalize ? ' active' : ''}`}
+                        onClick={() => setNormalize(false)}
+                        title='Raw values with fixed per-scalar Y range'>
+                        Raw
+                    </button>
+                    <button
+                        className={`gc-pill${normalize ? ' active' : ''}`}
+                        onClick={() => setNormalize(true)}
+                        title='Min-max normalize each scalar to [0–1] so all 4 charts share the same Y axis'>
+                        Normalize [0–1]
+                    </button>
+                </div>
             </div>
 
             {/* Group legend */}
@@ -554,6 +593,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                                 allSubjects={allSubjects} allGroups={allGroups}
                                 scalar={sc} segMethod={segMethod} chartType={chartType}
                                 yRange={yRanges[sc]}
+                                normalize={normalize} normFactor={normFactors[sc]}
                             />
                         </div>
                     ))}
