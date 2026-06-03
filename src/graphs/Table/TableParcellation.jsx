@@ -55,7 +55,7 @@ function exportCSV(headers, cols, filename) {
 }
 
 function ExpandableParcTable({ allSubjects, color }) {
-    const [open,        setOpen]        = useState(true)
+    const [open,        setOpen]        = useState(false)
     const [segMethod,   setSegMethod]   = useState("ROQS_parcellation")
     const [parcMethod,  setParcMethod]  = useState("Witelson")
     const [scalar,      setScalar]      = useState("FA")

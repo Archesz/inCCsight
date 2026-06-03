@@ -46,7 +46,7 @@ function exportCSV(headers, cols, filename) {
 }
 
 function ExpandableSubjectTable({ allSubjects, color, type }) {
-    const [open,        setOpen]        = useState(true)
+    const [open,        setOpen]        = useState(false)
     const [expandMethod, setExpandMethod] = useState(
         type === "3D" ? "CNN_scalar" : "ROQS_scalar"
     )
