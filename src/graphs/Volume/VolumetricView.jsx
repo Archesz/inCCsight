@@ -6,9 +6,9 @@ import './VolumetricView.scss'
 
 // ── Material presets ──────────────────────────────────────────────────────────
 const MATERIAL_PRESETS = {
-    'Anatomical': { color: 0xddd0b8, emissive: 0x1a0f05, roughness: 0.55, metalness: 0.06 },
-    'Scientific': { color: 0x4a8fd4, emissive: 0x041020, roughness: 0.38, metalness: 0.18 },
-    'Thermal':    { color: 0xf07030, emissive: 0x300a00, roughness: 0.48, metalness: 0.04 },
+    'White':   { color: 0xF6F5F4, emissive: 0x060504, roughness: 0.52, metalness: 0.04 },
+    'Thermal': { color: 0xf07030, emissive: 0x300a00, roughness: 0.48, metalness: 0.04 },
+    'Teal':    { color: 0x40BFB7, emissive: 0x041918, roughness: 0.42, metalness: 0.10 },
 }
 
 // ── Self-contained Taubin mesh smoothing ─────────────────────────────────────

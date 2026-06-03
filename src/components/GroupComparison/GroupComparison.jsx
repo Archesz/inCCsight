@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
 
@@ -72,9 +72,9 @@ const CHART_LAYOUT_BASE = {
     legend: { orientation: 'h', y: -0.32 },
 }
 
-// ── Distribution (box or violin) ──────────────────────────────────────────
+// ── Distribution (box, violin, or grouped bar) ────────────────────────────
 
-function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartType }) {
+function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartType, yRange }) {
     const traces = allGroups.map((group, gi) => {
         const values = getValues(allSubjects.filter(s => s.group === group), segMethod, scalar)
         const color  = GROUP_COLORS[gi % GROUP_COLORS.length]
@@ -84,6 +84,15 @@ function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartTy
                 box: { visible: true }, meanline: { visible: true },
                 marker: { color, opacity: 0.8 }, line: { color },
                 fillcolor: color + '44', showlegend: false,
+            }
+        }
+        if (chartType === 'bar') {
+            const { mean, std } = calcStats(values)
+            return {
+                type: 'bar', name: group,
+                x: [group], y: [mean ?? 0],
+                error_y: { type: 'data', array: [std ?? 0], visible: true, color, thickness: 2 },
+                marker: { color, opacity: 0.85 },
             }
         }
         return {
@@ -100,7 +109,8 @@ function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartTy
                 title: { text: scalar, font: { size: 13, color: '#333' } },
                 height: 260, margin: { t: 36, b: 36, l: 44, r: 10 },
                 showlegend: false,
-                yaxis: { gridcolor: '#eee', zeroline: false },
+                barmode: chartType === 'bar' ? 'group' : undefined,
+                yaxis: { gridcolor: '#eee', zeroline: false, ...(yRange ? { range: yRange } : {}) },
                 xaxis: { showgrid: false },
                 paper_bgcolor: 'transparent', plot_bgcolor: '#fafbff',
             }}
@@ -249,9 +259,11 @@ function ParcellationBar({ allSubjects, allGroups, segMethod }) {
                 data={traces}
                 layout={{
                     ...CHART_LAYOUT_BASE,
-                    barmode: 'group', height: 300,
+                    barmode: 'group', height: 360,
+                    margin: { t: 12, b: 52, l: 52, r: 12 },
                     xaxis: { title: 'CC Region', gridcolor: '#eee' },
                     yaxis: { title: scalar, gridcolor: '#eee', zeroline: false },
+                    bargap: 0.25, bargroupgap: 0.08,
                 }}
                 config={{ displayModeBar: false, responsive: true }}
                 style={{ width: '100%' }} useResizeHandler
@@ -499,6 +511,17 @@ function GroupComparison({ allSubjects, allGroups }) {
     const [segMethod, setSegMethod] = useState('ROQS_scalar')
     const [chartType, setChartType] = useState('box')
 
+    // ── Per-scalar Y-axis ranges (global, so all distribution plots share the same scale) ──
+    const yRanges = useMemo(() => Object.fromEntries(SCALARS.map(sc => {
+        const vals = allSubjects
+            .map(s => { const v = s?.[segMethod]?.[sc]; return typeof v === 'number' ? v : parseFloat(v) })
+            .filter(v => !isNaN(v))
+        if (!vals.length) return [sc, null]
+        const mn = Math.min(...vals), mx = Math.max(...vals)
+        const pad = (mx - mn) * 0.15 || 0.01
+        return [sc, [mn - pad, mx + pad]]
+    })), [allSubjects, segMethod])
+
     if (allGroups.length < 2) {
         return (
             <div className='gc-empty'>
@@ -525,11 +548,15 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
                 <div className='gc-seg-picker'>
                     <label>Chart:</label>
-                    {['box', 'violin'].map(t => (
-                        <button key={t}
-                            className={`gc-pill${chartType === t ? ' active' : ''}`}
-                            onClick={() => setChartType(t)}>
-                            {t.charAt(0).toUpperCase() + t.slice(1)}
+                    {[
+                        { id: 'box',    label: 'Box'    },
+                        { id: 'violin', label: 'Violin' },
+                        { id: 'bar',    label: 'Bar'    },
+                    ].map(({ id, label }) => (
+                        <button key={id}
+                            className={`gc-pill${chartType === id ? ' active' : ''}`}
+                            onClick={() => setChartType(id)}>
+                            {label}
                         </button>
                     ))}
                 </div>
@@ -554,6 +581,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                             <ScalarDistribution
                                 allSubjects={allSubjects} allGroups={allGroups}
                                 scalar={sc} segMethod={segMethod} chartType={chartType}
+                                yRange={yRanges[sc]}
                             />
                         </div>
                     ))}
@@ -592,13 +620,23 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
-            {/* Parcellation by region */}
+            {/* Parcellation by region + Statistics table — side by side */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Mean scalar per CC Region</span>
-                <div className='gc-chart-card'>
-                    <ParcellationBar
-                        allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
-                    />
+                <div className='gc-parc-stats-row'>
+                    <div className='gc-parc-cell'>
+                        <span className='gc-section-title'>Mean scalar per CC Region</span>
+                        <div className='gc-chart-card'>
+                            <ParcellationBar
+                                allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
+                            />
+                        </div>
+                    </div>
+                    <div className='gc-stats-cell'>
+                        <span className='gc-section-title'>CC scalar statistics per group</span>
+                        <MeanTable
+                            allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -617,12 +655,6 @@ function GroupComparison({ allSubjects, allGroups }) {
                 <div className='gc-radar-wrap'>
                     <GroupRadar allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod} />
                 </div>
-            </div>
-
-            {/* Statistics table — group means + overall CC mean */}
-            <div className='gc-section'>
-                <span className='gc-section-title'>CC scalar statistics per group</span>
-                <MeanTable allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod} />
             </div>
 
         </div>

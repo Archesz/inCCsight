@@ -1323,3 +1323,111 @@ $shadow   : 0 1px 6px rgba(0,0,0,0.07), 0 4px 14px rgba(0,0,0,0.05);
     gap: 20px;
     flex-wrap: wrap;
 }
+
+// ── Demographics no-data fallback ──────────────────────────────────────────────
+.dnd-wrap {
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 520px;
+}
+
+.dnd-card {
+    background: $surface;
+    border-radius: $radius;
+    border: 1px solid $border;
+    box-shadow: $shadow;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dnd-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: $primary;
+}
+
+.dnd-hint {
+    font-size: 13px;
+    color: $muted;
+    line-height: 1.6;
+    margin: 0;
+
+    code {
+        background: #eef1ff;
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: $accent;
+        font-size: 12px;
+    }
+}
+
+.dnd-reload {
+    align-self: flex-start;
+    padding: 6px 16px;
+    border-radius: 10px;
+    border: 1.5px solid $border;
+    background: white;
+    color: $accent;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover { border-color: $accent; background: rgba($accent, 0.06); }
+}
+
+.dnd-summary-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: $muted;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dnd-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid $border;
+}
+
+.dnd-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid $border;
+    font-size: 13px;
+    color: $text;
+
+    &:last-child { border-bottom: none; }
+    &:nth-child(even) { background: #fafbff; }
+
+    &--total {
+        background: #eef1ff !important;
+        border-top: 2px solid $primary;
+        color: $primary;
+    }
+}
+
+.dnd-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dnd-group { flex: 1; }
+
+.dnd-count {
+    font-family: monospace;
+    font-size: 13px;
+    color: $primary;
+    font-weight: 700;
+}

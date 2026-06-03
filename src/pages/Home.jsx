@@ -16,6 +16,46 @@ import '../styles/home.scss'
 
 const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
 
+// ── Demographics fallback (shown when demograph.csv is absent) ─────────────────
+function DemographNoData({ subjects, allGroups, onReload }) {
+    const ungrouped = subjects.filter(s => !s.group || s.group === '').length
+    return (
+        <div className='dnd-wrap'>
+            <div className='dnd-card'>
+                <div className='dnd-title'>Demographics</div>
+                <p className='dnd-hint'>
+                    No <code>demograph.csv</code> file found in the analysis folder.
+                    Add one to unlock full demographics &amp; DTI correlation analysis.
+                </p>
+                <button className='dnd-reload' onClick={onReload}>↺ Check again</button>
+            </div>
+            <div className='dnd-card'>
+                <div className='dnd-summary-title'>Subjects per group</div>
+                <div className='dnd-rows'>
+                    {allGroups.map((g, i) => (
+                        <div key={g} className='dnd-row'>
+                            <span className='dnd-dot' style={{ background: GROUP_COLORS[i % GROUP_COLORS.length] }} />
+                            <span className='dnd-group'>{g}</span>
+                            <span className='dnd-count'>{subjects.filter(s => s.group === g).length}</span>
+                        </div>
+                    ))}
+                    {ungrouped > 0 && (
+                        <div className='dnd-row'>
+                            <span className='dnd-dot' style={{ background: '#ccc' }} />
+                            <span className='dnd-group'>(no group)</span>
+                            <span className='dnd-count'>{ungrouped}</span>
+                        </div>
+                    )}
+                    <div className='dnd-row dnd-row--total'>
+                        <span className='dnd-group'><strong>Total</strong></span>
+                        <span className='dnd-count'><strong>{subjects.length}</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function Home() {
     const navigate = useNavigate()
 
@@ -153,9 +193,7 @@ function Home() {
                         ...(allGroups.length >= 2
                             ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
                             : []),
-                        ...(demographData
-                            ? [{ id: 'demograph', label: 'Demographics' }]
-                            : []),
+                        { id: 'demograph', label: 'Demographics' },
                         ...(activeSubjects.some(s => s.tract_stats?.total_streamlines > 0)
                             ? [{ id: 'tractography', label: 'Tractography' }]
                             : []),
@@ -295,12 +333,18 @@ function Home() {
                         : activeTab === 'compare'
                         ? <GroupComparison allSubjects={activeSubjects} allGroups={allGroups} />
                         : activeTab === 'demograph'
-                        ? <DemographicsDashboard
-                            rows={demographData.rows}
-                            presentCols={demographData.presentCols}
-                            subjects={activeSubjects}
-                            onReload={fetchDemograph}
-                          />
+                        ? demographData
+                            ? <DemographicsDashboard
+                                rows={demographData.rows}
+                                presentCols={demographData.presentCols}
+                                subjects={activeSubjects}
+                                onReload={fetchDemograph}
+                              />
+                            : <DemographNoData
+                                subjects={activeSubjects}
+                                allGroups={allGroups}
+                                onReload={fetchDemograph}
+                              />
                         : activeTab === 'tractography'
                         ? <TractographyDashboard subjects={activeSubjects} />
                         : <View
