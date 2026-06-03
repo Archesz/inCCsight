@@ -239,6 +239,20 @@ function View({ type }) {
         streamPipeline('/api/load-last', null)
     }
 
+    async function runDemo() {
+        try {
+            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
+            if (!ping.ok) throw new Error()
+        } catch {
+            alert(
+                'Server not found on port 3001.\n\n' +
+                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
+            )
+            return
+        }
+        streamPipeline('/api/run-demo', null)
+    }
+
     // ── Render ─────────────────────────────────────────────────────────────
 
     if (type === 'Input') {
@@ -322,7 +336,7 @@ function View({ type }) {
                         <div className='btn-history' onClick={loadLast}>
                             <span>Last analysis</span>
                         </div>
-                        <div className='btn-demo' onClick={() => navigate('/Home')}>
+                        <div className='btn-demo' onClick={runDemo}>
                             <span>Demo data</span>
                         </div>
                     </div>

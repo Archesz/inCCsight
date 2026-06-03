@@ -91,6 +91,16 @@ app.post('/api/load-last', (req, res) => {
   spawnSSE(res, ['transformInJson.py'], csvDir)
 })
 
+// ── POST /api/run-demo ────────────────────────────────────────────────────────
+app.post('/api/run-demo', (req, res) => {
+  const demoPath   = path.join(projectRoot, 'data', 'example')
+  const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
+  const groupsMap  = { [demoPath]: 'Demo' }
+  try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
+  catch (e) { console.warn('Could not save groups.json:', e.message) }
+  spawnSSE(res, ['run.py', '-p', demoPath], methodsDir)
+})
+
 // ── GET /api/mydata ───────────────────────────────────────────────────────────
 app.get('/api/mydata', (req, res) => {
   const candidates = [
