@@ -328,14 +328,23 @@ function useCNNSubjects(data) {
 }
 
 // ── Card wrapper with title ───────────────────────────────────────────────────
-function Card({ title, controls, children }) {
+function Card({ title, controls, children, collapsible = false, defaultOpen = true }) {
+    const [open, setOpen] = useState(defaultOpen)
     return (
         <div className='dash-card'>
-            <div className='dc-header'>
-                <span className='dc-title'>{title}</span>
+            <div
+                className={`dc-header${collapsible ? ' dc-header--collapsible' : ''}`}
+                onClick={collapsible ? () => setOpen(v => !v) : undefined}
+            >
+                <span className='dc-title'>
+                    {collapsible && (
+                        <span className='dc-collapse-arrow'>{open ? '▾' : '▸'}</span>
+                    )}
+                    {title}
+                </span>
                 {controls && <div className='dc-controls'>{controls}</div>}
             </div>
-            <div className='dc-body'>{children}</div>
+            {open && <div className='dc-body'>{children}</div>}
         </div>
     )
 }
@@ -392,10 +401,10 @@ function View({ view, data, selectedId, onDeselect }) {
 
                 {/* Data tables — side by side */}
                 <div className='two-col'>
-                    <Card title='Segmentation Table'>
+                    <Card title='Segmentation Table' collapsible defaultOpen={false}>
                         <TableSegmentation data={data} type='2D' />
                     </Card>
-                    <Card title='Parcellation Table'>
+                    <Card title='Parcellation Table' collapsible defaultOpen={false}>
                         <TableParcellation data={data} type='2D' />
                     </Card>
                 </div>
@@ -447,11 +456,11 @@ function View({ view, data, selectedId, onDeselect }) {
             <div className='view-wrap'>
 
                 {/* CNN tables */}
-                <Card title='Segmentation Table — CNN-Based'>
+                <Card title='Segmentation Table — CNN-Based' collapsible defaultOpen={false}>
                     <TableSegmentation data={data} type='3D' />
                 </Card>
 
-                <Card title='Parcellation Table — CNN-Based'>
+                <Card title='Parcellation Table — CNN-Based' collapsible defaultOpen={false}>
                     <TableParcellation data={data} type='3D' />
                 </Card>
 

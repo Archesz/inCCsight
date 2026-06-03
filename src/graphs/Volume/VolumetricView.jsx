@@ -374,7 +374,7 @@ function VolumetricView({ filePath }) {
     const [customColor,  setCustomColor]  = useState('')
     const customColorRef = useRef('')
     const [tractsStatus, setTractsStatus] = useState('none')  // 'none'|'loading'|'ready'|'error'
-    const [showTracts,   setShowTracts]   = useState(true)
+    const [showTracts,   setShowTracts]   = useState(false)
     const [tractColor,   setTractColor]   = useState('region')  // default: Witelson region coloring
     const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'color-fa' | 'fa'
     const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'|'full'

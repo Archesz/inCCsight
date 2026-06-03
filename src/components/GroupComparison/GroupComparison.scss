@@ -118,6 +118,23 @@
     letter-spacing: 0.5px;
 }
 
+.gc-collapsible-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    width: fit-content;
+
+    &:hover .gc-section-title { color: #4C6EF5; }
+}
+
+.gc-collapse-arrow {
+    font-size: 11px;
+    color: #999;
+    flex-shrink: 0;
+}
+
 .gc-radar-wrap {
     max-width: 480px;
     background: white;

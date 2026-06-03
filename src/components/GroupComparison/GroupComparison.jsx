@@ -479,8 +479,9 @@ function MeanTable({ allSubjects, allGroups, segMethod }) {
 // ── Main ──────────────────────────────────────────────────────────────────
 
 function GroupComparison({ allSubjects, allGroups }) {
-    const [segMethod, setSegMethod] = useState('ROQS_scalar')
-    const [chartType, setChartType] = useState('box')
+    const [segMethod,       setSegMethod]       = useState('ROQS_scalar')
+    const [chartType,       setChartType]       = useState('box')
+    const [perSubjectOpen,  setPerSubjectOpen]  = useState(false)
 
     // ── Per-scalar Y-axis ranges (global, so all distribution plots share the same scale) ──
     const yRanges = useMemo(() => Object.fromEntries(SCALARS.map(sc => {
@@ -559,14 +560,19 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
-            {/* Per-subject values table */}
+            {/* Per-subject values table — collapsible */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Per-subject scalar values</span>
-                <div className='gc-chart-card'>
-                    <SubjectTable
-                        allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
-                    />
+                <div className='gc-collapsible-header' onClick={() => setPerSubjectOpen(v => !v)}>
+                    <span className='gc-collapse-arrow'>{perSubjectOpen ? '▾' : '▸'}</span>
+                    <span className='gc-section-title'>Per-subject scalar values</span>
                 </div>
+                {perSubjectOpen && (
+                    <div className='gc-chart-card'>
+                        <SubjectTable
+                            allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* CC Thickness Profile + Scalar along midline — side by side */}
