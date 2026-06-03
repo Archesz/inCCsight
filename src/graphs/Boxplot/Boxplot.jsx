@@ -60,6 +60,8 @@ function Boxplot(props) {
         yaxis: {
             gridcolor: '#eee',
             zerolinecolor: '#eee',
+            ...(props.yRange ? { range: props.yRange } : {}),
+            ...(props.yRange ? { title: { text: 'normalized [0–1]', font: { size: 9, color: '#aaa' } } } : {}),
         },
         xaxis: { showgrid: false },
     }

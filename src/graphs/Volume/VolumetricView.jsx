@@ -680,6 +680,16 @@ function VolumetricView({ filePath }) {
                                 title='Color surface by Witelson 5-region AP parcellation (same scheme as tractography)'
                             >Witelson</button>
                         </div>
+                        {colorMode === 'fa' && (
+                            <div className='fa-heat-legend'>
+                                <div className='fa-heat-gradient' />
+                                <div className='fa-heat-labels'>
+                                    <span>0</span>
+                                    <span>FA</span>
+                                    <span>1</span>
+                                </div>
+                            </div>
+                        )}
                         {colorMode === 'parcellation' && (
                             <div className='tract-legend'>
                                 {WITELSON_REGION_META.map((w, i) => (
