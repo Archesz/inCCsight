@@ -401,10 +401,10 @@ function View({ view, data, selectedId, onDeselect }) {
 
                 {/* Data tables — side by side */}
                 <div className='two-col'>
-                    <Card title='Segmentation Table' collapsible defaultOpen={false}>
+                    <Card title='Segmentation Table'>
                         <TableSegmentation data={data} type='2D' />
                     </Card>
-                    <Card title='Parcellation Table' collapsible defaultOpen={false}>
+                    <Card title='Parcellation Table'>
                         <TableParcellation data={data} type='2D' />
                     </Card>
                 </div>
@@ -456,11 +456,11 @@ function View({ view, data, selectedId, onDeselect }) {
             <div className='view-wrap'>
 
                 {/* CNN tables */}
-                <Card title='Segmentation Table — CNN-Based' collapsible defaultOpen={false}>
+                <Card title='Segmentation Table — CNN-Based'>
                     <TableSegmentation data={data} type='3D' />
                 </Card>
 
-                <Card title='Parcellation Table — CNN-Based' collapsible defaultOpen={false}>
+                <Card title='Parcellation Table — CNN-Based'>
                     <TableParcellation data={data} type='3D' />
                 </Card>
 
