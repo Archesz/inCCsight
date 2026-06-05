@@ -111,7 +111,7 @@ function taubinSmooth(posArrIn, iterations) {
         for (let v = 0; v < 3; v++) {
             const id = triIdx[t*3+v]
             const b  = (t*3+v)*3
-            outPos [b]=pos [id*3]; outPos [b+1]=pos [id*3+1]; outPos [b+2]=pos [id*3+2]
+            outPos[b]=pos[id*3]; outPos[b+1]=pos[id*3+1]; outPos[b+2]=pos[id*3+2]
             outNorm[b]=normAcc[id*3]; outNorm[b+1]=normAcc[id*3+1]; outNorm[b+2]=normAcc[id*3+2]
         }
     }

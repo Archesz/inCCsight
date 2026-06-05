@@ -7,7 +7,7 @@ import BoxplotParcellation from '../../graphs/Boxplot/BoxplotParcellation'
 import Scatter             from '../../graphs/Scatter/Scatter'
 import Midline             from '../../graphs/Line/Midline'
 import VolumetricView      from '../../graphs/Volume/VolumetricView'
-import Radar, { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
+import { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
 import BubblePlot         from '../../graphs/BubblePlot/BubblePlot'
 
 import '../../styles/home.scss'
