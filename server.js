@@ -6,10 +6,40 @@ const fs      = require('fs')
 const { spawn } = require('child_process')
 
 const app  = express()
-const PORT = 3001
+const PORT = Number(process.env.PORT) || 3001
+// Bind to loopback by default so the API is not exposed to other machines on
+// the network. Containerized/remote deployments can opt in with HOST=0.0.0.0.
+const HOST = process.env.HOST || '127.0.0.1'
 
-app.use(cors())
+// CORS — restrict to the local dev/prod origins. CORS is browser-enforced, so
+// this stops arbitrary websites the user visits from reading responses off the
+// local API. Override with ALLOWED_ORIGINS (comma-separated) when needed.
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+    : [
+        'http://localhost:3000',  'http://127.0.0.1:3000',
+        `http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`,
+      ]
+app.use(cors({ origin: ALLOWED_ORIGINS }))
 app.use(express.json())
+
+// Host-header allowlist — blocks DNS-rebinding attacks, which slip past CORS by
+// making a malicious request look same-origin to the browser. Only requests
+// addressed to a loopback host are served. Extend via ALLOWED_HOSTS (comma-
+// separated) for remote/containerized deployments, e.g. ALLOWED_HOSTS=my.host.
+const ALLOWED_HOSTS = new Set([
+    'localhost', '127.0.0.1', '[::1]', '::1',
+    ...(process.env.ALLOWED_HOSTS
+        ? process.env.ALLOWED_HOSTS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+        : []),
+])
+app.use((req, res, next) => {
+    const host = (req.headers.host || '').replace(/:\d+$/, '').toLowerCase()
+    if (!ALLOWED_HOSTS.has(host)) {
+        return res.status(403).json({ error: 'Forbidden: host not allowed.' })
+    }
+    next()
+})
 
 const projectRoot = __dirname
 const methodsDir  = path.join(projectRoot, 'methods')
@@ -44,6 +74,39 @@ const python = findPython()
 const ALLOWED_FILE_EXTS = new Set([
     '.nii', '.gz', '.png', '.jpg', '.jpeg',
 ])
+
+// ── Path confinement — prevent arbitrary local-file read ─────────────────────
+// A request may only reach files that resolve (after following symlinks and
+// "..") under a known-safe root: the bundled data dir or a folder the user has
+// explicitly added for analysis (recorded in groups.json). This neutralizes
+// path traversal even if every other guard is bypassed.
+function allowedRoots() {
+    const roots = [path.join(projectRoot, 'data')]
+    try {
+        const groupsMap = JSON.parse(
+            fs.readFileSync(path.join(methodsDir, 'csvs', 'groups.json'), 'utf8'))
+        for (const folder of Object.keys(groupsMap)) roots.push(folder)
+    } catch (_) { /* no groups yet — only the data dir is allowed */ }
+    return roots
+}
+
+function realOrNull(p) {
+    try { return fs.realpathSync(path.resolve(p)) } catch (_) { return null }
+}
+
+function isPathAllowed(filePath) {
+    if (!filePath) return false
+    const real = realOrNull(filePath)
+    if (!real) return false               // path does not exist / cannot resolve
+    const norm = s => (process.platform === 'win32' ? s.toLowerCase() : s)
+    const target = norm(real)
+    return allowedRoots().some(root => {
+        const realRoot = realOrNull(root)
+        if (!realRoot) return false
+        const base = norm(realRoot)
+        return target === base || target.startsWith(base.endsWith(path.sep) ? base : base + path.sep)
+    })
+}
 
 // ── SSE utility: stream a Python subprocess to the client ────────────────────
 function spawnSSE(res, args, cwd) {
@@ -122,14 +185,18 @@ app.get('/api/file', (req, res) => {
   if (!ALLOWED_FILE_EXTS.has(ext)) {
     return res.status(403).json({ error: `File type not allowed: ${ext}` })
   }
+  if (!isPathAllowed(filePath)) {
+    return res.status(403).json({ error: 'Access denied: path is outside the allowed folders.' })
+  }
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found.' })
   res.sendFile(filePath)
 })
 
 // ── GET /api/exists?path=<abs> — check file existence ────────────────────────
 app.get('/api/exists', (req, res) => {
-  const filePath = req.query.path
-  res.json({ exists: Boolean(filePath && fs.existsSync(filePath)) })
+  // isPathAllowed already requires the path to resolve to a real file under an
+  // allowed root, so it doubles as the existence check (no arbitrary oracle).
+  res.json({ exists: isPathAllowed(req.query.path) })
 })
 
 // ── POST /api/check-paths — verify that folders exist on disk ────────────────
@@ -332,6 +399,9 @@ app.get('/api/tracts', (req, res) => {
     if (path.basename(filePath) !== 'tracts.json') {
         return res.status(403).json({ error: 'Only tracts.json files are served by this endpoint.' })
     }
+    if (!isPathAllowed(filePath)) {
+        return res.status(403).json({ error: 'Access denied: path is outside the allowed folders.' })
+    }
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'tracts.json not found.' })
     res.sendFile(filePath)
 })
@@ -356,8 +426,9 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-const server = app.listen(PORT, () => {
-  console.log(`✔  inCCsight server running at http://localhost:${PORT}`)
+const server = app.listen(PORT, HOST, () => {
+  const shown = (HOST === '127.0.0.1' || HOST === '0.0.0.0' || HOST === '::') ? 'localhost' : HOST
+  console.log(`✔  inCCsight server running at http://${shown}:${PORT}  (bound to ${HOST})`)
 })
 
 server.on('error', err => {
