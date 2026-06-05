@@ -231,6 +231,27 @@ $text-muted:    #7a849e;
     }
 }
 
+/* ── Inline error banner ────────────────────────────────────────────────── */
+.enter-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 4px 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(#e0563b, 0.10);
+    border: 1px solid rgba(#e0563b, 0.35);
+    color: #c0381f;
+    font-size: 0.88rem;
+    line-height: 1.35;
+
+    .enter-error-icon {
+        flex-shrink: 0;
+        margin-top: 1px;
+        font-size: 1.05rem;
+    }
+}
+
 /* ── Action buttons row ─────────────────────────────────────────────────── */
 .row-btns {
     display: flex;

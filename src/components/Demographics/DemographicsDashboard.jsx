@@ -48,7 +48,7 @@ const SECTION_LABELS = {
 const DTI_METHODS = [
     { key: 'ROQS_scalar',       label: 'ROQS' },
     { key: 'Watershed_scalar',  label: 'Watershed' },
-    { key: 'santarosa_scalars', label: 'CNN' },
+    { key: 'CNN_scalar',        label: 'CNN' },
 ]
 const DTI_SCALARS = ['FA', 'MD', 'RD', 'AD']
 
@@ -90,6 +90,13 @@ function toNum(v) {
     if (v === '' || v == null) return NaN
     const n = Number(v)
     return Number.isFinite(n) ? n : NaN
+}
+// Normalize a subject ID for cross-matching demograph.csv with analyzed subjects.
+// The pipeline zero-pads numeric folder names (e.g. "530" -> "0000530" via zfill),
+// so strip leading zeros for purely-numeric IDs while leaving other IDs untouched.
+function normId(v) {
+    const s = String(v ?? '').trim()
+    return /^\d+$/.test(s) ? s.replace(/^0+(?=\d)/, '') : s
 }
 function mean(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN }
 function stdDev(a) {
@@ -418,8 +425,8 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
     // Cross-DTI
     const matched = useMemo(() => {
         if (!subjects?.length) return []
-        const byId = new Map(subjects.map(s => [String(s.Id), s]))
-        return rows.map(r => ({ row: r, subject: byId.get(String(r.subject_id ?? '').trim()) })).filter(m => m.subject)
+        const byId = new Map(subjects.map(s => [normId(s.Id), s]))
+        return rows.map(r => ({ row: r, subject: byId.get(normId(r.subject_id)) })).filter(m => m.subject)
     }, [rows, subjects])
 
     const dtiNumericBase    = presentCols.filter(c => COL_META[c]?.type === 'numeric')

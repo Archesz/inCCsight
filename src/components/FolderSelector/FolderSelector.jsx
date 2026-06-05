@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import './FolderSelector.scss'
 import { TbFolder, TbFolders, TbX, TbChecks, TbLoader } from 'react-icons/tb'
 
-const API = 'http://localhost:3001'
+const API = process.env.REACT_APP_API_URL || ''
 const COLOR_CLASSES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5']
 
 function FolderSelector({ id, path, groupName, onUpdate, onRemove, colorIndex }) {

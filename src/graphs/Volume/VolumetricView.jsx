@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'
 import './VolumetricView.scss'
 
+const API = process.env.REACT_APP_API_URL || ''
+
 // ── Material presets ──────────────────────────────────────────────────────────
 const MATERIAL_PRESETS = {
     'White':   { color: 0xF6F5F4, emissive: 0x060504, roughness: 0.52, metalness: 0.04 },
@@ -469,11 +471,11 @@ function VolumetricView({ filePath }) {
                 const tractsPath = getTractsPath(filePath)
                 if (tractsPath) {
                     setTractsStatus('loading')
-                    fetch(`http://localhost:3001/api/exists?path=${encodeURIComponent(tractsPath)}`)
+                    fetch(`${API}/api/exists?path=${encodeURIComponent(tractsPath)}`)
                         .then(r => r.json())
                         .then(({ exists }) => {
                             if (!exists) { setTractsStatus('none'); return }
-                            return fetch(`http://localhost:3001/api/tracts?path=${encodeURIComponent(tractsPath)}`)
+                            return fetch(`${API}/api/tracts?path=${encodeURIComponent(tractsPath)}`)
                                 .then(r => { if (!r.ok) throw new Error('tracts.json fetch failed'); return r.json() })
                                 .then(data => {
                                     if (!cancelled) {

@@ -1,12 +1,14 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FolderSelector from '../FolderSelector/FolderSelector'
-import { TbPlus } from 'react-icons/tb'
+import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
 import Question from '../Question/Question'
 
-// Call the API directly on the Express server port,
-// bypassing the CRA proxy which may buffer SSE.
-const API = 'http://localhost:3001'
+// API base URL. In production the React build is served by the same Express
+// server, so an empty string (relative URLs) hits the right origin. In dev,
+// set REACT_APP_API_URL=http://localhost:3001 to call Express directly and
+// bypass the CRA proxy, which may buffer SSE streams.
+const API = process.env.REACT_APP_API_URL || ''
 
 // AbortSignal.timeout() is not available in Safari < 16.
 // This helper creates a timeout signal compatible with all browsers.
@@ -34,7 +36,10 @@ const questions = [
     { question: 'What files are required?',      response: 'DTI data in NIfTI format (.nii / .nii.gz) with eigenvector/eigenvalue files: dti_L1–3, dti_V1–3.' },
 ]
 
-let _nextId = 2
+// Message shown when the Express backend can't be reached.
+const SERVER_UNREACHABLE =
+    'Cannot reach the analysis server. Make sure inCCsight is running ' +
+    '(run start.bat on Windows, ./start.sh on Linux/macOS, or `npm run dev`).'
 
 function View({ type }) {
     const navigate = useNavigate()
@@ -46,6 +51,22 @@ function View({ type }) {
     const [selectedMethods, setSelectedMethods] = useState(new Set(['roqs', 'watershed', 'cnn']))
     const [skipTract, setSkipTract] = useState(false)
     const [filter, setFilter] = useState('')
+    const [error, setError]     = useState('')
+
+    // Stable, render-independent counter for unique group ids.
+    const nextIdRef = useRef(2)
+
+    // Ping the backend; on failure set an inline error and return false.
+    async function ensureServer() {
+        try {
+            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
+            if (!ping.ok) throw new Error()
+            return true
+        } catch {
+            setError(SERVER_UNREACHABLE)
+            return false
+        }
+    }
 
     // ── DOM helpers ────────────────────────────────────────────────────────
 
@@ -154,7 +175,7 @@ function View({ type }) {
             }
         } catch (err) {
             hideLoading()
-            alert(`Could not connect to server:\n${err.message}`)
+            setError(`Could not connect to the server: ${err.message}`)
         }
     }
 
@@ -165,7 +186,7 @@ function View({ type }) {
     }
 
     function addGroup() {
-        const id = _nextId++
+        const id = nextIdRef.current++
         setFolderGroups(prev => [...prev, { id, path: '', groupName: `Group ${prev.length + 1}` }])
     }
 
@@ -176,23 +197,15 @@ function View({ type }) {
     // ── Pipeline actions ───────────────────────────────────────────────────
 
     async function startAnalyzes() {
+        setError('')
         const valid = folderGroups.filter(g => g.path.trim())
         if (valid.length === 0) {
-            alert('Enter at least one folder path before running the analysis.')
+            setError('Enter at least one folder path before running the analysis.')
             return
         }
 
         // 1. Check that the Express server is running
-        try {
-            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
-            if (!ping.ok) throw new Error()
-        } catch {
-            alert(
-                'Server not found on port 3001.\n\n' +
-                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
-            )
-            return
-        }
+        if (!await ensureServer()) return
 
         // 2. Verify that the paths exist on disk
         const paths = valid.map(g => g.path.trim())
@@ -205,9 +218,9 @@ function View({ type }) {
             const checks  = await checkRes.json()
             const missing = checks.filter(c => !c.exists).map(c => c.path)
             if (missing.length > 0) {
-                alert(
-                    `The following folders were not found on disk:\n\n${missing.join('\n')}\n\n` +
-                    'Check that the path is correct and the folder exists.'
+                setError(
+                    `These folders were not found on disk: ${missing.join(', ')}. ` +
+                    'Check that each path is correct and the folder exists.'
                 )
                 return
             }
@@ -226,30 +239,14 @@ function View({ type }) {
     }
 
     async function loadLast() {
-        try {
-            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
-            if (!ping.ok) throw new Error()
-        } catch {
-            alert(
-                'Server not found on port 3001.\n\n' +
-                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
-            )
-            return
-        }
+        setError('')
+        if (!await ensureServer()) return
         streamPipeline('/api/load-last', null)
     }
 
     async function runDemo() {
-        try {
-            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
-            if (!ping.ok) throw new Error()
-        } catch {
-            alert(
-                'Server not found on port 3001.\n\n' +
-                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
-            )
-            return
-        }
+        setError('')
+        if (!await ensureServer()) return
         streamPipeline('/api/run-demo', null)
     }
 
@@ -329,6 +326,14 @@ function View({ type }) {
                         </label>
                     </div>
                 </div>
+
+                {/* Inline error banner */}
+                {error && (
+                    <div className='enter-error' role='alert'>
+                        <TbAlertTriangle className='enter-error-icon' />
+                        <span>{error}</span>
+                    </div>
+                )}
 
                 {/* Action buttons */}
                 <div className='row-btns'>

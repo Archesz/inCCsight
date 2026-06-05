@@ -14,6 +14,8 @@ import { TbAlertTriangle } from 'react-icons/tb'
 
 import '../styles/home.scss'
 
+const API = process.env.REACT_APP_API_URL || ''
+
 const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
 
 // ── Demographics fallback (shown when demograph.csv is absent) ─────────────────
@@ -82,14 +84,14 @@ function Home() {
     }
 
     function fetchDemograph() {
-        return fetch('http://localhost:3001/api/demograph')
+        return fetch(`${API}/api/demograph`)
             .then(r => r.ok ? r.json() : null)
             .then(json => { if (json?.rows?.length) setDemographData(json) })
             .catch(() => {})
     }
 
     function reloadData() {
-        fetch('http://localhost:3001/api/mydata')
+        fetch(`${API}/api/mydata`)
             .then(r => r.json())
             .then(json => {
                 const subjects = Array.isArray(json) ? json : (json.subjects || [])
@@ -100,7 +102,7 @@ function Home() {
     }
 
     useEffect(() => {
-        fetch('http://localhost:3001/api/mydata')
+        fetch(`${API}/api/mydata`)
             .then(r => {
                 if (!r.ok) throw new Error('Run an analysis first to generate data.')
                 return r.json()

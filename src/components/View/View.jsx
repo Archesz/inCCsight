@@ -12,7 +12,7 @@ import BubblePlot         from '../../graphs/BubblePlot/BubblePlot'
 
 import '../../styles/home.scss'
 
-const API = 'http://localhost:3001'
+const API = process.env.REACT_APP_API_URL || ''
 
 const SCALARS   = ['FA', 'MD', 'RD', 'AD']
 const SEG_KEYS  = [
