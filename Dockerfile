@@ -55,6 +55,9 @@ RUN npm run build
 ENV NODE_ENV=production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
+# server.js binds 127.0.0.1 by default; inside a container the published port
+# cannot reach loopback, so bind all interfaces (the container is the boundary).
+ENV HOST=0.0.0.0
 
 EXPOSE 3001
 

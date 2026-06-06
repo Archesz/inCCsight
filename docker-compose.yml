@@ -42,6 +42,11 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
       - INCCSIGHT_MODEL_URL=${INCCSIGHT_MODEL_URL:-}
+      # Bind all interfaces inside the container so the published port is reachable.
+      - HOST=0.0.0.0
+      # Access is via localhost:<port> by default. To reach the container from
+      # another machine, add that hostname/IP here, e.g. ALLOWED_HOSTS=10.0.0.5
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/ping"]
       interval: 30s
