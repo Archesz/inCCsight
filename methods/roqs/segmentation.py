@@ -338,12 +338,10 @@ def _collect_segm_stats(segmentation, FA, MD, RD, AD, scalar_maps, sub):
         midlines = {'FA': '[]', 'MD': '[]', 'RD': '[]', 'AD': '[]', 'y': '[]'}
 
     try:
-        col_heights = np.sum(segmentation, axis=0).astype(float)
-        thickness = np.interp(
-            np.linspace(0, max(len(col_heights) - 1, 1), 200),
-            np.arange(len(col_heights)),
-            col_heights
-        )
+        # Perpendicular thickness between the CC upper/lower boundaries
+        # (proper measure; replaces the old column-pixel-count approximation).
+        from libcc import CC_thickness
+        thickness, _pts_up, _pts_low = CC_thickness(segmentation, npoints=200)
     except Exception:
         thickness = np.zeros(200)
 

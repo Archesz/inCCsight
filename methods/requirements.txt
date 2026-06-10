@@ -17,6 +17,9 @@ matplotlib>=3.8.0
 nibabel==5.2.1
 dipy==1.9.0
 
+# --- Computer vision (CC contour for thickness) ---
+opencv-python-headless==4.9.0.80
+
 # --- Deep learning (PyTorch installed separately) ---
 monai==1.4.0
 torchvision==0.19.1
