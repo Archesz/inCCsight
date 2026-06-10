@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dino Neuroevolução — Algoritmo Genético + Rede Neural</title>
+<style>
+  :root {
+    --bg: #11141a;
+    --panel: #1a1f29;
+    --panel2: #232a38;
+    --text: #e6e9f0;
+    --muted: #8b93a7;
+    --accent: #4dd2a0;
+    --accent2: #5b9cf5;
+    --danger: #f06262;
+    --warn: #f0b762;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 16px;
+  }
+  header { margin-bottom: 14px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid #2b3242;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-bottom: 8px; font-weight: 600;
+  }
+
+  canvas#game { width: 100%; background: #161a22; border-radius: 8px; display: block; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
+  button {
+    background: var(--panel2); color: var(--text); border: 1px solid #344056;
+    border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0c1410; border-color: var(--accent); font-weight: 600; }
+  select {
+    background: var(--panel2); color: var(--text); border: 1px solid #344056;
+    border-radius: 6px; padding: 7px 8px; font-size: 13px;
+  }
+  .slider-group { display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
+  .slider-group label { font-size: 11px; color: var(--muted); }
+  .slider-group label b { color: var(--text); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat {
+    background: var(--panel2); border-radius: 8px; padding: 10px;
+  }
+  .stat .label { font-size: 11px; color: var(--muted); }
+  .stat .value { font-size: 22px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat .value.accent { color: var(--accent); }
+  .stat .value.blue { color: var(--accent2); }
+
+  canvas.viz { width: 100%; background: #161a22; border-radius: 8px; display: block; }
+
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .legend span::before { content: '●'; margin-right: 4px; }
+  .legend .best::before { color: var(--accent); }
+  .legend .avg::before { color: var(--accent2); }
+
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  footer { margin-top: 14px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🦖 Dino Neuroevolução</h1>
+  <p>Algoritmo genético evoluindo redes neurais para jogar o jogo do dinossauro — sem backpropagation, só seleção, crossover e mutação.</p>
+</header>
+
+<div class="layout">
+  <div class="stack">
+    <div class="panel">
+      <h2>Simulação</h2>
+      <canvas id="game" width="900" height="260"></canvas>
+      <div class="controls">
+        <button id="btnPause" class="primary">⏸ Pausar</button>
+        <button id="btnReset">↺ Reiniciar população</button>
+        <select id="selSpeed" title="Velocidade da simulação">
+          <option value="1">1× </option>
+          <option value="2">2×</option>
+          <option value="5">5×</option>
+          <option value="10">10×</option>
+          <option value="25">25×</option>
+          <option value="50">50× (máx)</option>
+        </select>
+        <div class="slider-group">
+          <label>População: <b id="lblPop">60</b> <small>(aplica no reinício)</small></label>
+          <input type="range" id="rngPop" min="20" max="200" step="10" value="60">
+        </div>
+        <div class="slider-group">
+          <label>Taxa de mutação: <b id="lblMut">8%</b></label>
+          <input type="range" id="rngMut" min="1" max="30" step="1" value="8">
+        </div>
+        <div class="slider-group">
+          <label>Elite (X melhores): <b id="lblElite">8</b></label>
+          <input type="range" id="rngElite" min="2" max="20" step="1" value="8">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Curva de aprendizado — fitness por geração</h2>
+      <canvas id="chart" class="viz" width="860" height="220"></canvas>
+      <div class="legend"><span class="best">Melhor da geração</span><span class="avg">Média da geração</span></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="panel">
+      <h2>Painel da simulação</h2>
+      <div class="stats">
+        <div class="stat"><div class="label">Geração</div><div class="value accent" id="stGen">1</div></div>
+        <div class="stat"><div class="label">Vivos</div><div class="value" id="stAlive">0</div></div>
+        <div class="stat"><div class="label">Pontuação atual</div><div class="value" id="stScore">0</div></div>
+        <div class="stat"><div class="label">Recorde histórico</div><div class="value blue" id="stRecord">0</div></div>
+        <div class="stat"><div class="label">Melhor (ger. anterior)</div><div class="value" id="stLastBest">—</div></div>
+        <div class="stat"><div class="label">Média (ger. anterior)</div><div class="value" id="stLastAvg">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Cérebro do melhor dino vivo</h2>
+      <canvas id="brain" class="viz" width="330" height="300"></canvas>
+      <div class="legend" style="margin-top:8px">
+        <span style="color:var(--muted)">Verde = peso positivo · Vermelho = negativo · Brilho do nó = ativação</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Genoma = pesos da rede (7 entradas → 8 ocultos → 3 saídas). Seleção por elite + crossover uniforme + mutação gaussiana.
+  A cada geração, todos os dinos jogam a mesma pista simultaneamente.
+</footer>
+
+<script>
+'use strict';
+
+// ============================================================
+// Utilidades
+// ============================================================
+function randn() { // gaussiana padrão (Box-Muller)
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+const rand = (a, b) => a + Math.random() * (b - a);
+
+// ============================================================
+// Rede neural: MLP 7 -> 8 -> 3, tanh na camada oculta
+// Genoma = vetor achatado [W1, b1, W2, b2]
+// ============================================================
+const N_IN = 7, N_HID = 8, N_OUT = 3;
+const GENOME_SIZE = N_IN * N_HID + N_HID + N_HID * N_OUT + N_OUT;
+
+class Brain {
+  constructor(genome) {
+    this.genome = genome || Brain.randomGenome();
+    this.acts = [new Array(N_IN).fill(0), new Array(N_HID).fill(0), new Array(N_OUT).fill(0)];
+  }
+  static randomGenome() {
+    const g = new Float32Array(GENOME_SIZE);
+    for (let i = 0; i < GENOME_SIZE; i++) g[i] = randn() * 0.8;
+    return g;
+  }
+  forward(inputs) {
+    const g = this.genome;
+    let p = 0;
+    const hid = new Array(N_HID);
+    for (let h = 0; h < N_HID; h++) {
+      let s = 0;
+      for (let i = 0; i < N_IN; i++) s += inputs[i] * g[p + h * N_IN + i];
+      hid[h] = Math.tanh(s + g[N_IN * N_HID + h]);
+    }
+    p = N_IN * N_HID + N_HID;
+    const out = new Array(N_OUT);
+    for (let o = 0; o < N_OUT; o++) {
+      let s = 0;
+      for (let h = 0; h < N_HID; h++) s += hid[h] * g[p + o * N_HID + h];
+      out[o] = s + g[p + N_HID * N_OUT + o];
+    }
+    this.acts = [inputs.slice(), hid, out];
+    // argmax: 0 = correr, 1 = pular, 2 = abaixar
+    let best = 0;
+    if (out[1] > out[best]) best = 1;
+    if (out[2] > out[best]) best = 2;
+    return best;
+  }
+}
+
+// crossover uniforme + mutação gaussiana
+function breed(gA, gB, mutRate) {
+  const child = new Float32Array(GENOME_SIZE);
+  for (let i = 0; i < GENOME_SIZE; i++) {
+    child[i] = Math.random() < 0.5 ? gA[i] : gB[i];
+    if (Math.random() < mutRate) {
+      child[i] += randn() * 0.4;                       // perturbação
+      if (Math.random() < 0.05) child[i] = randn();    // reset ocasional do gene
+    }
+  }
+  return child;
+}
+
+// ============================================================
+// Jogo
+// ============================================================
+const W = 900, H = 260;
+const GROUND_Y = 220;
+const DINO_X = 60;
+const DINO_W = 38, DINO_H = 46;
+const DUCK_W = 52, DUCK_H = 26;
+const GRAVITY = 0.6, JUMP_VY = -12;
+const SPEED_START = 6, SPEED_MAX = 13, SPEED_GAIN = 0.0015;
+
+// tipos de obstáculo
+const OBSTACLES = [
+  { kind: 'cactus', w: 18, h: 38 },                        // cacto pequeno
+  { kind: 'cactus', w: 26, h: 50 },                        // cacto grande
+  { kind: 'cactus', w: 52, h: 38 },                        // grupo de cactos
+  { kind: 'ptero',  w: 40, h: 22, y: GROUND_Y - 28 },      // baixo  -> pular
+  { kind: 'ptero',  w: 40, h: 22, y: GROUND_Y - 70 },      // médio  -> abaixar
+  { kind: 'ptero',  w: 40, h: 22, y: GROUND_Y - 115 },     // alto   -> ignorar
+];
+
+class Dino {
+  constructor(brain) {
+    this.brain = brain;
+    this.reset();
+  }
+  reset() {
+    this.y = GROUND_Y - DINO_H;
+    this.vy = 0;
+    this.ducking = false;
+    this.alive = true;
+    this.score = 0;
+  }
+  get onGround() { return this.y >= GROUND_Y - (this.ducking ? DUCK_H : DINO_H) - 0.5; }
+  bbox() {
+    const w = this.ducking ? DUCK_W : DINO_W;
+    const h = this.ducking ? DUCK_H : DINO_H;
+    const y = this.ducking ? GROUND_Y - DUCK_H : this.y;
+    // hitbox levemente reduzida para colisões menos injustas
+    return { x: DINO_X + 3, y: y + 3, w: w - 6, h: h - 6 };
+  }
+}
+
+class World {
+  constructor(popSize) {
+    this.popSize = popSize;
+    this.generation = 1;
+    this.history = [];     // [{best, avg}]
+    this.recordScore = 0;
+    this.dinos = [];
+    for (let i = 0; i < popSize; i++) this.dinos.push(new Dino(new Brain()));
+    this.resetTrack();
+  }
+
+  resetTrack() {
+    this.obstacles = [];
+    this.speed = SPEED_START;
+    this.frames = 0;
+    this.nextSpawnX = W + 100;
+    for (const d of this.dinos) d.reset();
+  }
+
+  spawn() {
+    const tpl = OBSTACLES[Math.floor(Math.random() * OBSTACLES.length)];
+    const y = tpl.kind === 'cactus' ? GROUND_Y - tpl.h : tpl.y;
+    this.obstacles.push({ kind: tpl.kind, x: W + 10, y, w: tpl.w, h: tpl.h, wing: 0 });
+    // distância até o próximo: cresce com a velocidade para continuar jogável
+    const gap = rand(280, 520) * (0.8 + this.speed / SPEED_MAX * 0.6);
+    this.nextSpawnX = gap;
+  }
+
+  nextObstacle() {
+    let best = null;
+    for (const o of this.obstacles) {
+      if (o.x + o.w > DINO_X && (!best || o.x < best.x)) best = o;
+    }
+    return best;
+  }
+
+  inputsFor(dino) {
+    const o = this.nextObstacle();
+    const standH = DINO_H;
+    if (!o) return [1, 0, 0, 0, this.speed / SPEED_MAX, (GROUND_Y - standH - dino.y) / 120, dino.vy / 15];
+    return [
+      (o.x - DINO_X) / W,                       // distância ao obstáculo
+      o.w / 60,                                 // largura
+      o.h / 60,                                 // altura
+      (GROUND_Y - (o.y + o.h)) / 130,           // folga entre obstáculo e o chão (0 = cacto)
+      this.speed / SPEED_MAX,                   // velocidade do jogo
+      (GROUND_Y - standH - dino.y) / 120,       // quão alto o dino está
+      dino.vy / 15,                             // velocidade vertical
+    ];
+  }
+
+  step() {
+    this.frames++;
+    this.speed = Math.min(SPEED_MAX, this.speed + SPEED_GAIN);
+
+    // obstáculos
+    this.nextSpawnX -= this.speed;
+    if (this.nextSpawnX <= 0) this.spawn();
+    for (const o of this.obstacles) { o.x -= this.speed; o.wing += 0.2; }
+    this.obstacles = this.obstacles.filter(o => o.x + o.w > -10);
+
+    // dinos
+    let aliveCount = 0;
+    for (const d of this.dinos) {
+      if (!d.alive) continue;
+
+      const action = d.brain.forward(this.inputsFor(d));
+      if (action === 1 && d.onGround && !d.ducking) {       // pular
+        d.vy = JUMP_VY;
+        d.y += d.vy;
+      }
+      d.ducking = (action === 2 && d.onGround);             // abaixar (só no chão)
+
+      // física
+      d.vy += GRAVITY;
+      d.y += d.vy;
+      const floorY = GROUND_Y - (d.ducking ? DUCK_H : DINO_H);
+      if (d.y >= floorY) { d.y = floorY; d.vy = 0; }
+
+      // colisão
+      const b = d.bbox();
+      for (const o of this.obstacles) {
+        if (b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y) {
+          d.alive = false;
+          break;
+        }
+      }
+      if (d.alive) {
+        d.score = this.frames;
+        aliveCount++;
+      }
+    }
+
+    if (aliveCount === 0) this.evolve();
+    return aliveCount;
+  }
+
+  evolve() {
+    const sorted = [...this.dinos].sort((a, b) => b.score - a.score);
+    const best = sorted[0].score;
+    const avg = this.dinos.reduce((s, d) => s + d.score, 0) / this.dinos.length;
+    this.history.push({ best, avg });
+    if (best > this.recordScore) this.recordScore = best;
+
+    const eliteN = Math.min(params.elite, this.popSize);
+    const mutRate = params.mutRate;
+    const newDinos = [];
+
+    // elite passa intacta
+    for (let i = 0; i < eliteN; i++) newDinos.push(new Dino(new Brain(sorted[i].brain.genome.slice())));
+
+    // resto: filhos de pares aleatórios da elite
+    while (newDinos.length < this.popSize) {
+      const a = sorted[Math.floor(Math.random() * eliteN)].brain.genome;
+      const b = sorted[Math.floor(Math.random() * eliteN)].brain.genome;
+      newDinos.push(new Dino(new Brain(breed(a, b, mutRate))));
+    }
+
+    this.dinos = newDinos;
+    this.generation++;
+    this.resetTrack();
+  }
+
+  bestAlive() {
+    let best = null;
+    for (const d of this.dinos) if (d.alive && (!best || d.score > best.score)) best = d;
+    return best || this.dinos[0];
+  }
+}
+
+// ============================================================
+// Parâmetros / controles
+// ============================================================
+const params = { popSize: 60, mutRate: 0.08, elite: 8, simSpeed: 1, paused: false };
+
+const $ = id => document.getElementById(id);
+$('rngPop').oninput = e => { params.popSize = +e.target.value; $('lblPop').textContent = e.target.value; };
+$('rngMut').oninput = e => { params.mutRate = +e.target.value / 100; $('lblMut').textContent = e.target.value + '%'; };
+$('rngElite').oninput = e => { params.elite = +e.target.value; $('lblElite').textContent = e.target.value; };
+$('selSpeed').onchange = e => { params.simSpeed = +e.target.value; };
+$('btnPause').onclick = () => {
+  params.paused = !params.paused;
+  $('btnPause').textContent = params.paused ? '▶ Continuar' : '⏸ Pausar';
+};
+$('btnReset').onclick = () => { world = new World(params.popSize); };
+
+let world = new World(params.popSize);
+
+// ============================================================
+// Renderização do jogo
+// ============================================================
+const gctx = $('game').getContext('2d');
+
+function drawDino(ctx, d, highlight) {
+  const w = d.ducking ? DUCK_W : DINO_W;
+  const h = d.ducking ? DUCK_H : DINO_H;
+  const y = d.ducking ? GROUND_Y - DUCK_H : d.y;
+  ctx.fillStyle = highlight ? '#4dd2a0' : 'rgba(139,147,167,0.25)';
+  // corpo
+  ctx.fillRect(DINO_X, y + h * 0.3, w * 0.7, h * 0.7);
+  // cabeça
+  ctx.fillRect(DINO_X + w * 0.45, y, w * 0.55, h * 0.42);
+  // olho
+  if (highlight) {
+    ctx.fillStyle = '#11141a';
+    ctx.fillRect(DINO_X + w * 0.78, y + h * 0.08, 4, 4);
+  }
+}
+
+function drawObstacle(ctx, o) {
+  if (o.kind === 'cactus') {
+    ctx.fillStyle = '#6fae5c';
+    const n = Math.max(1, Math.round(o.w / 18));
+    const cw = o.w / n;
+    for (let i = 0; i < n; i++) {
+      const hh = o.h * (i % 2 === 0 ? 1 : 0.75);
+      ctx.fillRect(o.x + i * cw + 2, GROUND_Y - hh, cw - 4, hh);
+    }
+  } else {
+    ctx.fillStyle = '#c98bdb';
+    const flap = Math.sin(o.wing) > 0;
+    // corpo
+    ctx.fillRect(o.x + 8, o.y + 6, o.w - 12, 10);
+    // bico
+    ctx.fillRect(o.x, o.y + 8, 10, 5);
+    // asa
+    ctx.fillRect(o.x + 14, flap ? o.y - 6 : o.y + 14, 14, 8);
+  }
+}
+
+function renderGame(aliveCount) {
+  gctx.clearRect(0, 0, W, H);
+
+  // chão
+  gctx.strokeStyle = '#3a4459';
+  gctx.beginPath();
+  gctx.moveTo(0, GROUND_Y + 1);
+  gctx.lineTo(W, GROUND_Y + 1);
+  gctx.stroke();
+  gctx.fillStyle = '#2b3242';
+  for (let i = 0; i < 20; i++) {
+    const x = (i * 97 - world.frames * world.speed * 0.5) % (W + 40);
+    gctx.fillRect(x < 0 ? x + W + 40 : x, GROUND_Y + 8 + (i % 3) * 6, 14, 2);
+  }
+
+  for (const o of world.obstacles) drawObstacle(gctx, o);
+
+  const best = world.bestAlive();
+  for (const d of world.dinos) if (d.alive && d !== best) drawDino(gctx, d, false);
+  if (best && best.alive) drawDino(gctx, best, true);
+
+  // HUD
+  gctx.fillStyle = '#8b93a7';
+  gctx.font = '12px monospace';
+  gctx.fillText(`geração ${world.generation}  ·  vivos ${aliveCount}/${world.popSize}  ·  velocidade ${world.speed.toFixed(1)}`, 10, 18);
+}
+
+// ============================================================
+// Gráfico de fitness
+// ============================================================
+const cctx = $('chart').getContext('2d');
+const CW = 860, CH = 220, PAD = { l: 46, r: 10, t: 10, b: 22 };
+
+function renderChart() {
+  cctx.clearRect(0, 0, CW, CH);
+  const hist = world.history;
+  cctx.fillStyle = '#8b93a7';
+  cctx.font = '11px monospace';
+  if (hist.length === 0) {
+    cctx.fillText('Aguardando a primeira geração terminar…', PAD.l, CH / 2);
+    return;
+  }
+  const maxY = Math.max(...hist.map(h => h.best)) * 1.1 || 1;
+  const px = i => PAD.l + (hist.length === 1 ? 0 : i / (hist.length - 1) * (CW - PAD.l - PAD.r));
+  const py = v => CH - PAD.b - (v / maxY) * (CH - PAD.t - PAD.b);
+
+  // eixos / grid
+  cctx.strokeStyle = '#2b3242';
+  for (let t = 0; t <= 4; t++) {
+    const v = maxY * t / 4;
+    cctx.beginPath(); cctx.moveTo(PAD.l, py(v)); cctx.lineTo(CW - PAD.r, py(v)); cctx.stroke();
+    cctx.fillText(Math.round(v), 4, py(v) + 4);
+  }
+  cctx.fillText(`ger. 1 → ${hist.length}`, PAD.l, CH - 6);
+
+  const line = (key, color) => {
+    cctx.strokeStyle = color;
+    cctx.lineWidth = 2;
+    cctx.beginPath();
+    hist.forEach((h, i) => i === 0 ? cctx.moveTo(px(i), py(h[key])) : cctx.lineTo(px(i), py(h[key])));
+    cctx.stroke();
+    cctx.lineWidth = 1;
+  };
+  line('avg', '#5b9cf5');
+  line('best', '#4dd2a0');
+}
+
+// ============================================================
+// Visualização da rede neural
+// ============================================================
+const bctx = $('brain').getContext('2d');
+const BW = 330, BH = 300;
+const IN_LABELS = ['dist', 'larg', 'alt', 'folga', 'veloc', 'y dino', 'vy'];
+const OUT_LABELS = ['correr', 'pular', 'abaixar'];
+
+function renderBrain() {
+  bctx.clearRect(0, 0, BW, BH);
+  const d = world.bestAlive();
+  if (!d) return;
+  const { genome, acts } = d.brain;
+
+  const colX = [70, 185, 280];
+  const nodeY = (layer, count, i) => 24 + i * ((BH - 48) / Math.max(1, count - 1));
+  const sizes = [N_IN, N_HID, N_OUT];
+
+  // conexões
+  const drawLayer = (offset, fromN, toN, fromCol, toCol, perRow) => {
+    for (let t = 0; t < toN; t++) {
+      for (let f = 0; f < fromN; f++) {
+        const wgt = genome[offset + t * perRow + f];
+        const mag = Math.min(1, Math.abs(wgt) / 2);
+        if (mag < 0.08) continue;
+        bctx.strokeStyle = wgt > 0 ? `rgba(77,210,160,${mag * 0.7})` : `rgba(240,98,98,${mag * 0.7})`;
+        bctx.lineWidth = mag * 2;
+        bctx.beginPath();
+        bctx.moveTo(colX[fromCol], nodeY(fromCol, sizes[fromCol], f));
+        bctx.lineTo(colX[toCol], nodeY(toCol, sizes[toCol], t));
+        bctx.stroke();
+      }
+    }
+  };
+  drawLayer(0, N_IN, N_HID, 0, 1, N_IN);
+  drawLayer(N_IN * N_HID + N_HID, N_HID, N_OUT, 1, 2, N_HID);
+  bctx.lineWidth = 1;
+
+  // nós
+  let chosen = 0;
+  acts[2].forEach((v, i) => { if (v > acts[2][chosen]) chosen = i; });
+  for (let L = 0; L < 3; L++) {
+    for (let i = 0; i < sizes[L]; i++) {
+      const a = Math.max(-1, Math.min(1, acts[L][i] || 0));
+      const bright = Math.abs(a);
+      const x = colX[L], y = nodeY(L, sizes[L], i);
+      bctx.beginPath();
+      bctx.arc(x, y, L === 2 ? 9 : 7, 0, Math.PI * 2);
+      bctx.fillStyle = a >= 0
+        ? `rgba(77,210,160,${0.2 + bright * 0.8})`
+        : `rgba(240,98,98,${0.2 + bright * 0.8})`;
+      bctx.fill();
+      bctx.strokeStyle = (L === 2 && i === chosen && d.alive) ? '#ffffff' : '#344056';
+      bctx.stroke();
+    }
+  }
+
+  // rótulos
+  bctx.fillStyle = '#8b93a7';
+  bctx.font = '10px monospace';
+  bctx.textAlign = 'right';
+  IN_LABELS.forEach((t, i) => bctx.fillText(t, colX[0] - 12, nodeY(0, N_IN, i) + 3));
+  bctx.textAlign = 'left';
+  OUT_LABELS.forEach((t, i) => {
+    bctx.fillStyle = (i === chosen && d.alive) ? '#e6e9f0' : '#8b93a7';
+    bctx.fillText(t, colX[2] - 60, nodeY(2, N_OUT, i) + 3);
+  });
+  bctx.textAlign = 'left';
+}
+
+// ============================================================
+// Painel de estatísticas
+// ============================================================
+function renderStats(aliveCount) {
+  $('stGen').textContent = world.generation;
+  $('stAlive').textContent = `${aliveCount}/${world.popSize}`;
+  $('stScore').textContent = world.frames;
+  $('stRecord').textContent = world.recordScore;
+  const last = world.history[world.history.length - 1];
+  $('stLastBest').textContent = last ? last.best : '—';
+  $('stLastAvg').textContent = last ? Math.round(last.avg) : '—';
+}
+
+// ============================================================
+// Loop principal
+// Simulação roda em setInterval (continua mesmo com a aba oculta,
+// ainda que limitada pelo navegador); renderização usa rAF.
+// ============================================================
+setInterval(() => {
+  if (params.paused) return;
+  for (let i = 0; i < params.simSpeed; i++) world.step();
+}, 1000 / 60);
+
+function render() {
+  const aliveCount = world.dinos.filter(d => d.alive).length;
+  renderGame(aliveCount);
+  renderChart();
+  renderBrain();
+  renderStats(aliveCount);
+  requestAnimationFrame(render);
+}
+render();
+</script>
+</body>
+</html>
