@@ -498,7 +498,6 @@ function MeanTable({ allSubjects, allGroups, segMethod }) {
 function GroupComparison({ allSubjects, allGroups }) {
     const [segMethod,       setSegMethod]       = useState('ROQS_scalar')
     const [chartType,       setChartType]       = useState('box')
-    const [perSubjectOpen,  setPerSubjectOpen]  = useState(false)
     const [normalize,       setNormalize]       = useState(false)
 
     // ── Per-scalar Y-axis ranges — computed across ALL methods so scale is stable when switching ──
@@ -609,19 +608,14 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
-            {/* Per-subject values table — collapsible */}
+            {/* Per-subject values table */}
             <div className='gc-section'>
-                <div className='gc-collapsible-header' onClick={() => setPerSubjectOpen(v => !v)}>
-                    <span className='gc-collapse-arrow'>{perSubjectOpen ? '▾' : '▸'}</span>
-                    <span className='gc-section-title'>Per-subject scalar values</span>
+                <span className='gc-section-title'>Per-subject scalar values</span>
+                <div className='gc-chart-card'>
+                    <SubjectTable
+                        allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
+                    />
                 </div>
-                {perSubjectOpen && (
-                    <div className='gc-chart-card'>
-                        <SubjectTable
-                            allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
-                        />
-                    </div>
-                )}
             </div>
 
             {/* CC Thickness Profile + Scalar along midline — side by side */}
