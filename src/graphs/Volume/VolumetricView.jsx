@@ -248,14 +248,6 @@ function animateReset(s) {
     tick()
 }
 
-// ── Witelson 5-region colors (used for the surface parcellation coloring) ─────
-const WITELSON_REGION_META = [
-    { label: 'W1 Anterior',    rgb: [0.39, 0.43, 0.98], hex: '#636EFA' },
-    { label: 'W2 Mid-ant.',    rgb: [0.00, 0.80, 0.59], hex: '#00CC96' },
-    { label: 'W3 Central',     rgb: [1.00, 0.63, 0.35], hex: '#FFA15A' },
-    { label: 'W4 Mid-post.',   rgb: [0.67, 0.39, 0.98], hex: '#AB63FA' },
-    { label: 'W5 Posterior',   rgb: [0.94, 0.33, 0.23], hex: '#EF553B' },
-]
 // ── DTI eigenvalue / eigenvector NIfTI loading (for vertex coloring) ─────────
 function dtiSubjectPath(fp, niftiName) {
     // .../subject/inCCsight/cnnBased.nii.gz → .../subject/<niftiName>.nii.gz
@@ -322,8 +314,8 @@ function VolumetricView({ filePath }) {
     const [smoothIter,   setSmoothIter]   = useState(0)
     const [customColor,  setCustomColor]  = useState('')
     const customColorRef = useRef('')
-    const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'color-fa' | 'fa'
-    const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'|'full'
+    const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'fa'
+    const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'
 
     const destroyScene = useCallback(() => {
         if (rafRef.current)  { cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -383,12 +375,11 @@ function VolumetricView({ filePath }) {
                     if (cancelled) { worker.terminate(); return }
                     const data = e.data
                     if (data.error) { setErrMsg(data.error); setStatus('error'); worker.terminate(); workerRef.current = null; return }
-                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation } = data
-                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation }
+                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorHeat } = data
+                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorHeat }
                     setTriCount(triCount)
-                    if      (colorFA)   setDtiStatus('full')
-                    else if (colorHeat) setDtiStatus('fa-only')
-                    else                setDtiStatus('no-data')
+                    if (colorHeat) setDtiStatus('fa-only')
+                    else           setDtiStatus('no-data')
                     setStatus('ready')
                     worker.terminate(); workerRef.current = null
                 }
@@ -460,20 +451,10 @@ function VolumetricView({ filePath }) {
     useEffect(() => {
         if (status !== 'ready' || !stateRef.current || !meshRef.current) return
         const { mesh, mat } = stateRef.current
-        const { colorFA, colorHeat, colorParcellation } = meshRef.current
+        const { colorHeat } = meshRef.current
 
-        if (colorMode === 'color-fa' && colorFA) {
-            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorFA, 3))
-            mat.vertexColors = true
-            mat.color.set(0xffffff)
-            mat.emissive.set(0x000000)
-        } else if (colorMode === 'fa' && colorHeat) {
+        if (colorMode === 'fa' && colorHeat) {
             mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorHeat, 3))
-            mat.vertexColors = true
-            mat.color.set(0xffffff)
-            mat.emissive.set(0x000000)
-        } else if (colorMode === 'parcellation' && colorParcellation) {
-            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorParcellation, 3))
             mat.vertexColors = true
             mat.color.set(0xffffff)
             mat.emissive.set(0x000000)
@@ -561,25 +542,13 @@ function VolumetricView({ filePath }) {
                                 />
                                 {!customColor && <span>+</span>}
                             </label>
-                            {(dtiStatus === 'full' || dtiStatus === 'fa-only') && (
+                            {dtiStatus === 'fa-only' && (
                                 <button
                                     className={`ctrl-pill${colorMode === 'fa' ? ' active' : ''}`}
                                     onClick={() => setColorMode('fa')}
                                     title='Color by FA magnitude (cold → warm)'
                                 >FA heat</button>
                             )}
-                            {dtiStatus === 'full' && (
-                                <button
-                                    className={`ctrl-pill${colorMode === 'color-fa' ? ' active' : ''}`}
-                                    onClick={() => setColorMode('color-fa')}
-                                    title='Color-FA: |V1|·FA encodes principal direction (R=L/R · G=A/P · B=S/I)'
-                                >Color-FA</button>
-                            )}
-                            <button
-                                className={`ctrl-pill${colorMode === 'parcellation' ? ' active' : ''}`}
-                                onClick={() => setColorMode('parcellation')}
-                                title='Color surface by Witelson 5-region AP parcellation'
-                            >Witelson</button>
                         </div>
                         {colorMode === 'fa' && (
                             <div className='fa-heat-legend'>
@@ -589,16 +558,6 @@ function VolumetricView({ filePath }) {
                                     <span>FA</span>
                                     <span>1</span>
                                 </div>
-                            </div>
-                        )}
-                        {colorMode === 'parcellation' && (
-                            <div className='tract-legend'>
-                                {WITELSON_REGION_META.map((w, i) => (
-                                    <span key={i} className='tract-legend-item'>
-                                        <span className='tract-legend-dot' style={{ background: w.hex }} />
-                                        {w.label}
-                                    </span>
-                                ))}
                             </div>
                         )}
                     </div>

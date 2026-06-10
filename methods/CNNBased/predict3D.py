@@ -121,22 +121,32 @@ def test_predict(model, data_paths):
 					import matplotlib.pyplot as plt
 					from skimage import measure as sk_measure
 					PANEL_BG = '#1F2C56'
-					fig_c, ax_c = plt.subplots(figsize=(5, 3.5), dpi=100, facecolor=PANEL_BG)
+					# Crop to the CC bounding box so the framing matches the
+					# ROQS/Watershed midsagittal PNGs (same figsize/dpi, no colorbar).
+					_rr = np.where(midsagittal.any(axis=1))[0]
+					_cr = np.where(midsagittal.any(axis=0))[0]
+					if _rr.size and _cr.size:
+						_pr = 20
+						_r0 = max(_rr[0] - _pr, 0);  _r1 = min(_rr[-1] + _pr, midsagittal.shape[0])
+						_c0 = max(_cr[0] - _pr, 0);  _c1 = min(_cr[-1] + _pr, midsagittal.shape[1])
+					else:
+						_r0, _r1 = 0, midsagittal.shape[0]
+						_c0, _c1 = 0, midsagittal.shape[1]
+					fig_c, ax_c = plt.subplots(figsize=(4, 3), dpi=120, facecolor=PANEL_BG)
 					ax_c.set_facecolor('#0d0d0d')
-					im_c = ax_c.imshow(FA, cmap='gray', vmin=0, vmax=1)
-					cbar_c = plt.colorbar(im_c, ax=ax_c)
-					cbar_c.ax.tick_params(colors='white', labelsize=8)
-					cbar_c.outline.set_edgecolor('#aaaaaa')
-					plt.setp(cbar_c.ax.yaxis.get_ticklabels(), color='white')
+					ax_c.imshow(FA, cmap='gray', vmin=0, vmax=1)
+					ax_c.set_xlim(_c0, _c1)
+					ax_c.set_ylim(_r1, _r0)
 					for c in sk_measure.find_contours(midsagittal.astype(float), 0.5):
 						ax_c.plot(c[:, 1], c[:, 0], color='#00C896', linewidth=1.5)
 					ax_c.set_xticks([]); ax_c.set_yticks([])
 					for sp in ax_c.spines.values():
 						sp.set_visible(False)
-					fig_c.tight_layout()
+					ax_c.set_aspect('equal')
+					fig_c.tight_layout(pad=0.1)
 					os.makedirs(os.path.join(data_path, 'inCCsight'), exist_ok=True)
 					fig_c.savefig(os.path.join(data_path, 'inCCsight', 'cnnBased_midsagittal.png'),
-								  bbox_inches='tight', dpi=100, facecolor=PANEL_BG)
+								  bbox_inches='tight', dpi=120, facecolor=PANEL_BG)
 					plt.close(fig_c)
 				except Exception:
 					try: plt.close('all')
