@@ -49,11 +49,14 @@ function bandTraces(xArr, stats, color, name) {
             fill: 'toself', fillcolor: color + '25',
             line: { color: 'transparent' },
             showlegend: false, hoverinfo: 'skip', type: 'scatter',
+            // Share the group's legendgroup so hiding the group via the legend
+            // also hides its ± std shaded band.
+            legendgroup: name,
         },
         {
             x: xArr, y: means,
             type: 'scatter', mode: 'lines',
-            name, line: { color, width: 2.5 },
+            name, legendgroup: name, line: { color, width: 2.5 },
         },
     ]
 }
@@ -69,7 +72,7 @@ const CHART_LAYOUT_BASE = {
     margin: { t: 12, b: 48, l: 56, r: 16 },
     paper_bgcolor: 'transparent',
     plot_bgcolor: '#fafbff',
-    legend: { orientation: 'h', y: -0.32 },
+    legend: { orientation: 'h', y: -0.32, groupclick: 'togglegroup' },
 }
 
 // ── Distribution (box, violin, or grouped bar) ────────────────────────────

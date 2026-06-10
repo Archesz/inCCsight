@@ -190,19 +190,19 @@ function Midline(props) {
             traces.push({
                 x, y: norm.uppers,
                 mode: 'lines', line: { width: 0 }, showlegend: false, hoverinfo: 'skip',
-                name: 'norm_upper',
+                name: 'norm_upper', legendgroup: 'norm',
             })
             // Lower boundary (fills up to upper)
             traces.push({
                 x, y: norm.lowers,
                 fill: 'tonexty', mode: 'lines', line: { width: 0 },
                 fillcolor: 'rgba(180,200,255,0.18)',
-                showlegend: false, hoverinfo: 'skip', name: 'norm_lower',
+                showlegend: false, hoverinfo: 'skip', name: 'norm_lower', legendgroup: 'norm',
             })
             // Mean line
             traces.push({
                 x, y: norm.means,
-                mode: 'lines', name: 'Normative mean ±1 SD',
+                mode: 'lines', name: 'Normative mean ±1 SD', legendgroup: 'norm',
                 line: { color: 'rgba(130,160,255,0.6)', width: 1.5, dash: 'dot' },
                 hovertemplate: 'Point %{x}<br>Normative mean: %{y:.6f}<extra>Normative</extra>',
             })
@@ -302,7 +302,7 @@ function Midline(props) {
         title:  'Midline Plots',
         height: 420,
         margin: { t: 50, l: 50, r: 10 },
-        legend: { orientation: 'h', x: 1, y: 1.1, xanchor: 'right' },
+        legend: { orientation: 'h', x: 1, y: 1.1, xanchor: 'right', groupclick: 'togglegroup' },
         plot_bgcolor: '#E5ECF6',
         yaxis: { gridcolor: 'rgb(255,255,255)', title: yAxisTitle },
         xaxis: { gridcolor: 'rgb(255,255,255)', title: 'Points Along CC Body' },
