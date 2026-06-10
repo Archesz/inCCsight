@@ -7,7 +7,6 @@ import GroupComparison       from '../components/GroupComparison/GroupComparison
 import Glossary              from '../components/Glossary/Glossary'
 import QualityControl        from '../components/QualityControl/QualityControl'
 import DemographicsDashboard  from '../components/Demographics/DemographicsDashboard'
-import TractographyDashboard from '../components/Tractography/TractographyDashboard'
 
 import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
@@ -196,9 +195,6 @@ function Home() {
                             ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
                             : []),
                         { id: 'demograph', label: 'Demographics' },
-                        ...(activeSubjects.some(s => s.tract_stats?.total_streamlines > 0)
-                            ? [{ id: 'tractography', label: 'Tractography' }]
-                            : []),
                         { id: 'qc', label: 'Quality Control' },
                     ].map(tab => (
                         <button
@@ -352,8 +348,6 @@ function Home() {
                                 allGroups={allGroups}
                                 onReload={fetchDemograph}
                               />
-                        : activeTab === 'tractography'
-                        ? <TractographyDashboard subjects={activeSubjects} />
                         : <View
                             view={activeTab}
                             data={data}

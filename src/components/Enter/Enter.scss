@@ -366,6 +366,19 @@ $text-muted:    #7a849e;
     gap: 24px;
     padding: 32px;
     box-sizing: border-box;
+    overflow-y: auto;   // scroll if spinner + progress + console exceed the viewport
+
+    /* The Loading component is a full-screen fixed overlay by default; inside
+       the pipeline loading screen it must flow inline so the progress bar and
+       live console below it stay visible (instead of being covered by it). */
+    .loader-container {
+        position: static;
+        width: auto;
+        height: auto;
+        background-color: transparent;
+        z-index: auto;
+        flex: 0 0 auto;
+    }
 }
 
 .pipeline-log {

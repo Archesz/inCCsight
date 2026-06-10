@@ -17,7 +17,7 @@ function Loading() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentPhraseIndex(currentIndex => (currentIndex + 1) % phrases.length)
-    }, 1000)
+    }, 7000)
     return () => clearInterval(interval)
   }, [phrases])
 
