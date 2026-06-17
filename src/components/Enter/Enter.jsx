@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import './Enter.scss'
 import logo from '../../assets/inccsight.png'
 
 import { TbHome2, TbQuestionCircle, TbBrandGithub, TbSettings } from 'react-icons/tb'
 import View from './View'
 import Loading from '../Loading/Loading'
+import Tutorial from '../Tutorial/Tutorial'
 
 const NAV = [
     { icon: TbHome2,          name: 'Input',    title: 'Select data'   },
@@ -13,8 +14,67 @@ const NAV = [
     { icon: TbSettings,       name: 'Settings', title: 'Settings'      },
 ]
 
+// ── Tutorial preference ────────────────────────────────────────────────────────
+// `enabled` is persisted in localStorage (survives across visits). First-time
+// users have no stored value → the tutorial is ON by default.
+// A per-session flag (sessionStorage) makes it auto-open once per app launch
+// rather than on every in-app navigation back to the landing screen.
+const TUT_ENABLED_KEY = 'inccsight.tutorial.enabled'
+const TUT_SHOWN_KEY   = 'inccsight.tutorial.shownThisSession'
+
+function readTutorialEnabled() {
+    try {
+        const v = localStorage.getItem(TUT_ENABLED_KEY)
+        return v === null ? true : v === '1'
+    } catch (_) { return true }
+}
+function persistEnabled(val) {
+    try { localStorage.setItem(TUT_ENABLED_KEY, val ? '1' : '0') } catch (_) {}
+}
+function shownThisSession() {
+    try { return sessionStorage.getItem(TUT_SHOWN_KEY) === '1' } catch (_) { return false }
+}
+function markShownThisSession(val) {
+    try {
+        if (val) sessionStorage.setItem(TUT_SHOWN_KEY, '1')
+        else     sessionStorage.removeItem(TUT_SHOWN_KEY)
+    } catch (_) {}
+}
+
 function Enter() {
     const [page, setPage] = useState('Input')
+
+    const [tutorialEnabled, setTutorialEnabled] = useState(readTutorialEnabled)
+    const [showTutorial,    setShowTutorial]    = useState(false)
+
+    // Auto-open once per session while the tutorial is enabled.
+    useEffect(() => {
+        if (readTutorialEnabled() && !shownThisSession()) {
+            setShowTutorial(true)
+            markShownThisSession(true)
+        }
+    }, [])
+
+    function openTutorial() {
+        setShowTutorial(true)
+        markShownThisSession(true)
+    }
+
+    function closeTutorial() {
+        setShowTutorial(false)
+    }
+
+    function toggleTutorialEnabled(checked) {
+        setTutorialEnabled(checked)
+        persistEnabled(checked)
+        if (checked) {
+            // Re-enabling brings the tour back right away.
+            markShownThisSession(true)
+            setShowTutorial(true)
+        } else {
+            setShowTutorial(false)
+        }
+    }
 
     return (
         <div className='enter-wrap'>
@@ -40,6 +100,26 @@ function Enter() {
                         <span className='header-name'>InCCsight</span>
                         <span className='header-sub'>Corpus Callosum Analysis Tool</span>
                     </div>
+
+                    {/* Tutorial controls */}
+                    <div className='enter-header-actions'>
+                        <label className='tut-toggle' title='Open the guided tutorial automatically on startup'>
+                            <input
+                                type='checkbox'
+                                checked={tutorialEnabled}
+                                onChange={e => toggleTutorialEnabled(e.target.checked)}
+                            />
+                            <span>Show tutorial on startup</span>
+                        </label>
+                        <button
+                            className='tut-launch-btn'
+                            onClick={openTutorial}
+                            title='Open the guided tutorial'
+                        >
+                            <TbQuestionCircle />
+                            <span>Tutorial</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Corpo: sidebar + conteúdo */}
@@ -63,6 +143,9 @@ function Enter() {
                     </div>
                 </div>
             </div>
+
+            {/* Guided tutorial */}
+            {showTutorial && <Tutorial onClose={closeTutorial} />}
         </div>
     )
 }

@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import Plot from 'react-plotly.js'
 import './DemographicsDashboard.scss'
+import InfoTool from '../InfoTool/InfoTool'
 
 const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
 
@@ -42,6 +43,20 @@ const SECTION_LABELS = {
     dtiCorr:      'DTI Correlation',
     dtiScatter:   'Demographics × DTI',
     dtiBox:       'DTI by Category',
+}
+
+// Short help text shown in the (?) tooltip next to each section title
+const SECTION_INFO = {
+    completeness: 'How many subjects have a non-empty value for each variable, as a percentage. Helps spot columns with missing data.',
+    demographics: 'Distribution of basic demographic variables (age, sex, ethnicity) across groups. Numeric variables use violin plots; categorical ones use bar charts. Click the colours in the legend to hide or show each group.',
+    clinical:     'Distribution of clinical variables (diagnosis, disease duration, medication) across groups. Click the colours in the legend to hide or show each group.',
+    acquisition:  'Distribution of acquisition variables (scanner, field strength, acquisition date) across groups. Click the colours in the legend to hide or show each group.',
+    anthro:       'Distribution of anthropometric variables (weight, height) across groups. Click the colours in the legend to hide or show each group.',
+    bmi:          'Weight vs. height scatter with BMI iso-lines (18.5 / 25 / 30). Each point is a subject; hover to read its BMI. Click the colours in the legend to hide or show each group.',
+    custom:       'Charts for CSV columns not recognised automatically. Enable and pick a visualisation for each in the Customize panel.',
+    dtiCorr:      'Pearson correlation between each numeric demographic variable and the DTI scalars (FA, MD, RD, AD), for the selected segmentation method. Blue = positive, red = negative.',
+    dtiScatter:   'Scatter of a numeric demographic variable against the selected DTI scalar, with a linear fit and Pearson r. Click the colours in the legend to hide or show each group.',
+    dtiBox:       'Distribution of the selected DTI scalar split by the categories of a demographic variable.',
 }
 
 // ── DTI cross-analysis ────────────────────────────────────────────────────────
@@ -317,12 +332,15 @@ function BmiScatter({ rows, groups }) {
 }
 
 // ── Section wrapper with collapse toggle ─────────────────────────────────────
-function SectionCard({ title, accent, children, defaultOpen = true }) {
+function SectionCard({ title, info, accent, children, defaultOpen = true }) {
     const [open, setOpen] = useState(defaultOpen)
     return (
         <div className='dm-section-card' style={{ '--accent': accent }}>
             <div className='dm-section-card-header' onClick={() => setOpen(v => !v)}>
-                <span className='dm-section-card-title'>{title}</span>
+                <span className='dm-section-card-title'>
+                    {title}
+                    {info && <InfoTool text={info} />}
+                </span>
                 <span className='dm-section-card-arrow'>{open ? '▾' : '▸'}</span>
             </div>
             {open && <div className='dm-section-card-body'>{children}</div>}
@@ -474,7 +492,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
             const activeCols = known.cols.filter(c => presentCols.includes(c))
             if (!activeCols.length) return null
             return (
-                <SectionCard key={key} title={known.title} accent={accent}>
+                <SectionCard key={key} title={known.title} info={SECTION_INFO[key]} accent={accent}>
                     <div className='dm-charts-grid'>
                         {activeCols.map(col => {
                             const meta = COL_META[col]
@@ -497,7 +515,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
         // ── Special sections ────────────────────────────────────────────────
         if (key === 'completeness') {
             return (
-                <SectionCard key='completeness' title='Data Completeness' accent={accent}>
+                <SectionCard key='completeness' title='Data Completeness' info={SECTION_INFO.completeness} accent={accent}>
                     <div className='dm-completeness-grid'>
                         {completeness.map(({ col, present, total, pct }) => (
                             <div key={col} className='dm-completeness-row'>
@@ -519,7 +537,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
 
         if (key === 'bmi' && hasBmi) {
             return (
-                <SectionCard key='bmi' title='Body Composition' accent={accent}>
+                <SectionCard key='bmi' title='Body Composition' info={SECTION_INFO.bmi} accent={accent}>
                     <div className='dm-charts-grid'>
                         <div className='dm-chart-card dm-chart-card--full'>
                             <span className='dm-chart-title'>Weight × Height with BMI iso-lines</span>
@@ -534,7 +552,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
             const enabledCols = unknownCols.filter(c => getCustomCfg(c).enabled)
             if (!enabledCols.length) return null
             return (
-                <SectionCard key='custom' title='Custom Columns' accent={accent}>
+                <SectionCard key='custom' title='Custom Columns' info={SECTION_INFO.custom} accent={accent}>
                     <div className='dm-charts-grid'>
                         {enabledCols.map(col => {
                             const cfg = getCustomCfg(col)
@@ -552,7 +570,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
 
         if (key === 'dtiCorr' && matched.length >= 2 && dtiNumericCols.length > 0) {
             return (
-                <SectionCard key='dtiCorr' title={`Correlation — Demographics × DTI (${dtiMethodLabel})`} accent={accent}>
+                <SectionCard key='dtiCorr' title={`Correlation — Demographics × DTI (${dtiMethodLabel})`} info={SECTION_INFO.dtiCorr} accent={accent}>
                     <div className='dm-chart-card dm-chart-card--full'>
                         <Plot
                             data={[{ type: 'heatmap', z: corrMatrix, x: DTI_SCALARS, y: dtiNumericCols.map(colLabel), zmin: -1, zmax: 1, colorscale: 'RdBu', reversescale: true, text: corrMatrix.map(row => row.map(v => fmt(v, 2))), texttemplate: '%{text}', textfont: { size: 11 } }]}
@@ -567,7 +585,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
 
         if (key === 'dtiScatter' && matched.length > 0 && dtiNumericCols.length > 0) {
             return (
-                <SectionCard key='dtiScatter' title={`Demographics × ${dtiScalar} (${dtiMethodLabel})`} accent={accent}>
+                <SectionCard key='dtiScatter' title={`Demographics × ${dtiScalar} (${dtiMethodLabel})`} info={SECTION_INFO.dtiScatter} accent={accent}>
                     <div className='dm-section-head' style={{ padding: '0 0 12px' }}>
                         <select className='dm-select' value={scatterVar || ''} onChange={e => setScatterVarSel(e.target.value)}>
                             {dtiNumericCols.map(c => <option key={c} value={c}>{colLabel(c)}</option>)}
@@ -602,7 +620,7 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
 
         if (key === 'dtiBox' && matched.length > 0 && dtiCategoricalCols.length > 0) {
             return (
-                <SectionCard key='dtiBox' title={`${dtiScalar} (${dtiMethodLabel}) by Category`} accent={accent}>
+                <SectionCard key='dtiBox' title={`${dtiScalar} (${dtiMethodLabel}) by Category`} info={SECTION_INFO.dtiBox} accent={accent}>
                     <div className='dm-section-head' style={{ padding: '0 0 12px' }}>
                         <select className='dm-select' value={boxVar || ''} onChange={e => setBoxVarSel(e.target.value)}>
                             {dtiCategoricalCols.map(c => <option key={c} value={c}>{colLabel(c)}</option>)}
@@ -721,6 +739,26 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
                     </div>
                 ))}
             </div>
+
+            {/* Subjects per group */}
+            {groups.length > 0 && (
+                <div className='dm-group-cards-block'>
+                    <span className='dm-group-cards-title'>Subjects per group</span>
+                    <div className='dm-group-cards'>
+                        {groups.map((g, i) => {
+                            const accent = GROUP_COLORS[i % GROUP_COLORS.length]
+                            const count  = rows.filter(r => r.group === g).length
+                            return (
+                                <div key={g} className='dm-group-card' style={{ '--group-accent': accent }}>
+                                    <span className='dm-group-card-dot' style={{ background: accent }} />
+                                    <span className='dm-group-card-count'>{count}</span>
+                                    <span className='dm-group-card-name' title={g}>{g}</span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Group legend */}
             {groups.length > 1 && (

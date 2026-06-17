@@ -1,9 +1,14 @@
 import React, { useState, useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
+import InfoTool from '../InfoTool/InfoTool'
 
 const GROUP_COLORS  = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
 const SCALARS       = ['FA', 'MD', 'RD', 'AD']
+
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS  = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel   = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
 const METHODS_SEG   = ['ROQS_scalar', 'Watershed_scalar', 'CNN_scalar']
 const PARC_METHODS  = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
 const SHAPE_METRICS = [
@@ -258,7 +263,7 @@ function ParcellationBar({ allSubjects, allGroups, segMethod }) {
                     {SCALARS.map(sc => (
                         <button key={sc}
                             className={`gc-pill-sm${scalar === sc ? ' active' : ''}`}
-                            onClick={() => setScalar(sc)}>{sc}</button>
+                            onClick={() => setScalar(sc)}>{scalarLabel(sc)}</button>
                     ))}
                 </div>
                 <div className='gc-picker-group'>
@@ -591,7 +596,10 @@ function GroupComparison({ allSubjects, allGroups }) {
 
             {/* Scalar distributions */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Scalar distributions</span>
+                <span className='gc-section-title'>
+                    Scalar distributions
+                    <InfoTool text='One chart per scalar (FA, MD, RD, AD) showing its distribution across groups. Each colour is a group (see the legend above). Use the Method, Chart and Scale controls at the top to switch segmentation method, box/violin/bar and raw vs. normalized [0–1] values.' />
+                </span>
                 <div className='gc-boxplots'>
                     {SCALARS.map(sc => (
                         <div key={sc} className='gc-box-cell'>
@@ -610,7 +618,10 @@ function GroupComparison({ allSubjects, allGroups }) {
             <div className='gc-section'>
                 <div className='gc-collapsible-header' onClick={() => setPerSubjectOpen(v => !v)}>
                     <span className='gc-collapse-arrow'>{perSubjectOpen ? '▾' : '▸'}</span>
-                    <span className='gc-section-title'>Per-subject scalar values</span>
+                    <span className='gc-section-title'>
+                        Per-subject scalar values
+                        <InfoTool text='Expandable table with the raw scalar values of every subject. Sort by group or by any scalar, and download the data as CSV.' />
+                    </span>
                 </div>
                 {perSubjectOpen && (
                     <div className='gc-chart-card'>
@@ -625,7 +636,10 @@ function GroupComparison({ allSubjects, allGroups }) {
             <div className='gc-section'>
                 <div className='gc-profiles-row'>
                     <div className='gc-profile-cell'>
-                        <span className='gc-section-title'>CC Thickness Profile</span>
+                        <span className='gc-section-title'>
+                            CC Thickness Profile
+                            <InfoTool text='Mean CC thickness along its length (posterior → anterior) per group; the shaded band is ±1 SD. Click the colours in the legend to hide or show each group.' />
+                        </span>
                         <div className='gc-chart-card'>
                             <ThicknessProfile
                                 allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
@@ -633,7 +647,10 @@ function GroupComparison({ allSubjects, allGroups }) {
                         </div>
                     </div>
                     <div className='gc-profile-cell'>
-                        <span className='gc-section-title'>Scalar Profile along CC Midline</span>
+                        <span className='gc-section-title'>
+                            Scalar Profile along CC Midline
+                            <InfoTool text='Mean value of the selected scalar sampled along the CC midline per group; the shaded band is ±1 SD. Pick the scalar with the buttons above. Click the colours in the legend to hide or show each group.' />
+                        </span>
                         <div className='gc-chart-card'>
                             <MidlineProfile
                                 allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
@@ -647,7 +664,10 @@ function GroupComparison({ allSubjects, allGroups }) {
             <div className='gc-section'>
                 <div className='gc-parc-stats-row'>
                     <div className='gc-parc-cell'>
-                        <span className='gc-section-title'>Mean scalar per CC Region</span>
+                        <span className='gc-section-title'>
+                            Mean scalar per CC Region
+                            <InfoTool text='Grouped bars of the mean scalar per callosal region (P1–P5) for each group; error bars are ±1 SD. Choose scalar and parcellation scheme with the buttons above. Click the colours in the legend to hide or show each group.' />
+                        </span>
                         <div className='gc-chart-card'>
                             <ParcellationBar
                                 allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
@@ -655,7 +675,10 @@ function GroupComparison({ allSubjects, allGroups }) {
                         </div>
                     </div>
                     <div className='gc-stats-cell'>
-                        <span className='gc-section-title'>CC scalar statistics per group</span>
+                        <span className='gc-section-title'>
+                            CC scalar statistics per group
+                            <InfoTool text='Mean ± standard deviation of each scalar per group, plus an overall row across all subjects. FA is dimensionless; MD, RD and AD are in mm²/s.' />
+                        </span>
                         <MeanTable
                             allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
                         />
@@ -668,6 +691,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                 <span className='gc-section-title'>
                     Shape Metrics
                     <span className='gc-badge'>ROQS</span>
+                    <InfoTool text='Morphological metrics of the CC (area, length, max and mean thickness) per group, from the ROQS segmentation. Box/violin follows the Chart selector above.' />
                 </span>
                 <ShapeMetrics allSubjects={allSubjects} allGroups={allGroups} chartType={chartType} />
             </div>

@@ -120,6 +120,69 @@
     margin-top:     2px;
 }
 
+// ── Subjects per group cards ────────────────────────────────────────────────────
+
+.dm-group-cards-block {
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+}
+
+.dm-group-cards-title {
+    font-size:      11px;
+    color:          #8A93B2;
+    font-weight:    700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dm-group-cards {
+    display:   flex;
+    flex-wrap: wrap;
+    gap:       12px;
+}
+
+.dm-group-card {
+    display:        flex;
+    flex-direction: column;
+    align-items:    flex-start;
+    gap:            2px;
+    min-width:      120px;
+    background:     white;
+    border:         1.5px solid #e8eaf6;
+    border-left:    4px solid var(--group-accent, #4C6EF5);
+    border-radius:  10px;
+    padding:        12px 16px;
+    box-shadow:     0 2px 8px rgba(0, 0, 0, 0.04);
+    transition:     box-shadow 0.2s;
+
+    &:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); }
+}
+
+.dm-group-card-dot {
+    width:         9px;
+    height:        9px;
+    border-radius: 50%;
+    margin-bottom: 2px;
+}
+
+.dm-group-card-count {
+    font-size:   24px;
+    font-weight: 800;
+    color:       #1F2C56;
+    line-height: 1;
+}
+
+.dm-group-card-name {
+    font-size:     12px;
+    font-weight:   600;
+    color:         #555;
+    max-width:     160px;
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    white-space:   nowrap;
+}
+
 // ── Group legend ──────────────────────────────────────────────────────────────
 
 .dm-legend {

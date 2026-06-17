@@ -19,8 +19,11 @@ data/
 methods/csvs/*.csv
 methods/csvs/groups.json
 
-# Model checkpoint (mounted as volume)
+# CNN checkpoint (mounted as volume / downloaded at runtime)
 methods/CNNBased/peso/*.ckpt
+
+# NOTE: the ViT QC model methods/models/*.pth is intentionally NOT ignored here
+# so it gets baked into the image by `COPY . .` when present in the build context.
 
 # Subject data
 subjects/

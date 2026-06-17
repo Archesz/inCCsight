@@ -2,6 +2,10 @@ import React, { useState, memo } from 'react'
 import Boxplot from './Boxplot'
 import './BoxplotParcellation.scss'
 
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel  = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
+
 function getScalarValues(subjects, method, parc_method, scalar, part) {
     const name = `${parc_method}_${scalar}_${part}`
     return subjects.map(s => {
@@ -55,7 +59,7 @@ function BoxplotParcellation(props) {
                     <label>Scalar</label>
                     <select onChange={e => setScalarParcellation(e.target.value)}>
                         {["FA", "RD", "AD", "MD"].map(s => (
-                            <option key={s} value={s}>{s}</option>
+                            <option key={s} value={s}>{scalarLabel(s)}</option>
                         ))}
                     </select>
                 </div>
