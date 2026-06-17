@@ -53,30 +53,36 @@ $text    : #1a1f36;
         strong { color: $text; font-size: 11px; }
     }
 
-    .qcc-method-tabs {
+    .qcc-cols-control {
         display: flex;
-        gap: 3px;
-
-        .qcc-mtab {
-            padding: 4px 12px;
-            border-radius: 6px;
-            border: 1.5px solid $border;
-            background: transparent;
-            color: $muted;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.14s;
-
-            &:hover { border-color: $accent; color: $accent; }
-            &.active { background: $primary; border-color: $primary; color: white; }
-        }
+        align-items: center;
+        gap: 8px;
     }
 
     .qcc-slider {
-        width: 160px;
+        width: 120px;
         accent-color: $accent;
         cursor: pointer;
+
+        &:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+    }
+
+    .qcc-auto-btn {
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1.5px solid $border;
+        background: transparent;
+        color: $muted;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.14s;
+
+        &:hover { border-color: $accent; color: $accent; }
+        &.active { background: $primary; border-color: $primary; color: white; }
     }
 
     .qcc-select {
@@ -108,6 +114,27 @@ $text    : #1a1f36;
             width: 14px;
             height: 14px;
         }
+    }
+
+    .qcc-method-tabs {
+        display: flex;
+        gap: 3px;
+    }
+
+    .qcc-mtab {
+        padding: 5px 13px;
+        border-radius: 6px;
+        border: 1.5px solid $border;
+        background: transparent;
+        color: $muted;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.14s, border-color 0.14s, color 0.14s;
+        white-space: nowrap;
+
+        &:hover { border-color: $accent; color: $accent; }
+        &.active { background: $primary; border-color: $primary; color: #fff; }
     }
 }
 

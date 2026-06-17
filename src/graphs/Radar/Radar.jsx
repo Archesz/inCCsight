@@ -110,27 +110,14 @@ function RadarBySegmentation({ data }) {
     }))
 
     const layout = {
-        title:  { text: 'Segmentations by Parcellation', font: { size: 14 } },
         legend: { orientation: 'h' },
         polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
-        margin: { t: 40, l: 20, r: 20, b: 8 },
+        margin: { t: 20, l: 20, r: 20, b: 8 },
         height: 300,
     }
 
     return (
         <div className='radar-block'>
-            <Plot
-                data={plotData}
-                layout={layout}
-                config={{
-                    responsive: true,
-                    displayModeBar: 'hover',
-                    modeBarButtons: [['toImage']],
-                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'radar_chart' },
-                }}
-                style={{ width: '100%' }}
-                useResizeHandler
-            />
             <ControlRow>
                 <SelectField
                     label='Parcellation'
@@ -150,6 +137,18 @@ function RadarBySegmentation({ data }) {
                     onChange={setNormalized}
                 />
             </ControlRow>
+            <Plot
+                data={plotData}
+                layout={layout}
+                config={{
+                    responsive: true,
+                    displayModeBar: 'hover',
+                    modeBarButtons: [['toImage']],
+                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'radar_chart' },
+                }}
+                style={{ width: '100%' }}
+                useResizeHandler
+            />
         </div>
     )
 }
@@ -187,27 +186,14 @@ function RadarByParcellation({ data }) {
     }))
 
     const layout = {
-        title:  { text: 'Parcellations by Segmentation', font: { size: 14 } },
         legend: { orientation: 'h' },
         polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
-        margin: { t: 40, l: 20, r: 20, b: 8 },
+        margin: { t: 20, l: 20, r: 20, b: 8 },
         height: 300,
     }
 
     return (
         <div className='radar-block'>
-            <Plot
-                data={plotData}
-                layout={layout}
-                config={{
-                    responsive: true,
-                    displayModeBar: 'hover',
-                    modeBarButtons: [['toImage']],
-                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'radar_chart' },
-                }}
-                style={{ width: '100%' }}
-                useResizeHandler
-            />
             <ControlRow>
                 <SelectField
                     label='Segmentation'
@@ -227,6 +213,18 @@ function RadarByParcellation({ data }) {
                     onChange={setNormalized}
                 />
             </ControlRow>
+            <Plot
+                data={plotData}
+                layout={layout}
+                config={{
+                    responsive: true,
+                    displayModeBar: 'hover',
+                    modeBarButtons: [['toImage']],
+                    toImageButtonOptions: { format: 'png', scale: 2, filename: 'radar_chart' },
+                }}
+                style={{ width: '100%' }}
+                useResizeHandler
+            />
         </div>
     )
 }

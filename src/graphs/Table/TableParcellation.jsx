@@ -26,7 +26,7 @@ function getMeanValues(subjects, method, parc_method, scalar, part) {
     const values = subjects
         .filter(s => s[method] && s[method][name] != null)
         .map(s => Number(s[method][name]))
-    if (values.length === 0) return (0).toFixed(6)
+    if (values.length === 0) return '—'
     return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(6)
 }
 
@@ -86,7 +86,7 @@ function ExpandableParcTable({ allSubjects, color }) {
             <div className='expandable-header' onClick={() => setOpen(v => !v)}>
                 <span>Data by Subject</span>
                 <span className='expandable-toggle'>
-                    {open ? '▲ Recolher' : '▼ Ver todos os sujeitos'}
+                    {open ? '▲ Collapse' : '▼ Show all subjects'}
                 </span>
             </div>
 
@@ -219,11 +219,6 @@ function TableParcellation(props) {
                 </button>
             </div>
 
-            <Plot data={plotData} layout={layout}
-                config={{ responsive: true }}
-                style={{ width: '100%' }}
-                useResizeHandler />
-
             <div className='options-row'>
                 <div className='select-group'>
                     <label className={props.color}>Parc. Method: </label>
@@ -255,6 +250,11 @@ function TableParcellation(props) {
                     </div>
                 )}
             </div>
+
+            <Plot data={plotData} layout={layout}
+                config={{ responsive: true }}
+                style={{ width: '100%' }}
+                useResizeHandler />
 
             <ExpandableParcTable allSubjects={allSubjects} color={props.color} />
         </div>

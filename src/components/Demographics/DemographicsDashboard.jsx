@@ -19,72 +19,48 @@ const COL_META = {
     height_cm:        { type: 'numeric',     label: 'Height',           unit: 'cm'    },
 }
 
-const SECTIONS_KNOWN = [
-    { id: 'demographics', title: 'Demographics',     cols: ['age', 'sex', 'ethnicity']                         },
-    { id: 'clinical',     title: 'Clinical',          cols: ['diagnosis', 'disease_duration', 'medication']    },
-    { id: 'acquisition',  title: 'Acquisition',       cols: ['scanner', 'field_strength', 'acquisition_date'] },
-    { id: 'anthro',       title: 'Anthropometric',    cols: ['weight_kg', 'height_cm']                        },
-]
-
-const DEFAULT_ORDER = [
-    'completeness', 'demographics', 'clinical', 'acquisition', 'anthro',
-    'bmi', 'custom', 'dtiCorr', 'dtiScatter', 'dtiBox',
-]
-
-const SECTION_LABELS = {
-    completeness: 'Data Completeness',
-    demographics: 'Demographics',
-    clinical:     'Clinical',
-    acquisition:  'Acquisition',
-    anthro:       'Anthropometric',
-    bmi:          'Body Composition',
-    custom:       'Custom Columns',
-    dtiCorr:      'DTI Correlation',
-    dtiScatter:   'Demographics × DTI',
-    dtiBox:       'DTI by Category',
-}
-
-// ── DTI cross-analysis ────────────────────────────────────────────────────────
+// ── DTI columns synthesized from analyzed subjects ────────────────────────────
 const DTI_METHODS = [
-    { key: 'ROQS_scalar',       label: 'ROQS' },
-    { key: 'Watershed_scalar',  label: 'Watershed' },
-    { key: 'CNN_scalar',        label: 'CNN' },
+    { key: 'ROQS_scalar',      label: 'ROQS' },
+    { key: 'Watershed_scalar', label: 'Watershed' },
+    { key: 'CNN_scalar',       label: 'CNN' },
 ]
 const DTI_SCALARS = ['FA', 'MD', 'RD', 'AD']
 
-const STORAGE_KEY = 'inccsight.demographics.prefs'
+function parseDtiCol(col) {
+    for (const method of DTI_METHODS) {
+        for (const scalar of DTI_SCALARS) {
+            if (col === `${method.label}_${scalar}`) {
+                return { methodKey: method.key, scalar, label: `${method.label} ${scalar}` }
+            }
+        }
+    }
+    return null
+}
+
+const STORAGE_KEY = 'inccsight.demograph.panels'
 
 const LAYOUT_BASE = {
-    margin:        { t: 16, b: 52, l: 56, r: 16 },
+    margin:        { t: 10, b: 48, l: 56, r: 16 },
     paper_bgcolor: 'transparent',
     plot_bgcolor:  '#fafbff',
-    legend:        { orientation: 'h', y: -0.38 },
     font:          { size: 12 },
 }
+const PLOT_CONFIG = { displayModeBar: false, responsive: true }
+
+const PANEL_TYPES = [
+    { value: 'distribution', label: 'Distribution' },
+    { value: 'scatter',      label: 'Scatter' },
+    { value: 'bar',          label: 'Bar' },
+    { value: 'table',        label: 'Table' },
+]
+const VIZ_SUBTYPES = [
+    { value: 'violin',    label: 'Violin' },
+    { value: 'box',       label: 'Box' },
+    { value: 'histogram', label: 'Histogram' },
+]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function uniqueVals(rows, col) {
-    return [...new Set(rows.map(r => r[col]).filter(v => v && v !== ''))].sort()
-}
-
-function autoDetectType(rows, col) {
-    const vals = rows.map(r => r[col]).filter(v => v !== '' && v != null)
-    if (!vals.length) return 'categorical'
-    const nums = vals.filter(v => !isNaN(Number(v)))
-    return nums.length / vals.length > 0.8 ? 'numeric' : 'categorical'
-}
-
-function autoVizType(rows, col) {
-    return autoDetectType(rows, col) === 'numeric' ? 'violin' : 'bar'
-}
-
-function isFullWidth(col, rows) {
-    if (col === 'acquisition_date') return true
-    const meta = COL_META[col]
-    if (meta?.type === 'categorical') return uniqueVals(rows, col).length > 5
-    return false
-}
 
 function toNum(v) {
     if (v === '' || v == null) return NaN
@@ -129,512 +105,718 @@ function linfit(pairs) {
 }
 const fmt = (v, d = 3) => (Number.isFinite(v) ? v.toFixed(d) : '—')
 
-// ── Mini stats bar below numeric charts ──────────────────────────────────────
-function NumericStats({ rows, col, groups }) {
-    const stats = groups.map((g, gi) => {
-        const vals = rows
-            .filter(r => r.group === g)
-            .map(r => parseFloat(r[col]))
-            .filter(v => !isNaN(v))
+function autoDetectType(rows, col) {
+    const vals = rows.map(r => r[col]).filter(v => v !== '' && v != null)
+    if (!vals.length) return 'categorical'
+    const nums = vals.filter(v => !isNaN(Number(v)))
+    return nums.length / vals.length > 0.8 ? 'numeric' : 'categorical'
+}
+
+function quantile(sorted, p) {
+    if (!sorted.length) return NaN
+    const idx = (sorted.length - 1) * p
+    const lo = Math.floor(idx)
+    const hi = Math.ceil(idx)
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
+}
+
+function makeId() {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+// Categories of the color-by column, in stable order, each with its color.
+function colorCategories(data, colorBy) {
+    const keyOf = r => {
+        const raw = colorBy === 'group' ? r.group : r[colorBy]
+        const s = String(raw ?? '').trim()
+        return s === '' ? '—' : s
+    }
+    const cats = [...new Set(data.map(keyOf))]
+    return { keyOf, cats }
+}
+
+// ── Mini stats bar (n, mean ± std per color category) ────────────────────────
+function StatsBar({ data, col, keyOf, cats }) {
+    const items = cats.map((cat, ci) => {
+        const vals = data.filter(r => keyOf(r) === cat).map(r => toNum(r[col])).filter(Number.isFinite)
         return {
-            group: g,
-            color: GROUP_COLORS[gi % GROUP_COLORS.length],
+            cat,
+            color: GROUP_COLORS[ci % GROUP_COLORS.length],
             n: vals.length,
             mean: mean(vals),
             std: stdDev(vals),
-            min: vals.length ? Math.min(...vals) : NaN,
-            max: vals.length ? Math.max(...vals) : NaN,
         }
     })
     return (
         <div className='dm-stats-bar'>
-            {stats.map(s => (
-                <div key={s.group} className='dm-stats-item'>
+            {items.map(s => (
+                <div key={s.cat} className='dm-stats-item'>
                     <span className='dm-stats-dot' style={{ background: s.color }} />
-                    <span className='dm-stats-group'>{s.group}</span>
+                    <span className='dm-stats-cat'>{s.cat}</span>
                     <span className='dm-stats-val'>n={s.n}</span>
                     <span className='dm-stats-val'>{fmt(s.mean, 2)} ± {fmt(s.std, 2)}</span>
-                    <span className='dm-stats-range'>[{fmt(s.min, 2)} – {fmt(s.max, 2)}]</span>
                 </div>
             ))}
         </div>
     )
 }
 
-// ── Violin chart for numeric columns ─────────────────────────────────────────
-function NumericChart({ rows, col, groups, unit }) {
-    const multi = groups.length > 1
-    const traces = groups.map((group, gi) => {
-        const vals = rows.filter(r => r.group === group).map(r => parseFloat(r[col])).filter(v => !isNaN(v))
-        const color = GROUP_COLORS[gi % GROUP_COLORS.length]
+// ── Categorical count bar (shared by Distribution + Bar panels) ───────────────
+function CategoricalCountChart({ data, xCol, keyOf, cats }) {
+    const xCats = [...new Set(
+        data.map(r => String(r[xCol] ?? '').trim()).filter(v => v !== '')
+    )].sort()
+    if (!xCats.length) return <div className='dm-no-data'>No data available.</div>
+
+    const traces = cats.map((cat, ci) => {
+        const catRows = data.filter(r => keyOf(r) === cat)
         return {
-            type: 'violin', y: vals, name: group,
-            box: { visible: true }, meanline: { visible: true },
-            points: 'all', jitter: 0.35, pointpos: 0,
-            marker: { color, opacity: 0.7, size: 5 },
-            line: { color }, fillcolor: color + '33',
-            showlegend: multi,
+            type: 'bar',
+            x: xCats,
+            y: xCats.map(xc => catRows.filter(r => String(r[xCol] ?? '').trim() === xc).length),
+            name: cat,
+            marker: { color: GROUP_COLORS[ci % GROUP_COLORS.length], opacity: 0.85 },
+            showlegend: cats.length > 1,
         }
     })
-    if (traces.every(t => !t.y.length)) return <div className='dm-no-data'>No data available.</div>
+    return (
+        <Plot
+            data={traces}
+            layout={{
+                ...LAYOUT_BASE,
+                barmode: 'group',
+                height: 280,
+                legend: { orientation: 'h', y: -0.25 },
+                xaxis: { automargin: true, showgrid: false },
+                yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false },
+            }}
+            config={PLOT_CONFIG}
+            style={{ width: '100%' }}
+            useResizeHandler
+        />
+    )
+}
+
+// ── Distribution panel body ───────────────────────────────────────────────────
+function DistributionBody({ data, xCol, colorBy, vizSubtype, isNumeric, axisTitle }) {
+    const { keyOf, cats } = colorCategories(data, colorBy)
+
+    if (!isNumeric) {
+        return <CategoricalCountChart data={data} xCol={xCol} keyOf={keyOf} cats={cats} />
+    }
+
+    const multi = cats.length > 1
+    let traces
+
+    if (vizSubtype === 'histogram') {
+        traces = cats.map((cat, ci) => {
+            const vals = data.filter(r => keyOf(r) === cat).map(r => toNum(r[xCol])).filter(Number.isFinite)
+            return {
+                type: 'histogram',
+                x: vals,
+                name: cat,
+                marker: { color: GROUP_COLORS[ci % GROUP_COLORS.length], opacity: 0.8 },
+                showlegend: multi,
+            }
+        })
+    } else if (vizSubtype === 'box') {
+        traces = cats.map((cat, ci) => {
+            const vals = data.filter(r => keyOf(r) === cat).map(r => toNum(r[xCol])).filter(Number.isFinite)
+            const color = GROUP_COLORS[ci % GROUP_COLORS.length]
+            return {
+                type: 'box',
+                y: vals,
+                name: cat,
+                boxmean: 'sd',
+                boxpoints: 'all',
+                jitter: 0.4,
+                pointpos: 0,
+                marker: { color, opacity: 0.8, size: 5 },
+                line: { color },
+                showlegend: multi,
+            }
+        })
+    } else {
+        traces = cats.map((cat, ci) => {
+            const vals = data.filter(r => keyOf(r) === cat).map(r => toNum(r[xCol])).filter(Number.isFinite)
+            const color = GROUP_COLORS[ci % GROUP_COLORS.length]
+            return {
+                type: 'violin',
+                y: vals,
+                name: cat,
+                box: { visible: true },
+                meanline: { visible: true },
+                points: 'all',
+                jitter: 0.35,
+                pointpos: 0,
+                marker: { color, opacity: 0.7, size: 5 },
+                line: { color },
+                fillcolor: color + '33',
+                showlegend: multi,
+            }
+        })
+    }
+
+    const empty = vizSubtype === 'histogram'
+        ? traces.every(t => !t.x.length)
+        : traces.every(t => !t.y.length)
+    if (empty) return <div className='dm-no-data'>No data available.</div>
+
+    const isHist = vizSubtype === 'histogram'
     return (
         <>
             <Plot
                 data={traces}
                 layout={{
                     ...LAYOUT_BASE,
-                    height: 280,
-                    yaxis: { title: unit || '', gridcolor: '#eee', zeroline: false },
-                    xaxis: { showgrid: false },
+                    barmode: isHist ? 'overlay' : undefined,
+                    height: 300,
+                    legend: { orientation: 'h', y: -0.22 },
+                    xaxis: isHist
+                        ? { title: axisTitle, gridcolor: '#eee', zeroline: false }
+                        : { showgrid: false },
+                    yaxis: isHist
+                        ? { title: 'Count', gridcolor: '#eee', zeroline: false }
+                        : { title: axisTitle, gridcolor: '#eee', zeroline: false },
                 }}
-                config={{ displayModeBar: false, responsive: true }}
-                style={{ width: '100%' }} useResizeHandler
+                config={PLOT_CONFIG}
+                style={{ width: '100%' }}
+                useResizeHandler
             />
-            <NumericStats rows={rows} col={col} groups={groups} />
+            <StatsBar data={data} col={xCol} keyOf={keyOf} cats={cats} />
         </>
     )
 }
 
-// ── Bar chart for categorical columns ────────────────────────────────────────
-function CategoricalChart({ rows, col, groups }) {
-    const cats  = uniqueVals(rows, col)
-    const multi = groups.length > 1
-    if (!cats.length) return <div className='dm-no-data'>No data available.</div>
-    const traces = groups.map((group, gi) => {
-        const groupRows = rows.filter(r => r.group === group)
-        const color = GROUP_COLORS[gi % GROUP_COLORS.length]
-        return {
-            type: 'bar', x: cats,
-            y: cats.map(cat => groupRows.filter(r => r[col] === cat).length),
-            name: group, marker: { color, opacity: 0.85 }, showlegend: multi,
-        }
-    })
-    return (
-        <Plot
-            data={traces}
-            layout={{
-                ...LAYOUT_BASE, barmode: 'group', height: 260,
-                xaxis: { gridcolor: '#eee', automargin: true },
-                yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false },
-            }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: '100%' }} useResizeHandler
-        />
-    )
-}
+// ── Scatter panel body ────────────────────────────────────────────────────────
+function ScatterBody({ data, xCol, yCol, colorBy, xTitle, yTitle }) {
+    const { keyOf, cats } = colorCategories(data, colorBy)
 
-// ── Year histogram for date columns ──────────────────────────────────────────
-function DateChart({ rows, col, groups }) {
-    const multi = groups.length > 1
-    const traces = groups.map((group, gi) => {
-        const years = rows
-            .filter(r => r.group === group)
-            .map(r => { const d = new Date(r[col]); return isNaN(d.getTime()) ? null : d.getFullYear() })
-            .filter(Boolean)
-        const color = GROUP_COLORS[gi % GROUP_COLORS.length]
-        return { type: 'histogram', x: years, name: group, marker: { color, opacity: 0.8 }, showlegend: multi }
-    })
-    return (
-        <Plot
-            data={traces}
-            layout={{
-                ...LAYOUT_BASE, barmode: 'group', height: 240,
-                xaxis: { title: 'Year', gridcolor: '#eee', dtick: 1 },
-                yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false },
-            }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: '100%' }} useResizeHandler
-        />
-    )
-}
+    const points = data
+        .map(r => ({
+            x: toNum(r[xCol]),
+            y: toNum(r[yCol]),
+            id: r.subject_id ?? '',
+            cat: keyOf(r),
+        }))
+        .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
 
-// ── Custom column chart (unknown CSV columns) ─────────────────────────────────
-function CustomColChart({ rows, col, groups, vizType }) {
-    const detectedType = autoDetectType(rows, col)
-    if (vizType === 'violin' || (vizType === 'violin' && detectedType === 'numeric')) {
-        return <NumericChart rows={rows} col={col} groups={groups} unit='' />
+    if (points.length < 2) {
+        return <div className='dm-no-data'>Not enough subjects with both values.</div>
     }
-    if (vizType === 'box') {
-        const multi = groups.length > 1
-        const traces = groups.map((g, gi) => {
-            const vals = rows.filter(r => r.group === g).map(r => parseFloat(r[col])).filter(v => !isNaN(v))
-            const color = GROUP_COLORS[gi % GROUP_COLORS.length]
-            return { type: 'box', y: vals, name: g, boxmean: 'sd', boxpoints: 'all', jitter: 0.4, pointpos: 0, marker: { color, opacity: 0.8 }, showlegend: multi }
+
+    const pairs = points.map(p => [p.x, p.y])
+    const r = pearson(pairs)
+    const fit = points.length >= 5 ? linfit(pairs) : null
+
+    const traces = cats
+        .map((cat, ci) => {
+            const pts = points.filter(p => p.cat === cat)
+            if (!pts.length) return null
+            return {
+                type: 'scatter',
+                mode: 'markers',
+                name: cat,
+                x: pts.map(p => p.x),
+                y: pts.map(p => p.y),
+                text: pts.map(p => String(p.id)),
+                hovertemplate: '%{text}<br>%{x}, %{y}<extra></extra>',
+                marker: { size: 9, color: GROUP_COLORS[ci % GROUP_COLORS.length], opacity: 0.85 },
+                showlegend: cats.length > 1,
+            }
         })
-        return (
-            <>
-                <Plot
-                    data={traces}
-                    layout={{ ...LAYOUT_BASE, height: 280, xaxis: { showgrid: false }, yaxis: { gridcolor: '#eee', zeroline: false } }}
-                    config={{ displayModeBar: false, responsive: true }}
-                    style={{ width: '100%' }} useResizeHandler
-                />
-                {detectedType === 'numeric' && <NumericStats rows={rows} col={col} groups={groups} />}
-            </>
-        )
+        .filter(Boolean)
+
+    if (fit) {
+        const xs = points.map(p => p.x)
+        const xMin = Math.min(...xs)
+        const xMax = Math.max(...xs)
+        traces.push({
+            type: 'scatter',
+            mode: 'lines',
+            name: 'linear fit',
+            x: [xMin, xMax],
+            y: [fit.a * xMin + fit.b, fit.a * xMax + fit.b],
+            line: { color: '#1F2C56', dash: 'dash', width: 2 },
+            hoverinfo: 'skip',
+            showlegend: false,
+        })
     }
-    if (vizType === 'histogram') {
-        const multi = groups.length > 1
-        const traces = groups.map((g, gi) => {
-            const vals = rows.filter(r => r.group === g).map(r => r[col]).filter(v => v !== '' && v != null)
-            const color = GROUP_COLORS[gi % GROUP_COLORS.length]
-            return { type: 'histogram', x: vals, name: g, marker: { color, opacity: 0.8 }, showlegend: multi }
-        })
-        return (
+
+    return (
+        <>
             <Plot
                 data={traces}
-                layout={{ ...LAYOUT_BASE, barmode: 'group', height: 260, xaxis: { automargin: true }, yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false } }}
-                config={{ displayModeBar: false, responsive: true }}
-                style={{ width: '100%' }} useResizeHandler
+                layout={{
+                    ...LAYOUT_BASE,
+                    height: 320,
+                    legend: { orientation: 'h', y: -0.25 },
+                    xaxis: { title: xTitle, gridcolor: '#eee', zeroline: false },
+                    yaxis: { title: yTitle, gridcolor: '#eee', zeroline: false },
+                }}
+                config={PLOT_CONFIG}
+                style={{ width: '100%' }}
+                useResizeHandler
             />
-        )
-    }
-    // Default: bar (categorical)
-    return <CategoricalChart rows={rows} col={col} groups={groups} />
+            <div className='dm-stats-bar'>
+                <div className='dm-stats-item'>
+                    <span className='dm-stats-val'>n = {points.length}</span>
+                </div>
+                {points.length >= 5 && (
+                    <div className='dm-stats-item'>
+                        <span className='dm-stats-val'>Pearson r = {fmt(r, 3)}</span>
+                    </div>
+                )}
+                {fit && (
+                    <div className='dm-stats-item'>
+                        <span className='dm-stats-val'>slope = {fmt(fit.a, 4)}</span>
+                    </div>
+                )}
+            </div>
+        </>
+    )
 }
 
-// ── BMI scatter ───────────────────────────────────────────────────────────────
-function BmiScatter({ rows, groups }) {
-    const traces = groups.map((group, gi) => {
-        const color = GROUP_COLORS[gi % GROUP_COLORS.length]
-        const pts   = rows.filter(r => r.group === group).map(r => {
-            const w = parseFloat(r.weight_kg), h = parseFloat(r.height_cm)
-            if (isNaN(w) || isNaN(h) || h <= 0) return null
-            return { h, w, bmi: w / ((h / 100) ** 2), id: r.subject_id || '' }
-        }).filter(Boolean)
+// ── Bar panel body ────────────────────────────────────────────────────────────
+function BarBody({ data, xCol, colorBy, isNumeric, label }) {
+    const { keyOf, cats } = colorCategories(data, colorBy)
+
+    if (!isNumeric) {
+        return <CategoricalCountChart data={data} xCol={xCol} keyOf={keyOf} cats={cats} />
+    }
+
+    // Numeric column: bin into quartiles and count per quartile.
+    const allVals = data.map(r => toNum(r[xCol])).filter(Number.isFinite)
+    if (!allVals.length) return <div className='dm-no-data'>No data available.</div>
+
+    const sorted = [...allVals].sort((a, b) => a - b)
+    const q1 = quantile(sorted, 0.25)
+    const q2 = quantile(sorted, 0.50)
+    const q3 = quantile(sorted, 0.75)
+
+    const binOf = v => {
+        if (v <= q1) return 0
+        if (v <= q2) return 1
+        if (v <= q3) return 2
+        return 3
+    }
+    const binLabels = [
+        `Q1 (≤ ${fmt(q1, 1)})`,
+        `Q2 (${fmt(q1, 1)}–${fmt(q2, 1)})`,
+        `Q3 (${fmt(q2, 1)}–${fmt(q3, 1)})`,
+        `Q4 (> ${fmt(q3, 1)})`,
+    ]
+
+    const traces = cats.map((cat, ci) => {
+        const counts = [0, 0, 0, 0]
+        for (const row of data) {
+            if (keyOf(row) !== cat) continue
+            const v = toNum(row[xCol])
+            if (Number.isFinite(v)) counts[binOf(v)] += 1
+        }
         return {
-            type: 'scatter', mode: 'markers', name: group,
-            x: pts.map(p => p.h), y: pts.map(p => p.w),
-            text: pts.map(p => `${p.id}<br>BMI: ${p.bmi.toFixed(1)}`),
-            hoverinfo: 'text', marker: { color, size: 8, opacity: 0.75 },
+            type: 'bar',
+            x: binLabels,
+            y: counts,
+            name: cat,
+            marker: { color: GROUP_COLORS[ci % GROUP_COLORS.length], opacity: 0.85 },
+            showlegend: cats.length > 1,
         }
     })
-    ;[{ bmi: 18.5, label: 'BMI 18.5', color: '#74b9ff' }, { bmi: 25, label: 'BMI 25', color: '#fdcb6e' }, { bmi: 30, label: 'BMI 30', color: '#e17055' }].forEach(({ bmi, label, color }) => {
-        const H = [140, 210]
-        traces.push({ type: 'scatter', mode: 'lines', name: label, x: H, y: H.map(h => bmi * ((h / 100) ** 2)), line: { color, dash: 'dot', width: 1.5 }, hoverinfo: 'name' })
-    })
+
     return (
         <Plot
             data={traces}
-            layout={{ ...LAYOUT_BASE, height: 340, legend: { orientation: 'h', y: -0.28 }, xaxis: { title: 'Height (cm)', gridcolor: '#eee', zeroline: false }, yaxis: { title: 'Weight (kg)', gridcolor: '#eee', zeroline: false } }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: '100%' }} useResizeHandler
+            layout={{
+                ...LAYOUT_BASE,
+                barmode: 'group',
+                height: 280,
+                legend: { orientation: 'h', y: -0.25 },
+                xaxis: { title: `${label} quartiles`, automargin: true, showgrid: false },
+                yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false },
+            }}
+            config={PLOT_CONFIG}
+            style={{ width: '100%' }}
+            useResizeHandler
         />
     )
 }
 
-// ── Section wrapper with collapse toggle ─────────────────────────────────────
-function SectionCard({ title, accent, children, defaultOpen = true }) {
-    const [open, setOpen] = useState(defaultOpen)
+// ── Table panel body ──────────────────────────────────────────────────────────
+const TABLE_PAGE_SIZE = 20
+
+function TableBody({ rows, presentCols, labelOf }) {
+    const [sortCol, setSortCol] = useState(null)
+    const [sortDir, setSortDir] = useState('asc')
+    const [page, setPage]       = useState(0)
+
+    const columns = useMemo(() => {
+        const base = ['subject_id', 'group']
+        return [...base, ...presentCols.filter(c => !base.includes(c))]
+    }, [presentCols])
+
+    const sortedRows = useMemo(() => {
+        if (!sortCol) return rows
+        const dir = sortDir === 'asc' ? 1 : -1
+        return [...rows].sort((a, b) => {
+            const va = a[sortCol], vb = b[sortCol]
+            const na = toNum(va), nb = toNum(vb)
+            if (Number.isFinite(na) && Number.isFinite(nb)) return (na - nb) * dir
+            return String(va ?? '').localeCompare(String(vb ?? '')) * dir
+        })
+    }, [rows, sortCol, sortDir])
+
+    const totalPages = Math.max(1, Math.ceil(sortedRows.length / TABLE_PAGE_SIZE))
+    const safePage   = Math.min(page, totalPages - 1)
+    const pageRows   = sortedRows.slice(safePage * TABLE_PAGE_SIZE, (safePage + 1) * TABLE_PAGE_SIZE)
+
+    function handleSort(col) {
+        if (sortCol === col) {
+            setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+        } else {
+            setSortCol(col)
+            setSortDir('asc')
+        }
+        setPage(0)
+    }
+
+    if (!rows.length) return <div className='dm-no-data'>No data available.</div>
+
     return (
-        <div className='dm-section-card' style={{ '--accent': accent }}>
-            <div className='dm-section-card-header' onClick={() => setOpen(v => !v)}>
-                <span className='dm-section-card-title'>{title}</span>
-                <span className='dm-section-card-arrow'>{open ? '▾' : '▸'}</span>
+        <div className='dm-table-wrap'>
+            <div className='dm-table-scroll'>
+                <table className='dm-table'>
+                    <thead>
+                        <tr>
+                            {columns.map(col => (
+                                <th key={col} onClick={() => handleSort(col)}>
+                                    {labelOf(col)}
+                                    {sortCol === col && (
+                                        <span className='dm-sort-arrow'>{sortDir === 'asc' ? ' ▲' : ' ▼'}</span>
+                                    )}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageRows.map((row, ri) => (
+                            <tr key={`${row.subject_id ?? ri}-${ri}`}>
+                                {columns.map(col => (
+                                    <td key={col}>{String(row[col] ?? '')}</td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
-            {open && <div className='dm-section-card-body'>{children}</div>}
+            <div className='dm-pager'>
+                <button
+                    className='dm-pager-btn'
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={safePage === 0}
+                >‹ Prev</button>
+                <span className='dm-pager-info'>Page {safePage + 1} of {totalPages} · {sortedRows.length} rows</span>
+                <button
+                    className='dm-pager-btn'
+                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={safePage >= totalPages - 1}
+                >Next ›</button>
+            </div>
         </div>
     )
 }
 
-const ACCENT_COLORS = {
-    completeness: '#4C6EF5',
-    demographics: '#00C896',
-    clinical:     '#EF553B',
-    acquisition:  '#AB63FA',
-    anthro:       '#FFA15A',
-    bmi:          '#19D3F3',
-    custom:       '#636EFA',
-    dtiCorr:      '#f472b6',
-    dtiScatter:   '#34d399',
-    dtiBox:       '#fb923c',
+// ── Panel card (header controls + chart body) ─────────────────────────────────
+function PanelCard({ panel, ctx, onChange, onRemove }) {
+    const {
+        rows, data, presentCols, scatterCols,
+        numericCols, colorByOptions, colTypeOf, labelOf, axisTitleOf,
+    } = ctx
+
+    // Sanitize stored config against currently available columns.
+    const xOptions = panel.type === 'scatter' ? scatterCols : presentCols
+    const xCol = xOptions.includes(panel.xCol) ? panel.xCol : (xOptions[0] ?? '')
+    const yCol = scatterCols.includes(panel.yCol) ? panel.yCol : (scatterCols[0] ?? '')
+    const colorBy = colorByOptions.includes(panel.colorBy) ? panel.colorBy : 'group'
+    const vizSubtype = VIZ_SUBTYPES.some(v => v.value === panel.vizSubtype) ? panel.vizSubtype : 'violin'
+
+    function handleTypeChange(nextType) {
+        const patch = { type: nextType }
+        if (nextType === 'scatter') {
+            if (!scatterCols.includes(panel.xCol)) patch.xCol = numericCols[0] ?? scatterCols[0] ?? ''
+            if (!scatterCols.includes(panel.yCol)) {
+                const fallback = scatterCols.find(c => c !== (patch.xCol ?? panel.xCol))
+                patch.yCol = fallback ?? scatterCols[0] ?? ''
+            }
+        } else if (nextType !== 'table') {
+            if (!presentCols.includes(panel.xCol)) patch.xCol = presentCols[0] ?? ''
+        }
+        onChange(patch)
+    }
+
+    function renderBody() {
+        if (panel.type === 'table') {
+            return <TableBody rows={rows} presentCols={presentCols} labelOf={labelOf} />
+        }
+        if (!xCol) return <div className='dm-no-data'>No columns available.</div>
+
+        if (panel.type === 'scatter') {
+            if (!yCol) return <div className='dm-no-data'>No Y column available.</div>
+            return (
+                <ScatterBody
+                    data={data}
+                    xCol={xCol}
+                    yCol={yCol}
+                    colorBy={colorBy}
+                    xTitle={axisTitleOf(xCol)}
+                    yTitle={axisTitleOf(yCol)}
+                />
+            )
+        }
+        if (panel.type === 'bar') {
+            return (
+                <BarBody
+                    data={data}
+                    xCol={xCol}
+                    colorBy={colorBy}
+                    isNumeric={colTypeOf(xCol) === 'numeric'}
+                    label={labelOf(xCol)}
+                />
+            )
+        }
+        // distribution
+        return (
+            <DistributionBody
+                data={data}
+                xCol={xCol}
+                colorBy={colorBy}
+                vizSubtype={vizSubtype}
+                isNumeric={colTypeOf(xCol) === 'numeric'}
+                axisTitle={axisTitleOf(xCol)}
+            />
+        )
+    }
+
+    const isFull = panel.width === 'full'
+
+    return (
+        <div className={`dm-panel${isFull ? ' dm-panel--full' : ''}`}>
+            <div className='dm-panel-header'>
+                <div className='dm-panel-controls'>
+                    <select
+                        className='dm-select'
+                        title='Panel type'
+                        value={panel.type}
+                        onChange={e => handleTypeChange(e.target.value)}
+                    >
+                        {PANEL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+
+                    {panel.type !== 'table' && (
+                        <select
+                            className='dm-select'
+                            title={panel.type === 'scatter' ? 'X axis column' : 'Column'}
+                            value={xCol}
+                            onChange={e => onChange({ xCol: e.target.value })}
+                        >
+                            {xOptions.map(c => <option key={c} value={c}>{labelOf(c)}</option>)}
+                        </select>
+                    )}
+
+                    {panel.type === 'scatter' && (
+                        <select
+                            className='dm-select'
+                            title='Y axis column'
+                            value={yCol}
+                            onChange={e => onChange({ yCol: e.target.value })}
+                        >
+                            {scatterCols.map(c => <option key={c} value={c}>{labelOf(c)}</option>)}
+                        </select>
+                    )}
+
+                    {panel.type === 'distribution' && (
+                        <select
+                            className='dm-select'
+                            title='Visualization'
+                            value={vizSubtype}
+                            onChange={e => onChange({ vizSubtype: e.target.value })}
+                        >
+                            {VIZ_SUBTYPES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                        </select>
+                    )}
+
+                    {panel.type !== 'table' && (
+                        <select
+                            className='dm-select'
+                            title='Color by'
+                            value={colorBy}
+                            onChange={e => onChange({ colorBy: e.target.value })}
+                        >
+                            {colorByOptions.map(c => (
+                                <option key={c} value={c}>
+                                    {c === 'group' ? 'Color: group' : `Color: ${labelOf(c)}`}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+
+                    <button
+                        className='dm-width-btn'
+                        title={isFull ? 'Make half width' : 'Make full width'}
+                        onClick={() => onChange({ width: isFull ? 'half' : 'full' })}
+                    >
+                        {isFull ? '⊟' : '⊞'}
+                    </button>
+                </div>
+                <button className='dm-close-btn' title='Remove panel' onClick={onRemove}>×</button>
+            </div>
+            <div className='dm-panel-body'>
+                {renderBody()}
+            </div>
+        </div>
+    )
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
-    const [showCustomize, setShowCustomize] = useState(false)
-    const [reloading,     setReloading]     = useState(false)
-    const [dtiMethod,     setDtiMethod]     = useState('ROQS_scalar')
-    const [dtiScalar,     setDtiScalar]     = useState('FA')
-    const [scatterVarSel, setScatterVarSel] = useState(null)
-    const [boxVarSel,     setBoxVarSel]     = useState(null)
+    const [reloading, setReloading] = useState(false)
 
-    // Prefs: sections toggle, display order, custom column configs
-    const [prefs, setPrefs] = useState(() => {
+    const groups = useMemo(
+        () => [...new Set(rows.map(r => r.group).filter(Boolean))],
+        [rows]
+    )
+
+    // ── Cross-matching with analyzed subjects ─────────────────────────────────
+    const subjectById = useMemo(
+        () => new Map(subjects.map(s => [normId(s.Id), s])),
+        [subjects]
+    )
+    const hasMatches = useMemo(
+        () => rows.some(r => subjectById.has(normId(r.subject_id))),
+        [rows, subjectById]
+    )
+
+    // DTI columns: only expose method×scalar combos with at least one non-null
+    // value among matched subjects.
+    const dtiCols = useMemo(() => {
+        if (!hasMatches) return []
+        const cols = []
+        for (const method of DTI_METHODS) {
+            for (const scalar of DTI_SCALARS) {
+                const hasValue = rows.some(r => {
+                    const sub = subjectById.get(normId(r.subject_id))
+                    const raw = sub?.[method.key]?.[scalar]
+                    const v = typeof raw === 'number' ? raw : toNum(raw)
+                    return Number.isFinite(v)
+                })
+                if (hasValue) cols.push(`${method.label}_${scalar}`)
+            }
+        }
+        return cols
+    }, [rows, subjectById, hasMatches])
+
+    // Enriched rows: demographic columns + flattened DTI values.
+    const data = useMemo(() => rows.map(r => {
+        const sub = subjectById.get(normId(r.subject_id))
+        const enriched = { ...r }
+        for (const col of dtiCols) {
+            const { methodKey, scalar } = parseDtiCol(col)
+            const raw = sub?.[methodKey]?.[scalar]
+            enriched[col] = typeof raw === 'number' ? raw : toNum(raw)
+        }
+        return enriched
+    }), [rows, subjectById, dtiCols])
+
+    // ── Column typing / labeling ──────────────────────────────────────────────
+    const colTypeOf = useCallback(col => {
+        if (parseDtiCol(col)) return 'numeric'
+        const meta = COL_META[col]
+        if (meta) return meta.type
+        return autoDetectType(rows, col)
+    }, [rows])
+
+    const labelOf = useCallback(col => {
+        const dti = parseDtiCol(col)
+        if (dti) return dti.label
+        if (col === 'subject_id') return 'Subject ID'
+        if (col === 'group') return 'Group'
+        return COL_META[col]?.label || col
+    }, [])
+
+    const axisTitleOf = useCallback(col => {
+        const unit = COL_META[col]?.unit
+        return unit ? `${labelOf(col)} (${unit})` : labelOf(col)
+    }, [labelOf])
+
+    const numericCols     = useMemo(() => presentCols.filter(c => colTypeOf(c) === 'numeric'),     [presentCols, colTypeOf])
+    const categoricalCols = useMemo(() => presentCols.filter(c => colTypeOf(c) === 'categorical'), [presentCols, colTypeOf])
+    const colorByOptions  = useMemo(() => ['group', ...categoricalCols],                            [categoricalCols])
+    const scatterCols     = useMemo(() => [...presentCols, ...dtiCols],                             [presentCols, dtiCols])
+
+    // ── Panel state (persisted) ───────────────────────────────────────────────
+    const defaultPanels = useMemo(() => {
+        const panels = []
+        if (numericCols.length) {
+            panels.push({
+                id: makeId(), type: 'distribution', xCol: numericCols[0],
+                yCol: '', colorBy: 'group', vizSubtype: 'violin', width: 'half',
+            })
+        }
+        if (categoricalCols.length) {
+            panels.push({
+                id: makeId(), type: 'bar', xCol: categoricalCols[0],
+                yCol: '', colorBy: 'group', vizSubtype: 'violin', width: 'half',
+            })
+        }
+        return panels
+    }, [numericCols, categoricalCols])
+
+    const [charts, setCharts] = useState(() => {
         try {
             const raw = localStorage.getItem(STORAGE_KEY)
-            if (raw) return { sections: {}, order: [], customCols: {}, ...JSON.parse(raw) }
+            if (raw) {
+                const parsed = JSON.parse(raw)
+                if (Array.isArray(parsed)) return parsed
+            }
         } catch (_) {}
-        return { sections: {}, order: [], customCols: {} }
+        return null
     })
+
+    const panels = charts !== null ? charts : defaultPanels
+
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)) } catch (_) {}
-    }, [prefs])
+        if (charts === null) return
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(charts)) } catch (_) {}
+    }, [charts])
 
-    // Section order — stored order + any default keys not yet in it
-    const sectionOrder = useMemo(() => {
-        const stored = prefs.order || []
-        return [...stored, ...DEFAULT_ORDER.filter(k => !stored.includes(k))]
-    }, [prefs.order])
+    const updatePanel = useCallback((id, patch) => {
+        setCharts(panels.map(p => (p.id === id ? { ...p, ...patch } : p)))
+    }, [panels])
 
-    const moveSection = useCallback((key, dir) => {
-        setPrefs(p => {
-            const order = [...sectionOrder]
-            const idx = order.indexOf(key)
-            if (idx < 0) return p
-            const ni = idx + dir
-            if (ni < 0 || ni >= order.length) return p
-            ;[order[idx], order[ni]] = [order[ni], order[idx]]
-            return { ...p, order }
-        })
-    }, [sectionOrder])
+    const removePanel = useCallback(id => {
+        setCharts(panels.filter(p => p.id !== id))
+    }, [panels])
 
-    const sectionOn  = key => prefs.sections[key] !== false
-    const toggleSection = key => setPrefs(p => ({
-        ...p, sections: { ...p.sections, [key]: p.sections[key] === false },
-    }))
-
-    // Unknown columns
-    const unknownCols = useMemo(
-        () => presentCols.filter(c => !COL_META[c]),
-        [presentCols]
-    )
-    const getCustomCfg = col => prefs.customCols?.[col] ?? { enabled: false, vizType: autoVizType(rows, col) }
-    const setCustomCfg = (col, patch) => setPrefs(p => ({
-        ...p, customCols: { ...(p.customCols || {}), [col]: { ...getCustomCfg(col), ...patch } },
-    }))
+    const addPanel = useCallback(() => {
+        const xCol = numericCols[0] ?? presentCols[0] ?? ''
+        setCharts([
+            ...panels,
+            {
+                id: makeId(), type: 'distribution', xCol,
+                yCol: '', colorBy: 'group', vizSubtype: 'violin', width: 'half',
+            },
+        ])
+    }, [panels, numericCols, presentCols])
 
     function handleReload() {
         setReloading(true)
         Promise.resolve(onReload?.()).finally(() => setReloading(false))
     }
 
-    const groups = useMemo(() => [...new Set(rows.map(r => r.group).filter(Boolean))], [rows])
-    const n = rows.length
-
-    const completeness = useMemo(() => presentCols.map(col => {
-        const present = rows.filter(r => r[col] !== undefined && r[col] !== '').length
-        return { col, present, total: n, pct: n ? Math.round(present / n * 100) : 0 }
-    }), [rows, presentCols, n])
-
-    const avgCompleteness = completeness.length
-        ? Math.round(completeness.reduce((s, c) => s + c.pct, 0) / completeness.length) : 0
-
-    const hasBmi = presentCols.includes('weight_kg') && presentCols.includes('height_cm')
-
-    // Cross-DTI
-    const matched = useMemo(() => {
-        if (!subjects?.length) return []
-        const byId = new Map(subjects.map(s => [normId(s.Id), s]))
-        return rows.map(r => ({ row: r, subject: byId.get(normId(r.subject_id)) })).filter(m => m.subject)
-    }, [rows, subjects])
-
-    const dtiNumericBase    = presentCols.filter(c => COL_META[c]?.type === 'numeric')
-    const dtiNumericCols    = hasBmi ? [...dtiNumericBase, '_bmi'] : dtiNumericBase
-    const dtiCategoricalCols = presentCols.filter(c => COL_META[c]?.type === 'categorical')
-    const colLabel = c => c === '_bmi' ? 'BMI (derived)' : (COL_META[c]?.label || c)
-    const getNumeric = (row, col) => {
-        if (col === '_bmi') { const w = parseFloat(row.weight_kg), h = parseFloat(row.height_cm); return (isNaN(w) || isNaN(h) || h <= 0) ? NaN : w / ((h / 100) ** 2) }
-        return toNum(row[col])
-    }
-    const dtiValue = sub => { const v = sub?.[dtiMethod]?.[dtiScalar]; return typeof v === 'number' ? v : toNum(v) }
-    const dtiMethodLabel = DTI_METHODS.find(m => m.key === dtiMethod)?.label || dtiMethod
-
-    const scatterVar = (scatterVarSel && dtiNumericCols.includes(scatterVarSel)) ? scatterVarSel : (dtiNumericCols[0] ?? null)
-    const boxVar     = (boxVarSel && dtiCategoricalCols.includes(boxVarSel))     ? boxVarSel     : (dtiCategoricalCols[0] ?? null)
-
-    const corrMatrix = dtiNumericCols.map(dc =>
-        DTI_SCALARS.map(sc => pearson(
-            matched.map(m => [getNumeric(m.row, dc), m.subject?.[dtiMethod]?.[sc] ?? toNum(m.subject?.[dtiMethod]?.[sc])])
-                   .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
-        ))
-    )
-
-    const scatterPairs = scatterVar
-        ? matched.map(m => ({ x: getNumeric(m.row, scatterVar), y: dtiValue(m.subject), id: m.row.subject_id || m.subject.Id, group: m.row.group || m.subject.group || '—' })).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
-        : []
-    const scatterFit    = linfit(scatterPairs.map(p => [p.x, p.y]))
-    const scatterR      = pearson(scatterPairs.map(p => [p.x, p.y]))
-    const scatterGroups = [...new Set(scatterPairs.map(p => p.group))]
-
-    const boxCats = boxVar ? [...new Set(matched.map(m => String(m.row[boxVar] ?? '').trim()).filter(v => v !== ''))] : []
-    const showDtiControls = matched.length > 0 && (sectionOn('dtiCorr') || sectionOn('dtiScatter') || sectionOn('dtiBox'))
-
-    // ── Render a known chart ──────────────────────────────────────────────────
-    function renderKnownChart(col) {
-        const meta = COL_META[col]
-        if (!meta) return null
-        if (meta.type === 'numeric')     return <NumericChart     rows={rows} col={col} groups={groups} unit={meta.unit} />
-        if (meta.type === 'categorical') return <CategoricalChart rows={rows} col={col} groups={groups} />
-        if (meta.type === 'date')        return <DateChart        rows={rows} col={col} groups={groups} />
-        return null
-    }
-
-    // ── Render a section by key ───────────────────────────────────────────────
-    function renderSection(key) {
-        if (!sectionOn(key)) return null
-        const accent = ACCENT_COLORS[key] || '#4C6EF5'
-
-        // ── Known chart sections ────────────────────────────────────────────
-        const known = SECTIONS_KNOWN.find(s => s.id === key)
-        if (known) {
-            const activeCols = known.cols.filter(c => presentCols.includes(c))
-            if (!activeCols.length) return null
-            return (
-                <SectionCard key={key} title={known.title} accent={accent}>
-                    <div className='dm-charts-grid'>
-                        {activeCols.map(col => {
-                            const meta = COL_META[col]
-                            const full = isFullWidth(col, rows) || activeCols.length === 1
-                            return (
-                                <div key={col} className={`dm-chart-card${full ? ' dm-chart-card--full' : ''}`}>
-                                    <span className='dm-chart-title'>
-                                        {meta?.label || col}
-                                        {meta?.unit && <span className='dm-chart-unit'> ({meta.unit})</span>}
-                                    </span>
-                                    {renderKnownChart(col)}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </SectionCard>
-            )
-        }
-
-        // ── Special sections ────────────────────────────────────────────────
-        if (key === 'completeness') {
-            return (
-                <SectionCard key='completeness' title='Data Completeness' accent={accent}>
-                    <div className='dm-completeness-grid'>
-                        {completeness.map(({ col, present, total, pct }) => (
-                            <div key={col} className='dm-completeness-row'>
-                                <span className='dm-col-label'>{COL_META[col]?.label || col}</span>
-                                <div className='dm-bar-track'>
-                                    <div className='dm-bar-fill' style={{
-                                        width: `${pct}%`,
-                                        background: pct >= 80 ? '#4C6EF5' : pct >= 50 ? '#FFA15A' : '#EF553B',
-                                    }} />
-                                </div>
-                                <span className='dm-col-pct' style={{ color: pct >= 80 ? '#4C6EF5' : pct >= 50 ? '#FFA15A' : '#EF553B' }}>{pct}%</span>
-                                <span className='dm-col-count'>{present}/{total}</span>
-                            </div>
-                        ))}
-                    </div>
-                </SectionCard>
-            )
-        }
-
-        if (key === 'bmi' && hasBmi) {
-            return (
-                <SectionCard key='bmi' title='Body Composition' accent={accent}>
-                    <div className='dm-charts-grid'>
-                        <div className='dm-chart-card dm-chart-card--full'>
-                            <span className='dm-chart-title'>Weight × Height with BMI iso-lines</span>
-                            <BmiScatter rows={rows} groups={groups} />
-                        </div>
-                    </div>
-                </SectionCard>
-            )
-        }
-
-        if (key === 'custom') {
-            const enabledCols = unknownCols.filter(c => getCustomCfg(c).enabled)
-            if (!enabledCols.length) return null
-            return (
-                <SectionCard key='custom' title='Custom Columns' accent={accent}>
-                    <div className='dm-charts-grid'>
-                        {enabledCols.map(col => {
-                            const cfg = getCustomCfg(col)
-                            return (
-                                <div key={col} className='dm-chart-card'>
-                                    <span className='dm-chart-title'>{col}</span>
-                                    <CustomColChart rows={rows} col={col} groups={groups} vizType={cfg.vizType} />
-                                </div>
-                            )
-                        })}
-                    </div>
-                </SectionCard>
-            )
-        }
-
-        if (key === 'dtiCorr' && matched.length >= 2 && dtiNumericCols.length > 0) {
-            return (
-                <SectionCard key='dtiCorr' title={`Correlation — Demographics × DTI (${dtiMethodLabel})`} accent={accent}>
-                    <div className='dm-chart-card dm-chart-card--full'>
-                        <Plot
-                            data={[{ type: 'heatmap', z: corrMatrix, x: DTI_SCALARS, y: dtiNumericCols.map(colLabel), zmin: -1, zmax: 1, colorscale: 'RdBu', reversescale: true, text: corrMatrix.map(row => row.map(v => fmt(v, 2))), texttemplate: '%{text}', textfont: { size: 11 } }]}
-                            layout={{ ...LAYOUT_BASE, height: 90 + dtiNumericCols.length * 44, margin: { t: 10, b: 50, l: 150, r: 30 }, xaxis: { side: 'bottom' }, yaxis: { automargin: true } }}
-                            config={{ displayModeBar: false, responsive: true }}
-                            style={{ width: '100%', maxWidth: 680 }} useResizeHandler
-                        />
-                    </div>
-                </SectionCard>
-            )
-        }
-
-        if (key === 'dtiScatter' && matched.length > 0 && dtiNumericCols.length > 0) {
-            return (
-                <SectionCard key='dtiScatter' title={`Demographics × ${dtiScalar} (${dtiMethodLabel})`} accent={accent}>
-                    <div className='dm-section-head' style={{ padding: '0 0 12px' }}>
-                        <select className='dm-select' value={scatterVar || ''} onChange={e => setScatterVarSel(e.target.value)}>
-                            {dtiNumericCols.map(c => <option key={c} value={c}>{colLabel(c)}</option>)}
-                        </select>
-                    </div>
-                    {scatterPairs.length >= 2 ? (
-                        <div className='dm-chart-card dm-chart-card--full'>
-                            <Plot
-                                data={[
-                                    ...scatterGroups.map((g, gi) => {
-                                        const pts = scatterPairs.filter(p => p.group === g)
-                                        return { type: 'scatter', mode: 'markers', name: g, x: pts.map(p => p.x), y: pts.map(p => p.y), text: pts.map(p => p.id), marker: { size: 9, color: GROUP_COLORS[gi % GROUP_COLORS.length], opacity: 0.85 } }
-                                    }),
-                                    ...(scatterFit ? [{ type: 'scatter', mode: 'lines', name: 'linear fit', x: [Math.min(...scatterPairs.map(p => p.x)), Math.max(...scatterPairs.map(p => p.x))], y: [Math.min(...scatterPairs.map(p => p.x)), Math.max(...scatterPairs.map(p => p.x))].map(x => scatterFit.a * x + scatterFit.b), line: { color: '#1F2C56', dash: 'dash', width: 2 }, hoverinfo: 'skip' }] : []),
-                                ]}
-                                layout={{ ...LAYOUT_BASE, height: 360, margin: { t: 16, b: 56, l: 60, r: 16 }, xaxis: { title: colLabel(scatterVar), gridcolor: '#eee' }, yaxis: { title: `${dtiScalar} (${dtiMethodLabel})`, gridcolor: '#eee' }, showlegend: scatterGroups.length > 1, legend: { orientation: 'h', y: -0.18 } }}
-                                config={{ displayModeBar: false, responsive: true }}
-                                style={{ width: '100%' }} useResizeHandler
-                            />
-                            <div className='dm-scatter-stats'>
-                                <span>n = {scatterPairs.length}</span>
-                                <span>Pearson r = {fmt(scatterR, 3)}</span>
-                                {scatterFit && <span>slope = {fmt(scatterFit.a, 4)}</span>}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className='dm-no-data'>Not enough matched subjects with both values.</div>
-                    )}
-                </SectionCard>
-            )
-        }
-
-        if (key === 'dtiBox' && matched.length > 0 && dtiCategoricalCols.length > 0) {
-            return (
-                <SectionCard key='dtiBox' title={`${dtiScalar} (${dtiMethodLabel}) by Category`} accent={accent}>
-                    <div className='dm-section-head' style={{ padding: '0 0 12px' }}>
-                        <select className='dm-select' value={boxVar || ''} onChange={e => setBoxVarSel(e.target.value)}>
-                            {dtiCategoricalCols.map(c => <option key={c} value={c}>{colLabel(c)}</option>)}
-                        </select>
-                    </div>
-                    {boxCats.length > 0 ? (
-                        <div className='dm-chart-card dm-chart-card--full'>
-                            <Plot
-                                data={boxCats.map((cat, ci) => {
-                                    const ys = matched.filter(m => String(m.row[boxVar] ?? '').trim() === cat).map(m => dtiValue(m.subject)).filter(Number.isFinite)
-                                    return { type: 'box', name: cat, y: ys, boxmean: 'sd', boxpoints: 'all', jitter: 0.4, pointpos: 0, marker: { color: GROUP_COLORS[ci % GROUP_COLORS.length] } }
-                                })}
-                                layout={{ ...LAYOUT_BASE, height: 340, margin: { t: 16, b: 50, l: 60, r: 16 }, xaxis: { title: colLabel(boxVar) }, yaxis: { title: `${dtiScalar} (${dtiMethodLabel})`, gridcolor: '#eee' }, showlegend: false }}
-                                config={{ displayModeBar: false, responsive: true }}
-                                style={{ width: '100%' }} useResizeHandler
-                            />
-                        </div>
-                    ) : (
-                        <div className='dm-no-data'>No matched subjects have this category filled in.</div>
-                    )}
-                </SectionCard>
-            )
-        }
-
-        return null
+    const ctx = {
+        rows, data, presentCols, dtiCols, scatterCols,
+        numericCols, categoricalCols, colorByOptions,
+        colTypeOf, labelOf, axisTitleOf,
     }
 
     // ── UI ────────────────────────────────────────────────────────────────────
@@ -645,131 +827,37 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
             <div className='dm-header'>
                 <div className='dm-header-left'>
                     <span className='dm-title'>Demographics</span>
-                    <span className='dm-subtitle'>{n} subjects · {presentCols.length} variables · {groups.length} group{groups.length !== 1 ? 's' : ''}</span>
+                    <span className='dm-subtitle'>
+                        {rows.length} subjects · {presentCols.length} variables · {groups.length} group{groups.length !== 1 ? 's' : ''}
+                    </span>
                 </div>
-                <div className='dm-header-actions'>
-                    <button className={`dm-action-btn${showCustomize ? ' active' : ''}`} onClick={() => setShowCustomize(v => !v)}>
-                        ⚙ Customize
-                    </button>
-                    <button className='dm-action-btn' onClick={handleReload} disabled={reloading}>
-                        ↻ {reloading ? 'Reloading…' : 'Reload'}
-                    </button>
-                </div>
+                <button className='dm-reload-btn' onClick={handleReload} disabled={reloading}>
+                    ↻ {reloading ? 'Reloading…' : 'Reload'}
+                </button>
             </div>
 
-            {/* Customize panel */}
-            {showCustomize && (
-                <div className='dm-customize-panel'>
-                    <div className='dm-customize-col'>
-                        <span className='dm-customize-group-title'>Sections</span>
-                        <div className='dm-section-list'>
-                            {sectionOrder.map((key, idx) => (
-                                <div key={key} className={`dm-section-row${sectionOn(key) ? ' on' : ''}`}>
-                                    <div className='dm-reorder-btns'>
-                                        <button className='dm-reorder-btn' onClick={() => moveSection(key, -1)} disabled={idx === 0} title='Move up'>↑</button>
-                                        <button className='dm-reorder-btn' onClick={() => moveSection(key, 1)} disabled={idx === sectionOrder.length - 1} title='Move down'>↓</button>
-                                    </div>
-                                    <button className={`dm-section-toggle-btn${sectionOn(key) ? ' on' : ''}`} onClick={() => toggleSection(key)}>
-                                        <span className='dm-toggle-dot' />
-                                        {SECTION_LABELS[key] || key}
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+            {/* Panels */}
+            {rows.length === 0 ? (
+                <div className='dm-no-data'>No demographic data loaded.</div>
+            ) : (
+                <>
+                    <div className='dm-grid'>
+                        {panels.map(panel => (
+                            <PanelCard
+                                key={panel.id}
+                                panel={panel}
+                                ctx={ctx}
+                                onChange={patch => updatePanel(panel.id, patch)}
+                                onRemove={() => removePanel(panel.id)}
+                            />
+                        ))}
                     </div>
 
-                    {unknownCols.length > 0 && (
-                        <div className='dm-customize-col'>
-                            <span className='dm-customize-group-title'>Custom Columns
-                                <span className='dm-customize-hint'>columns not recognized — configure below</span>
-                            </span>
-                            <div className='dm-custom-cols-list'>
-                                {unknownCols.map(col => {
-                                    const cfg = getCustomCfg(col)
-                                    return (
-                                        <div key={col} className={`dm-custom-col-row${cfg.enabled ? ' on' : ''}`}>
-                                            <button className={`dm-section-toggle-btn${cfg.enabled ? ' on' : ''}`} onClick={() => setCustomCfg(col, { enabled: !cfg.enabled })}>
-                                                <span className='dm-toggle-dot' />
-                                                <code className='dm-col-code'>{col}</code>
-                                            </button>
-                                            {cfg.enabled && (
-                                                <div className='dm-viz-selector'>
-                                                    <span className='dm-viz-label'>Viz:</span>
-                                                    {['violin', 'box', 'bar', 'histogram'].map(vt => (
-                                                        <button
-                                                            key={vt}
-                                                            className={`dm-viz-pill${cfg.vizType === vt ? ' active' : ''}`}
-                                                            onClick={() => setCustomCfg(col, { vizType: vt })}
-                                                        >{vt}</button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* KPI Row */}
-            <div className='dm-kpi-row'>
-                {[
-                    { val: n,                   label: 'Subjects',           accent: '#4C6EF5', icon: '👥' },
-                    { val: groups.length,        label: 'Groups',             accent: '#00C896', icon: '⬡'  },
-                    { val: presentCols.length,   label: 'Variables',          accent: '#AB63FA', icon: '⚙'  },
-                    { val: `${avgCompleteness}%`, label: 'Avg Completeness',   accent: avgCompleteness >= 80 ? '#4C6EF5' : avgCompleteness >= 50 ? '#FFA15A' : '#EF553B', icon: '✓' },
-                ].map(({ val, label, accent, icon }) => (
-                    <div key={label} className='dm-kpi-card' style={{ '--kpi-accent': accent }}>
-                        <span className='dm-kpi-icon'>{icon}</span>
-                        <span className='dm-kpi-val'>{val}</span>
-                        <span className='dm-kpi-label'>{label}</span>
+                    <div className='dm-add-wrap'>
+                        <button className='dm-add-btn' onClick={addPanel}>+ Add Chart</button>
                     </div>
-                ))}
-            </div>
-
-            {/* Group legend */}
-            {groups.length > 1 && (
-                <div className='dm-legend'>
-                    {groups.map((g, i) => (
-                        <div key={g} className='dm-legend-item'>
-                            <span className='dm-dot' style={{ background: GROUP_COLORS[i % GROUP_COLORS.length] }} />
-                            {g}
-                        </div>
-                    ))}
-                </div>
+                </>
             )}
-
-            {/* DTI shared controls */}
-            {showDtiControls && (
-                <div className='dm-dti-controls'>
-                    <div className='dm-picker'>
-                        <label>DTI Method</label>
-                        <div className='dm-pills'>
-                            {DTI_METHODS.map(m => <button key={m.key} className={`dm-pill${dtiMethod === m.key ? ' active' : ''}`} onClick={() => setDtiMethod(m.key)}>{m.label}</button>)}
-                        </div>
-                    </div>
-                    <div className='dm-picker'>
-                        <label>Scalar</label>
-                        <div className='dm-pills'>
-                            {DTI_SCALARS.map(s => <button key={s} className={`dm-pill${dtiScalar === s ? ' active' : ''}`} onClick={() => setDtiScalar(s)}>{s}</button>)}
-                        </div>
-                    </div>
-                    <span className='dm-matched-count'>{matched.length} of {rows.length} matched</span>
-                </div>
-            )}
-
-            {/* Cross-DTI no-match warning */}
-            {subjects.length > 0 && rows.length > 0 && matched.length === 0 &&
-             (sectionOn('dtiCorr') || sectionOn('dtiScatter') || sectionOn('dtiBox')) && (
-                <div className='dm-no-data'>
-                    Cross-DTI sections need a <code>subject_id</code> column in demograph.csv matching the analyzed subjects.
-                </div>
-            )}
-
-            {/* Sections in user-defined order */}
-            {sectionOrder.map(key => renderSection(key))}
 
         </div>
     )

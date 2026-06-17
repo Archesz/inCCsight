@@ -501,16 +501,17 @@ def get_segm(data_paths):
 
             except Exception as e_w:
                 import traceback as _tb
-                print(f"  [WARN] Watershed falhou para {sub}, usando ROQS como fallback: {e_w}")
+                print(f"  [WARN] Watershed falhou para {sub}: {e_w}")
                 _tb.print_exc()
-                # Fallback: copy ROQS values so the subject still appears in Watershed CSVs
-                w_meanFAList.append(scalar_statistics[0]); w_stdFAList.append(scalar_statistics[1])
-                w_meanMDList.append(scalar_statistics[2]); w_stdMDList.append(scalar_statistics[3])
-                w_meanRDList.append(scalar_statistics[4]); w_stdRDList.append(scalar_statistics[5])
-                w_meanADList.append(scalar_statistics[6]); w_stdADList.append(scalar_statistics[7])
-                w_midlinesList.append(roqs_midlines)
-                w_thicknessList.append(thickness_200)
-                w_parcellationStatsList.append(parc_row)
+                # Watershed failed — store empty sentinel values so the subject
+                # still appears in the CSVs but with null/empty Watershed fields.
+                w_meanFAList.append(None); w_stdFAList.append(None)
+                w_meanMDList.append(None); w_stdMDList.append(None)
+                w_meanRDList.append(None); w_stdRDList.append(None)
+                w_meanADList.append(None); w_stdADList.append(None)
+                w_midlinesList.append({'FA': '[]', 'MD': '[]', 'RD': '[]', 'AD': '[]', 'y': '[]'})
+                w_thicknessList.append([None] * 200)
+                w_parcellationStatsList.append({})
 
             sub_data = {
                 "name":    sub,

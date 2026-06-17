@@ -158,7 +158,7 @@ function View({ type }) {
                         if (msg.done && !navigated) {
                             navigated = true
                             if (msg.code === 0) {
-                                navigate('/Home')
+                                navigate('/Home', { state: { initialTab: 'qc' } })
                             } else {
                                 appendLog('\n✖ Pipeline finished with errors. Check the log above.\n')
                                 const screen = document.querySelector('#loading-screen')

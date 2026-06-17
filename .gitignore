@@ -21,10 +21,8 @@ methods/csvs/groups.json
 methods/csvs/mydata.json
 methods/csvs/removed_subjects.json
 
-# Large model weights (use LFS or external storage)
-*.pth
-*.pt
-*.ckpt
+# Large model weights — tracked via Git LFS (see .gitattributes)
+# *.pth, *.pt, *.ckpt are tracked by LFS, not ignored
 *.h5
 
 # OS

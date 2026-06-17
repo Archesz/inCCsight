@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate }  from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import logo    from '../assets/images/inccsight.png'
 
 import View                  from '../components/View/View'
@@ -58,7 +58,8 @@ function DemographNoData({ subjects, allGroups, onReload }) {
 }
 
 function Home() {
-    const navigate = useNavigate()
+    const navigate  = useNavigate()
+    const location  = useLocation()
 
     const [allSubjects,  setAllSubjects]  = useState([])
     const [data,         setData]         = useState([])
@@ -66,7 +67,7 @@ function Home() {
     const [groupColor,   setGroupColor]   = useState({})
     const [search,       setSearch]       = useState('')
     const [groupFilter,  setGroupFilter]  = useState('')
-    const [activeTab,    setActiveTab]    = useState('2D')
+    const [activeTab,    setActiveTab]    = useState(location.state?.initialTab || '2D')
     const [selectedId,   setSelectedId]   = useState(null)
     const [qcFilter,     setQcFilter]     = useState(false)
     const [loading,      setLoading]      = useState(true)
@@ -189,13 +190,13 @@ function Home() {
 
                 <div className='topbar-tabs'>
                     {[
+                        { id: 'qc',      label: 'Quality Control'  },
                         { id: '2D',      label: '2D Segmentation'  },
                         { id: '3D',      label: '3D Volumetric'    },
                         ...(allGroups.length >= 2
                             ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
                             : []),
                         { id: 'demograph', label: 'Demographics' },
-                        { id: 'qc', label: 'Quality Control' },
                     ].map(tab => (
                         <button
                             key={tab.id}

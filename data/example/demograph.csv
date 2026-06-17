@@ -1,0 +1,4 @@
+subject_id,age,sex,ethnicity,diagnosis,disease_duration,medication,scanner,field_strength,acquisition_date,weight_kg,height_cm
+000117,28,F,White,Healthy Control,,None,Siemens Prisma,3T,2021-03-15,62,168
+000251,34,M,Hispanic,Healthy Control,,None,Siemens Prisma,3T,2021-03-17,80,175
+000530,41,F,Black,Healthy Control,,None,Siemens Prisma,3T,2021-04-02,70,162

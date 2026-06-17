@@ -20,6 +20,23 @@ if errorlevel 1 (
 for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PY_VER=%%v
 echo   Python %PY_VER% found.
 
+:: Warn on Python 3.13+ — numpy/numba may lack pre-built wheels for very new versions
+for /f %%m in ('python -c "import sys; print(sys.version_info.minor)"') do set PY_MINOR=%%m
+for /f %%M in ('python -c "import sys; print(sys.version_info.major)"') do set PY_MAJOR=%%M
+if %PY_MAJOR% EQU 3 (
+    if %PY_MINOR% GEQ 13 (
+        echo.
+        echo   WARNING: Python %PY_VER% detected.
+        echo   Some packages ^(numpy, numba^) may not have pre-built wheels for
+        echo   Python 3.13+ and require a C compiler to build from source.
+        echo   Recommended: Python 3.10, 3.11, or 3.12.
+        echo   Download: https://www.python.org/downloads/
+        echo.
+        set /p CONT="   Continue anyway? [y/N]: "
+        if /i not "!CONT!"=="y" ( echo Aborted. & pause & exit /b 1 )
+    )
+)
+
 :: ── Create Python venv ────────────────────────────────────────────────────────
 echo.
 echo [2/5] Creating Python virtual environment...

@@ -311,6 +311,7 @@ export default function QualityControl({ allSubjects, onReload }) {
     const [scalar,     setScalar]     = useState('FA')
     const [zThresh,    setZThresh]    = useState(2.0)
     const [perGroup,   setPerGroup]   = useState(false)
+    const [cols,       setCols]       = useState(0)         // 0 = auto-fill
     const [selected,   setSelected]   = useState(new Set())
     const [loading,    setLoading]    = useState(false)
 
@@ -370,6 +371,10 @@ export default function QualityControl({ allSubjects, onReload }) {
     const handleRemove       = () => _post('/api/remove-subjects',  [...selected])
     const handleRestoreAll   = () => _post('/api/restore-subjects', removedSubjects.map(s => s['Id']))
     const handleRestoreOne   = id => _post('/api/restore-subjects', [id])
+
+    const gridStyle = cols > 0
+        ? { gridTemplateColumns: `repeat(${cols}, 1fr)` }
+        : {}
 
     // ── render ────────────────────────────────────────────────────────────────
 
@@ -450,6 +455,28 @@ export default function QualityControl({ allSubjects, onReload }) {
                             />
                             Z-score per group
                         </label>
+                    </div>
+
+                    <div className='qcc-group'>
+                        <span className='qcc-label'>
+                            Columns: <strong>{cols === 0 ? 'Auto' : cols}</strong>
+                        </span>
+                        <div className='qcc-cols-control'>
+                            <input
+                                type='range' min='1' max='8' step='1'
+                                value={cols === 0 ? 4 : cols}
+                                disabled={cols === 0}
+                                onChange={e => setCols(+e.target.value)}
+                                className='qcc-slider'
+                            />
+                            <button
+                                className={`qcc-auto-btn${cols === 0 ? ' active' : ''}`}
+                                onClick={() => setCols(v => v === 0 ? 4 : 0)}
+                                title='Auto-fill based on card width'
+                            >
+                                Auto
+                            </button>
+                        </div>
                     </div>
                 </>}
 
@@ -553,7 +580,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                                 Flagged — {flaggedActive.length} subject{flaggedActive.length !== 1 ? 's' : ''}
                                 <span className='qcg-hint'>click to select / deselect</span>
                             </div>
-                            <div className='qcg'>
+                            <div className='qcg' style={gridStyle}>
                                 {flaggedActive.map(s => (
                                     <SubjectCard
                                         key={s['Id']}
@@ -576,7 +603,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                             <div className='qcg-section-hd qcg-section-hd--pass'>
                                 Pass — {passActive.length} subject{passActive.length !== 1 ? 's' : ''}
                             </div>
-                            <div className='qcg'>
+                            <div className='qcg' style={gridStyle}>
                                 {passActive.map(s => (
                                     <SubjectCard
                                         key={s['Id']}
@@ -606,7 +633,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                                     ⬇ Download CSV
                                 </button>
                             </div>
-                            <div className='qcg'>
+                            <div className='qcg' style={gridStyle}>
                                 {removedSubjects.map(s => (
                                     <div key={s['Id']} className='qcc qcc--removed'>
                                         <div className='qcc-img'>

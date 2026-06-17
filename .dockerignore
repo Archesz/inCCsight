@@ -19,9 +19,6 @@ data/
 methods/csvs/*.csv
 methods/csvs/groups.json
 
-# Model checkpoint (mounted as volume)
-methods/CNNBased/peso/*.ckpt
-
 # Subject data
 subjects/
 

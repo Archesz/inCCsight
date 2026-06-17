@@ -198,7 +198,28 @@ class Subject:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _sanitize_dict(d: dict) -> dict:
+        """Replace NaN floats with None so json.dump doesn't choke."""
+        return {k: (None if isinstance(v, float) and math.isnan(v) else v)
+                for k, v in d.items()}
+
+    @staticmethod
+    def _sanitize_thickness(lst: list) -> list:
+        """Return empty list when all values are NaN/None (Watershed failed)."""
+        if not lst:
+            return lst
+        if all(v is None or (isinstance(v, float) and math.isnan(v)) for v in lst):
+            return []
+        return [None if (isinstance(v, float) and math.isnan(v)) else v for v in lst]
+
     def to_dict(self) -> dict:
+        # Watershed fields are nullable — sanitize NaN → null so downstream
+        # JSON serialisation and NaN-drop logic handle them correctly.
+        ws_scalar = self._sanitize_dict(dict(self.watershed_scalar))
+        ws_parc   = self._sanitize_dict(dict(self.watershed_parcellation))
+        ws_thick  = self._sanitize_thickness(self.watershed_thickness)
+
         return {
             "Id":                    self.name,
             "removed":               self.removed,
@@ -212,14 +233,14 @@ class Subject:
                 "CNN":        {"flag": self._safe_bool(self.cnn_qc_flag),
                                "prob": self._safe_float(self.cnn_qc_prob)},
             },
-            "Watershed_scalar":       dict(self.watershed_scalar),
+            "Watershed_scalar":       ws_scalar,
             "ROQS_scalar":            dict(self.roqs_scalar),
             "CNN_scalar":             dict(self.cnn_scalar),
             "Watershed_midlines":     dict(self.watershed_midlines),
             "ROQS_midlines":          dict(self.roqs_midlines),
-            "Watershed_thickness":    self.watershed_thickness,
+            "Watershed_thickness":    ws_thick,
             "ROQS_thickness":         self.roqs_thickness,
-            "Watershed_parcellation": dict(self.watershed_parcellation),
+            "Watershed_parcellation": ws_parc,
             "ROQS_parcellation":      dict(self.roqs_parcellation),
             "CNN_parcellation":       dict(self.cnn_parcellation),
             "CNN_midlines":           dict(self.cnn_midlines),

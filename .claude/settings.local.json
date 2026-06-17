@@ -62,7 +62,8 @@
       "Bash(node *)",
       "Bash(npx --yes acorn --ecma2020 --module server.js)",
       "Bash(npx react-scripts *)",
-      "Bash(/home/jovi/inccsight_final/methods/venv/bin/python3 transformInJson.py)"
+      "Bash(/home/jovi/inccsight_final/methods/venv/bin/python3 transformInJson.py)",
+      "Bash(dir *)"
     ]
   }
 }

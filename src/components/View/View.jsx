@@ -414,9 +414,12 @@ function View({ view, data, selectedId, onDeselect }) {
                     <Card title='Midline Profile Along the Corpus Callosum'>
                         <Midline data={data} />
                     </Card>
-                    <Card title='Bubble Plots — CC Body Profile'>
-                        <BubblePlot data={data} />
+
+                    {/* Row 7 — Scatter + histograms */}
+                    <Card title='Scalar Correlation'>
+                        <Scatter data={data} />
                     </Card>
+
                 </div>
 
                 {/* Row 4 — Segmentation Boxplot (full width) */}
@@ -439,10 +442,6 @@ function View({ view, data, selectedId, onDeselect }) {
                     </Card>
                 </div>
 
-                {/* Row 7 — Scatter + histograms */}
-                <Card title='Scalar Correlation'>
-                    <Scatter data={data} />
-                </Card>
 
             </div>
         )

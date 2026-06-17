@@ -82,7 +82,7 @@ function ExpandableSubjectTable({ allSubjects, color, type }) {
             <div className='expandable-header' onClick={() => setOpen(v => !v)}>
                 <span>Data by Subject</span>
                 <span className='expandable-toggle'>
-                    {open ? '▲ Recolher' : '▼ Ver todos os sujeitos'}
+                    {open ? '▲ Collapse' : '▼ Show all subjects'}
                 </span>
             </div>
 
@@ -195,11 +195,6 @@ function TableSegmentation(props) {
                     </button>
                 </div>
 
-                <Plot data={plotData} layout={layout}
-                    config={{ responsive: true }}
-                    style={{ width: '100%' }}
-                    useResizeHandler />
-
                 <div className='options-row'>
                     <div className='select-group'>
                         <label className={props.color}>Std. Dev: </label>
@@ -219,6 +214,11 @@ function TableSegmentation(props) {
                         </div>
                     )}
                 </div>
+
+                <Plot data={plotData} layout={layout}
+                    config={{ responsive: true }}
+                    style={{ width: '100%' }}
+                    useResizeHandler />
 
                 <ExpandableSubjectTable allSubjects={allSubjects} color={props.color} type="2D" />
             </div>
@@ -266,11 +266,6 @@ function TableSegmentation(props) {
                     </button>
                 </div>
 
-                <Plot data={plotData3d} layout={layout}
-                    config={{ responsive: true }}
-                    style={{ width: '100%' }}
-                    useResizeHandler />
-
                 <div className='options-row'>
                     <div className='select-group'>
                         <label className={props.color}>Std. Dev: </label>
@@ -290,6 +285,11 @@ function TableSegmentation(props) {
                         </div>
                     )}
                 </div>
+
+                <Plot data={plotData3d} layout={layout}
+                    config={{ responsive: true }}
+                    style={{ width: '100%' }}
+                    useResizeHandler />
 
                 <ExpandableSubjectTable allSubjects={allSubjects} color={props.color} type="3D" />
             </div>
