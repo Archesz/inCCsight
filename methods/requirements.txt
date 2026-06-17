@@ -1,5 +1,13 @@
 # inCCsight — unified Python requirements
 # Install with: pip install -r requirements.txt
+#
+# Only DIRECT dependencies are listed here. All transitive packages
+# (e.g. imageio, tifffile, pywavelets, networkx, lazy_loader, h5py, tqdm,
+# torchmetrics, lightning-utilities, sympy, fsspec, jinja2, requests,
+# urllib3, certifi, six, python-dateutil, pytz, packaging, attrs, …) are
+# resolved automatically by pip from the packages below, so they no longer
+# need to be pinned by hand.
+#
 # PyTorch must be installed separately (see README for CUDA variants):
 #   CPU:       pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
 #   CUDA 11.8: pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu118
@@ -24,54 +32,18 @@ opencv-python-headless==4.9.0.80
 monai==1.4.0
 torchvision==0.19.1
 pytorch-lightning==2.2.1
-torchmetrics==1.3.1
-lightning-utilities==0.11.2
 
 # --- Image I/O ---
 Pillow==10.2.0
-imageio==2.34.0
-h5py==3.10.0
-tifffile==2024.1.30
-PyWavelets==1.5.0
 
-# --- Connectivity / graph ---
+# --- Connectivity / labelling ---
 connected-components-3d==3.12.4
-networkx==3.2.1
 
-# --- Utilities ---
-tqdm==4.66.2
+# --- Model loading + JIT acceleration (tractography tracker) ---
 joblib==1.3.2
-sympy==1.12
-mpmath==1.3.0
-
-# --- JIT acceleration (tractography tracker) ---
 numba==0.60.0
 
-# --- Async / networking ---
-aiohttp==3.9.3
-aiosignal==1.3.1
-async-timeout==4.0.3
-requests==2.31.0
-urllib3==2.2.1
-certifi==2024.2.2
-charset-normalizer==3.3.2
-idna==3.6
-yarl==1.9.4
-multidict==6.0.5
-frozenlist==1.4.1
-
-# --- Python internals / compat ---
-typing_extensions==4.10.0
-python-dateutil==2.8.2
-pytz==2024.1
-six==1.16.0
-packaging==23.2
-PyYAML==6.0.1
-Jinja2==3.1.3
-MarkupSafe==2.1.5
-attrs==23.2.0
-colorama==0.4.6
-filelock==3.13.1
-fsspec==2024.2.0
-lazy_loader==0.4
-threadpoolctl==3.3.0
+# --- Optional (not installed by default; only used by inactive code paths) ---
+# siamxt        # Max-Tree watershed markers — segmentation falls back to skimage when absent
+# SimpleITK     # STAPLE mask fusion (segm_staple)
+# opencv-python # cv2 — used by CNNBased/return_patch.py

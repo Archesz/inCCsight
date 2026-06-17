@@ -20,6 +20,13 @@ const PARTS      = ['P1', 'P2', 'P3', 'P4', 'P5']
 const PARC_METHS = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
 const SCALARS    = ['FA', 'RD', 'AD', 'MD']
 
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS   = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const SCALAR_OPTIONS = SCALARS.map(s => ({
+    value: s,
+    label: SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s,
+}))
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 function getMeanValue(subjects, segmKey, parcMethod, scalar, part) {
@@ -129,7 +136,7 @@ function RadarBySegmentation({ data }) {
                     label='Scalar'
                     value={scalar}
                     onChange={setScalar}
-                    options={SCALARS}
+                    options={SCALAR_OPTIONS}
                 />
                 <CheckField
                     label='Normalise (0–1)'
@@ -205,7 +212,7 @@ function RadarByParcellation({ data }) {
                     label='Scalar'
                     value={scalar}
                     onChange={setScalar}
-                    options={SCALARS}
+                    options={SCALAR_OPTIONS}
                 />
                 <CheckField
                     label='Normalise (0–1)'

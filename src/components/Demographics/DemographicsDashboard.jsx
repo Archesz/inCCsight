@@ -836,6 +836,26 @@ function DemographicsDashboard({ rows, presentCols, subjects = [], onReload }) {
                 </button>
             </div>
 
+            {/* Subjects per group */}
+            {rows.length > 0 && groups.length > 0 && (
+                <div className='dm-group-cards-block'>
+                    <span className='dm-group-cards-title'>Subjects per group</span>
+                    <div className='dm-group-cards'>
+                        {groups.map((g, i) => {
+                            const accent = GROUP_COLORS[i % GROUP_COLORS.length]
+                            const count  = rows.filter(r => r.group === g).length
+                            return (
+                                <div key={g} className='dm-group-card' style={{ '--group-accent': accent }}>
+                                    <span className='dm-group-card-dot' style={{ background: accent }} />
+                                    <span className='dm-group-card-count'>{count}</span>
+                                    <span className='dm-group-card-name' title={g}>{g}</span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Panels */}
             {rows.length === 0 ? (
                 <div className='dm-no-data'>No demographic data loaded.</div>

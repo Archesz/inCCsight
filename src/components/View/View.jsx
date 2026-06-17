@@ -8,13 +8,17 @@ import Scatter             from '../../graphs/Scatter/Scatter'
 import Midline             from '../../graphs/Line/Midline'
 import VolumetricView      from '../../graphs/Volume/VolumetricView'
 import { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
-import BubblePlot         from '../../graphs/BubblePlot/BubblePlot'
+import InfoTool           from '../../components/InfoTool/InfoTool'
 
 import '../../styles/home.scss'
 
 const API = process.env.REACT_APP_API_URL || ''
 
 const SCALARS   = ['FA', 'MD', 'RD', 'AD']
+
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel  = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
 const SEG_KEYS  = [
     { key: 'ROQS_scalar',      label: 'ROQS'      },
     { key: 'Watershed_scalar', label: 'Watershed'  },
@@ -204,7 +208,7 @@ function SubjectBanner({ subject, onDeselect }) {
                                     title='Scalar'
                                 >
                                     {SCALARS.map(s => (
-                                        <option key={s} value={s}>{s}</option>
+                                        <option key={s} value={s}>{scalarLabel(s)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -328,7 +332,7 @@ function useCNNSubjects(data) {
 }
 
 // ── Card wrapper with title ───────────────────────────────────────────────────
-function Card({ title, controls, children, collapsible = false, defaultOpen = true }) {
+function Card({ title, info, controls, children, collapsible = false, defaultOpen = true }) {
     const [open, setOpen] = useState(defaultOpen)
     return (
         <div className='dash-card'>
@@ -341,6 +345,7 @@ function Card({ title, controls, children, collapsible = false, defaultOpen = tr
                         <span className='dc-collapse-arrow'>{open ? '▾' : '▸'}</span>
                     )}
                     {title}
+                    {info && <InfoTool text={info} />}
                 </span>
                 {controls && <div className='dc-controls'>{controls}</div>}
             </div>
@@ -395,49 +400,77 @@ function View({ view, data, selectedId, onDeselect }) {
                 )}
 
                 {/* KPI Overview */}
-                <Card title='Overview — Mean per Scalar' controls={methodControls}>
+                <Card
+                    title='Overview — Mean per Scalar'
+                    info='Average of each DTI scalar (FA, MD, RD, AD) across the selected subjects, for the chosen segmentation method. Use the method pills on the right to switch between ROQS, Watershed and CNN.'
+                    controls={methodControls}
+                >
                     <KPIRow data={data} method={kpiMethod} />
                 </Card>
 
                 {/* Data tables — side by side */}
                 <div className='two-col'>
-                    <Card title='Segmentation Table'>
+                    <Card
+                        title='Segmentation Table'
+                        info='Mean DTI scalar values per segmentation method for the whole corpus callosum. FA is dimensionless; MD, RD and AD are in mm²/s.'
+                    >
                         <TableSegmentation data={data} type='2D' />
                     </Card>
-                    <Card title='Parcellation Table'>
+                    <Card
+                        title='Parcellation Table'
+                        info='Mean scalar value for each callosal sub-region (P1–P5) under the selected parcellation scheme and scalar.'
+                    >
                         <TableParcellation data={data} type='2D' />
                     </Card>
                 </div>
 
                 {/* Row 3 — Midline | Bubble Plot */}
                 <div className='two-col'>
-                    <Card title='Midline Profile Along the Corpus Callosum'>
+                    <Card
+                        title='Midline Profile Along the Corpus Callosum'
+                        info='Scalar value sampled along the 200 points of the CC midline, from posterior (splenium) to anterior (genu). Click the colours in the legend to hide or show each series.'
+                    >
                         <Midline data={data} />
                     </Card>
 
-                    {/* Row 7 — Scatter + histograms */}
-                    <Card title='Scalar Correlation'>
+                    {/* Row 3b — Scalar Correlation */}
+                    <Card
+                        title='Scalar Correlation'
+                        info='Scatter plot of two scalars against each other with a linear regression line, plus their marginal histograms. Useful to inspect relationships such as FA vs. MD. Click the colours in the legend to hide or show each series.'
+                    >
                         <Scatter data={data} />
                     </Card>
 
                 </div>
 
                 {/* Row 4 — Segmentation Boxplot (full width) */}
-                <Card title='Distributions — Scalars by Segmentation Method'>
+                <Card
+                    title='Distributions — Scalars by Segmentation Method'
+                    info='Distribution (box plots) of each scalar across subjects, compared between segmentation methods. The box shows the quartiles and the line the median. Click the colours in the legend to hide or show each method.'
+                >
                     <BoxplotSegmentation data={data} />
                 </Card>
 
                 {/* Row 5 — Parcellation Boxplot (full width) */}
-                <Card title='Distributions — Parcellation by Part'>
+                <Card
+                    title='Distributions — Parcellation by Part'
+                    info='Distribution of the selected scalar per callosal region (P1–P5), one box per segmentation method. Use the selectors below to change parcellation scheme and scalar. Click the colours in the legend to hide or show each method.'
+                >
                     <BoxplotParcellation data={data} />
                 </Card>
 
                 {/* Row 6 — Radar charts side by side */}
                 <div className='two-col'>
-                    <Card title='Segmentations by Parcellation'>
+                    <Card
+                        title='Segmentations by Parcellation'
+                        info='Radar comparing the segmentation methods across the five callosal regions for a fixed parcellation scheme. Click the colours in the legend to hide or show each method.'
+                    >
                         <RadarBySegmentation data={data} />
                     </Card>
-                    <Card title='Parcellations by Segmentation'>
+                    <Card
+                        title='Parcellations by Segmentation'
+                        info='Radar comparing the parcellation schemes across the five callosal regions for a fixed segmentation method. Click the colours in the legend to hide or show each scheme.'
+                    >
                         <RadarByParcellation data={data} />
                     </Card>
                 </div>
@@ -455,16 +488,25 @@ function View({ view, data, selectedId, onDeselect }) {
             <div className='view-wrap'>
 
                 {/* CNN tables */}
-                <Card title='Segmentation Table — CNN-Based'>
+                <Card
+                    title='Segmentation Table — CNN-Based'
+                    info='Mean DTI scalar values computed from the volumetric CNN segmentation. FA is dimensionless; MD, RD and AD are in mm²/s.'
+                >
                     <TableSegmentation data={data} type='3D' />
                 </Card>
 
-                <Card title='Parcellation Table — CNN-Based'>
+                <Card
+                    title='Parcellation Table — CNN-Based'
+                    info='Mean scalar value per callosal region (P1–P5) from the CNN segmentation, for the selected parcellation scheme and scalar.'
+                >
                     <TableParcellation data={data} type='3D' />
                 </Card>
 
                 {/* Volumetric viewer */}
-                <Card title='3D Volumetric Viewer'>
+                <Card
+                    title='3D Volumetric Viewer'
+                    info='Interactive 3D rendering of the CNN corpus callosum mask. Drag to rotate, scroll to zoom. Pick a subject from the list and use the controls to change material, opacity and wireframe.'
+                >
                     <div className='area-volumetric'>
                         <div className='cnn-subject-list'>
                             <span className='cnn-list-title'>CNN Subjects</span>

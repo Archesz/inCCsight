@@ -6,6 +6,10 @@ const PARC_METHODS = ["Witelson", "Hofer", "Chao", "Cover", "Freesurfer"]
 const SCALARS      = ["FA", "RD", "AD", "MD"]
 const PARTS        = ["P1", "P2", "P3", "P4", "P5"]
 
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel  = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
+
 function getScalarValues(subjects, method, parc_method, scalar, part) {
     const name = `${parc_method}_${scalar}_${part}`
     return subjects.map(s => {
@@ -78,7 +82,7 @@ function BoxplotParcellation(props) {
                     <label>Scalar</label>
                     <select onChange={e => setScalarParcellation(e.target.value)}>
                         {SCALARS.map(s => (
-                            <option key={s} value={s}>{s}</option>
+                            <option key={s} value={s}>{scalarLabel(s)}</option>
                         ))}
                     </select>
                 </div>
