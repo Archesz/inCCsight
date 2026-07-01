@@ -24,7 +24,15 @@ def _build_parc_row(sub, parcellation_dict):
     return row
 
 def test_predict(model, data_paths):
-	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+	# Device preference from the UI (Settings → CNN compute device), via env var.
+	_pref = os.environ.get("INCCSIGHT_DEVICE", "auto").lower()
+	if _pref == "cpu":
+		device = torch.device("cpu")
+	else:
+		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+	if _pref in ("gpu", "cuda") and device.type != "cuda":
+		print("[CNN] GPU requested but CUDA is unavailable — falling back to CPU.", flush=True)
+	print(f"[CNN] Using device: {device}", flush=True)
 
 	vol_file = "iso_dti_FA_norm.nii.gz"
 

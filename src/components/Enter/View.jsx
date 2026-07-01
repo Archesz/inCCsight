@@ -238,7 +238,7 @@ function View({ type }) {
         const skipCnn  = !selectedMethods.has('cnn')
 
         // Tractography is deferred to a future version — always skip it for now.
-        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, skipTract: true })
+        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, skipTract: true, cnnDevice: getSetting('cnnDevice') })
     }
 
     async function loadLast() {

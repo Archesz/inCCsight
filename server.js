@@ -109,7 +109,7 @@ function isPathAllowed(filePath) {
 }
 
 // ── SSE utility: stream a Python subprocess to the client ────────────────────
-function spawnSSE(res, args, cwd) {
+function spawnSSE(res, args, cwd, extraEnv = {}) {
   res.setHeader('Content-Type',      'text/event-stream')
   res.setHeader('Cache-Control',     'no-cache')
   res.setHeader('Connection',        'keep-alive')
@@ -118,7 +118,7 @@ function spawnSSE(res, args, cwd) {
 
   // PYTHONUNBUFFERED=1 + -u flag ensure real-time output through pipes
   // PYTHONIOENCODING=utf-8 prevents UnicodeEncodeError on Windows (pipe defaults to cp1252)
-  const env  = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
+  const env  = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', ...extraEnv }
   const proc = spawn(python, ['-u', ...args], { cwd, env })
 
   const send = data => res.write(`data: ${JSON.stringify(data)}\n\n`)
@@ -134,7 +134,7 @@ function spawnSSE(res, args, cwd) {
 
 // ── POST /api/run-pipeline ────────────────────────────────────────────────────
 app.post('/api/run-pipeline', (req, res) => {
-  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false, skipTract = false } = req.body
+  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false, skipTract = false, cnnDevice = 'auto' } = req.body
 
   const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
   try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
@@ -145,7 +145,9 @@ app.post('/api/run-pipeline', (req, res) => {
   if (skipRoqs)  args.push('--skip-roqs')
   if (skipTract) args.push('--skip-tract')
 
-  spawnSSE(res, args, methodsDir)
+  // CNN compute device preference (auto | cpu | gpu) — read by predict3D.py
+  const device = ['auto', 'cpu', 'gpu'].includes(cnnDevice) ? cnnDevice : 'auto'
+  spawnSSE(res, args, methodsDir, { INCCSIGHT_DEVICE: device })
 })
 
 // ── POST /api/load-last ───────────────────────────────────────────────────────
