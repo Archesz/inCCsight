@@ -159,6 +159,36 @@
     &.on .set-toggle-knob { left: 21px; }
 }
 
+/* Range slider (QC threshold) */
+.set-slider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    input[type='range'] { width: 150px; accent-color: #4C6EF5; cursor: pointer; }
+}
+.set-slider-val {
+    min-width: 34px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+    color: #2b3ba8;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Text input (API endpoint) */
+.set-text {
+    width: 210px;
+    height: 34px;
+    border: 1.5px solid #d8deee;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 13px;
+    color: #2a3354;
+
+    &:focus { outline: none; border-color: #4C6EF5; }
+}
+
 /* "Planned" tag for not-yet-wired settings */
 .set-soon {
     font-size: 11.5px;

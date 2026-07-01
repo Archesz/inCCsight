@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import './SettingsPanel.scss'
-import { loadSettings, saveSettings, resetSettings } from '../../settings/settings'
+import { loadSettings, saveSettings, resetSettings, applyTheme } from '../../settings/settings'
 import { PALETTES } from '../../settings/palettes'
 
 // Pipeline methods (mirror of the Input screen)
@@ -67,6 +67,7 @@ function SettingsPanel() {
     function update(patch) {
         const next = saveSettings(patch)
         setS({ ...next })
+        if ('theme' in patch) applyTheme(patch.theme)
         setSavedFlash(true)
         clearTimeout(update._t)
         update._t = setTimeout(() => setSavedFlash(false), 1100)
@@ -110,11 +111,23 @@ function SettingsPanel() {
                         ))}
                     </div>
                 </Row>
-                <Row label='Theme' hint='Dark mode — rolling out'>
-                    <span className='set-soon'>Planned</span>
+                <Row label='Theme' hint='Light / Dark'>
+                    <div className='set-pills'>
+                        {[{ v: 'light', l: '☀ Light' }, { v: 'dark', l: '🌙 Dark' }].map(o => (
+                            <button
+                                key={o.v}
+                                className={`set-pill${s.theme === o.v ? ' active' : ''}`}
+                                onClick={() => update({ theme: o.v })}
+                            >
+                                {o.l}
+                            </button>
+                        ))}
+                    </div>
                 </Row>
                 <Row label='Decimal places in tables' hint='Numeric precision'>
-                    <span className='set-soon'>Planned</span>
+                    <select value={s.decimals} onChange={e => update({ decimals: parseInt(e.target.value, 10) })}>
+                        {[2, 3, 4, 5, 6].map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                 </Row>
             </Section>
 
@@ -159,25 +172,62 @@ function SettingsPanel() {
             </Section>
 
             {/* ── Scientific parameters ──────────────────────────────────── */}
-            <Section title='Scientific parameters' badge='backend'>
-                <Row label='QC PASS/FAIL threshold' hint='P(incorrect) cutoff for the QC flag'>
-                    <span className='set-soon'>Planned</span>
+            <Section title='Scientific parameters'>
+                <Row label='QC PASS/FAIL threshold' hint='P(incorrect) above this = FAIL · applied live'>
+                    <div className='set-slider'>
+                        <input
+                            type='range' min='0.05' max='0.95' step='0.05'
+                            value={s.qcThreshold}
+                            onChange={e => update({ qcThreshold: parseFloat(e.target.value) })}
+                        />
+                        <span className='set-slider-val'>{Number(s.qcThreshold).toFixed(2)}</span>
+                    </div>
                 </Row>
-                <Row label='CNN compute device' hint='CPU / GPU / auto'>
-                    <span className='set-soon'>Planned</span>
+                <Row label='CNN compute device' hint='Used when running the pipeline'>
+                    <select value={s.cnnDevice} onChange={e => update({ cnnDevice: e.target.value })}>
+                        <option value='auto'>Auto</option>
+                        <option value='cpu'>CPU</option>
+                        <option value='gpu'>GPU (CUDA)</option>
+                    </select>
                 </Row>
             </Section>
 
             {/* ── Language & infrastructure ──────────────────────────────── */}
             <Section title='Language & infrastructure'>
+                <Row label='Language'>
+                    <div className='set-pills'>
+                        {[{ v: 'en', l: 'English' }, { v: 'pt', l: 'Português' }].map(o => (
+                            <button
+                                key={o.v}
+                                className={`set-pill${s.language === o.v ? ' active' : ''}`}
+                                onClick={() => update({ language: o.v })}
+                            >
+                                {o.l}
+                            </button>
+                        ))}
+                    </div>
+                </Row>
                 <Row label='Exported CSV delimiter' hint='Excel (pt-BR) expects “;”'>
-                    <span className='set-soon'>Planned</span>
+                    <div className='set-pills'>
+                        {[{ v: ',', l: 'Comma  ,' }, { v: ';', l: 'Semicolon  ;' }].map(o => (
+                            <button
+                                key={o.v}
+                                className={`set-pill${s.csvDelimiter === o.v ? ' active' : ''}`}
+                                onClick={() => update({ csvDelimiter: o.v })}
+                            >
+                                {o.l}
+                            </button>
+                        ))}
+                    </div>
                 </Row>
-                <Row label='Language' hint='Português / English'>
-                    <span className='set-soon'>Planned</span>
-                </Row>
-                <Row label='API endpoint' hint='Custom server host:port'>
-                    <span className='set-soon'>Planned</span>
+                <Row label='API endpoint' hint='Blank = same origin · reload to apply'>
+                    <input
+                        className='set-text'
+                        type='text'
+                        placeholder='e.g. http://localhost:3001'
+                        value={s.apiUrl}
+                        onChange={e => update({ apiUrl: e.target.value })}
+                    />
                 </Row>
             </Section>
 

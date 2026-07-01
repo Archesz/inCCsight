@@ -13,8 +13,9 @@ import { TbAlertTriangle } from 'react-icons/tb'
 
 import '../styles/home.scss'
 import { getGroupColors } from '../settings/palettes'
+import { qcFail, apiBase } from '../settings/settings'
 
-const API = process.env.REACT_APP_API_URL || ''
+const API = apiBase()
 
 const GROUP_COLORS = getGroupColors()
 
@@ -128,7 +129,7 @@ function Home() {
             setSelectedId(null)
             const filtered = activeSubjects
                 .filter(s => !groupFilter || s.group === groupFilter)
-                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
+                .filter(s => !qcFilter    || qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN))
             setData(filtered)
         } else {
             setSelectedId(id)
@@ -143,13 +144,11 @@ function Home() {
     // ── Subjects visible in sidebar ────────────────────────────────────────
     const visibleSubjects = activeSubjects
         .filter(s => !groupFilter || s.group === groupFilter)
-        .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
+        .filter(s => !qcFilter    || qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN))
         .filter(s => s['Id'].toLowerCase().includes(search.toLowerCase()))
 
     const failCount = activeSubjects.filter(s =>
-        s.qc?.ROQS?.flag === true ||
-        s.qc?.Watershed?.flag === true ||
-        s.qc?.CNN?.flag === true
+        qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN)
     ).length
 
     // ── Update data when filter changes ────────────────────────────────────
@@ -157,7 +156,7 @@ function Home() {
         if (!selectedId) {
             const filtered = activeSubjects
                 .filter(s => !groupFilter || s.group === groupFilter)
-                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
+                .filter(s => !qcFilter    || qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN))
             setData(filtered)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,7 +290,9 @@ function Home() {
                         {visibleSubjects.map((s, i) => {
                             const gIdx    = groupColor[s.group] ?? -1
                             const color   = gIdx >= 0 ? GROUP_COLORS[gIdx % GROUP_COLORS.length] : '#E3E7F0'
-                            const qcFlag  = s.qc?.ROQS?.flag
+                            const q       = s.qc?.ROQS
+                            const hasQc   = q && (q.prob != null || q.flag != null)
+                            const qcIsBad = hasQc && qcFail(q)
                             return (
                                 <div
                                     key={s['Id']}
@@ -300,8 +301,8 @@ function Home() {
                                 >
                                     <span className='sub-dot' style={{ background: color }} />
                                     <span className='sub-name'>{s['Id']}</span>
-                                    {qcFlag === true  && <span className='sub-qc fail'>FAIL</span>}
-                                    {qcFlag === false && <span className='sub-qc pass'>PASS</span>}
+                                    {hasQc && qcIsBad  && <span className='sub-qc fail'>FAIL</span>}
+                                    {hasQc && !qcIsBad && <span className='sub-qc pass'>PASS</span>}
                                 </div>
                             )
                         })}

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Plot from 'react-plotly.js'
 import './TableParcellation.scss'
 import InfoTool from '../../components/InfoTool/InfoTool'
+import { getSetting } from '../../settings/settings'
 
 const SEG_METHOD_OPTIONS = [
     { label: "ROQS",            key: "ROQS_parcellation"      },
@@ -31,7 +32,7 @@ function getMeanValues(subjects, method, parc_method, scalar, part) {
         .filter(s => s[method] && s[method][name] != null)
         .map(s => Number(s[method][name]))
     if (values.length === 0) return '—'
-    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(6)
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(getSetting('decimals'))
 }
 
 function getColumnColors(colValues) {
@@ -45,9 +46,9 @@ function colorsForRows(rows, colCount) {
 }
 
 function exportCSV(headers, cols, filename) {
-    const rows = [headers.join(',')]
+    const rows = [headers.join(getSetting('csvDelimiter'))]
     for (let r = 0; r < cols[0].length; r++) {
-        rows.push(cols.map(col => col[r]).join(','))
+        rows.push(cols.map(col => col[r]).join(getSetting('csvDelimiter')))
     }
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -68,7 +69,7 @@ function ExpandableParcTable({ allSubjects, color }) {
         const m = s[segMethod] || {}
         return PARTS.map(part => {
             const key = `${parcMethod}_${scalar}_${part}`
-            return m[key] != null ? Number(m[key]).toFixed(6) : "—"
+            return m[key] != null ? Number(m[key]).toFixed(getSetting('decimals')) : "—"
         })
     })
 
@@ -77,7 +78,7 @@ function ExpandableParcTable({ allSubjects, color }) {
     function exportExpanded() {
         const headers = ["Subject", ...PARTS]
         const data = allSubjects.map((s, i) => [s["Id"], ...rows[i]])
-        const csv  = [headers, ...data].map(r => r.join(',')).join('\n')
+        const csv  = [headers, ...data].map(r => r.join(getSetting('csvDelimiter'))).join('\n')
         const blob = new Blob([csv], { type: 'text/csv' })
         const url  = URL.createObjectURL(blob)
         const a    = document.createElement('a'); a.href = url

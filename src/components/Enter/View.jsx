@@ -4,15 +4,14 @@ import FolderSelector from '../FolderSelector/FolderSelector'
 import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
 import Question from '../Question/Question'
 import SettingsPanel from '../Settings/SettingsPanel'
-import { getSetting } from '../../settings/settings'
+import { getSetting, apiBase } from '../../settings/settings'
 
 // API base URL. In production the React build is served by the same Express
 // server, so an empty string (relative URLs) hits the right origin. In dev the
 // CRA dev-server proxy BUFFERS the SSE stream, so the live pipeline console and
 // progress bar never update (they sit on "Starting…"). Talk to Express (:3001)
 // directly in dev to bypass the proxy; REACT_APP_API_URL still overrides.
-const API = process.env.REACT_APP_API_URL ||
-    (process.env.NODE_ENV === 'development' ? `http://${window.location.hostname}:3001` : '')
+const API = apiBase()
 
 // AbortSignal.timeout() is not available in Safari < 16.
 // This helper creates a timeout signal compatible with all browsers.

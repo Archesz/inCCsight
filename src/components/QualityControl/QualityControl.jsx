@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import './QualityControl.scss'
+import { qcFail, buildCsv, apiBase } from '../../settings/settings'
 
-const API      = process.env.REACT_APP_API_URL || ''
+const API      = apiBase()
 const SCALARS  = ['FA', 'MD', 'RD', 'AD']
 const METHODS  = ['ROQS', 'Watershed', 'CNN']
 
@@ -22,12 +23,6 @@ function imgPathForMethod(subject, method) {
 }
 
 // CSV cell escaping (RFC 4180)
-function csvCell(v) {
-    if (v == null) return ''
-    const s = String(v)
-    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
-
 // Build a CSV with metadata for removed subjects (QC flags + scalars)
 function downloadRemovedCsv(subjects) {
     if (!subjects.length) return
@@ -59,9 +54,9 @@ function downloadRemovedCsv(subjects) {
         s.CNN_scalar?.MD       ?? '',
         s.CNN_scalar?.RD       ?? '',
         s.CNN_scalar?.AD       ?? '',
-    ].map(csvCell).join(','))
+    ])
 
-    const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+    const csv = buildCsv(rows, { header: cols })
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
@@ -84,22 +79,22 @@ function downloadOverviewCsv(subjects) {
         'failed_methods', 'status',
     ]
     const rows = subjects.map(s => {
-        const failed = METHODS.filter(m => s.qc?.[m]?.flag === true)
+        const failed = METHODS.filter(m => qcFail(s.qc?.[m]))
         return [
             s.Id,
             s.group ?? '',
-            s.qc?.ROQS?.flag      != null ? (s.qc.ROQS.flag      ? 'FAIL' : 'PASS') : '',
+            (s.qc?.ROQS?.flag != null || s.qc?.ROQS?.prob != null) ? (qcFail(s.qc.ROQS) ? 'FAIL' : 'PASS') : '',
             s.qc?.ROQS?.prob      != null ? s.qc.ROQS.prob.toFixed(4)               : '',
-            s.qc?.Watershed?.flag != null ? (s.qc.Watershed.flag ? 'FAIL' : 'PASS') : '',
+            (s.qc?.Watershed?.flag != null || s.qc?.Watershed?.prob != null) ? (qcFail(s.qc.Watershed) ? 'FAIL' : 'PASS') : '',
             s.qc?.Watershed?.prob != null ? s.qc.Watershed.prob.toFixed(4)           : '',
-            s.qc?.CNN?.flag       != null ? (s.qc.CNN.flag       ? 'FAIL' : 'PASS') : '',
+            (s.qc?.CNN?.flag != null || s.qc?.CNN?.prob != null) ? (qcFail(s.qc.CNN) ? 'FAIL' : 'PASS') : '',
             s.qc?.CNN?.prob       != null ? s.qc.CNN.prob.toFixed(4)                 : '',
             failed.join(';') || 'none',
             s.removed ? 'removed' : failed.length ? 'flagged' : 'ok',
-        ].map(csvCell).join(',')
+        ]
     })
 
-    const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+    const csv = buildCsv(rows, { header: cols })
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
@@ -195,11 +190,11 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
     const [filter, setFilter] = useState('all')  // 'all' | 'failed'
 
     const allShown    = useMemo(() => [...activeSubjects, ...removedSubjects], [activeSubjects, removedSubjects])
-    const failedCount = useMemo(() => allShown.filter(s => METHODS.some(m => s.qc?.[m]?.flag === true)).length, [allShown])
+    const failedCount = useMemo(() => allShown.filter(s => METHODS.some(m => qcFail(s.qc?.[m]))).length, [allShown])
 
     const displayed = useMemo(() =>
         filter === 'failed'
-            ? allShown.filter(s => METHODS.some(m => s.qc?.[m]?.flag === true))
+            ? allShown.filter(s => METHODS.some(m => qcFail(s.qc?.[m])))
             : allShown,
         [allShown, filter]
     )
@@ -254,7 +249,7 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
                         </thead>
                         <tbody>
                             {displayed.map(s => {
-                                const failed = METHODS.filter(m => s.qc?.[m]?.flag === true)
+                                const failed = METHODS.filter(m => qcFail(s.qc?.[m]))
                                 const anyFail = failed.length > 0
                                 return (
                                     <tr
@@ -267,14 +262,15 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
                                         <td className='qco-id'>{s.Id ?? s['Id']}</td>
                                         <td>{s.group ?? '—'}</td>
                                         {METHODS.map(m => {
-                                            const flag = s.qc?.[m]?.flag
-                                            const prob = s.qc?.[m]?.prob
-                                            if (flag == null) {
+                                            const q    = s.qc?.[m]
+                                            const prob = q?.prob
+                                            if (!q || (q.flag == null && q.prob == null)) {
                                                 return <td key={m} className='qco-nd'>—</td>
                                             }
+                                            const bad = qcFail(q)
                                             return (
-                                                <td key={m} className={`qco-cell qco-cell--${flag ? 'fail' : 'pass'}`}>
-                                                    {flag ? '✕ FAIL' : '✓ PASS'}
+                                                <td key={m} className={`qco-cell qco-cell--${bad ? 'fail' : 'pass'}`}>
+                                                    {bad ? '✕ FAIL' : '✓ PASS'}
                                                     {prob != null &&
                                                         <span className='qco-prob'> {(prob * 100).toFixed(0)}%</span>
                                                     }
@@ -504,7 +500,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                 </>}
                 {viewMode === 'overview' && <>
                     {METHODS.map(m => {
-                        const n = allSubjects.filter(s => s.qc?.[m]?.flag === true).length
+                        const n = allSubjects.filter(s => qcFail(s.qc?.[m])).length
                         return (
                             <div key={m} className='qcs qcs--flag'>
                                 <span className='qcs-val'>{n}</span>
@@ -514,7 +510,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                     })}
                     <div className='qcs qcs--flag'>
                         <span className='qcs-val'>
-                            {allSubjects.filter(s => METHODS.some(m => s.qc?.[m]?.flag === true)).length}
+                            {allSubjects.filter(s => METHODS.some(m => qcFail(s.qc?.[m]))).length}
                         </span>
                         <span className='qcs-lbl'>Any Failure</span>
                     </div>

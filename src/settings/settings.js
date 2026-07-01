@@ -84,9 +84,46 @@ export function resetSettings() {
 export function apiBase() {
     const override = getSetting('apiUrl')
     if (override && override.trim()) return override.trim().replace(/\/$/, '')
-    return process.env.REACT_APP_API_URL || ''
+    if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL
+    // In dev the CRA proxy buffers SSE, so talk to Express (:3001) directly.
+    if (process.env.NODE_ENV === 'development') {
+        try { return `http://${window.location.hostname}:3001` } catch (_) {}
+    }
+    return ''
 }
 
 export function applyTheme(theme = getSetting('theme')) {
     try { document.documentElement.setAttribute('data-theme', theme) } catch (_) {}
+}
+
+// ── Derived helpers ────────────────────────────────────────────────────────
+
+// Re-derive a QC PASS/FAIL decision from the stored probability using the
+// user's threshold. Falls back to the pipeline's stored flag when no prob.
+export function qcFail(q) {
+    if (!q) return false
+    if (typeof q.prob === 'number') return q.prob > getSetting('qcThreshold')
+    return q.flag === true
+}
+
+// Format a number with the user's decimal-place preference (or an override).
+export function fmtNum(v, decimals) {
+    if (v == null || v === '' || isNaN(Number(v))) return '—'
+    const d = decimals == null ? getSetting('decimals') : decimals
+    return Number(v).toFixed(d)
+}
+
+// Build a CSV string honouring the user's delimiter, with RFC-4180 escaping.
+export function buildCsv(rows, { header, bom = true } = {}) {
+    const delim = getSetting('csvDelimiter') || ','
+    const esc = v => {
+        if (v == null) return ''
+        const s = String(v)
+        return new RegExp(`["${delim === ';' ? ';' : ','}\\r\\n]`).test(s)
+            ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const lines = []
+    if (header) lines.push(header.map(esc).join(delim))
+    for (const row of rows) lines.push(row.map(esc).join(delim))
+    return (bom ? '﻿' : '') + lines.join('\n')
 }

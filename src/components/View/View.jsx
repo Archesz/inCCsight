@@ -9,11 +9,11 @@ import Midline             from '../../graphs/Line/Midline'
 import VolumetricView      from '../../graphs/Volume/VolumetricView'
 import { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
 import InfoTool           from '../../components/InfoTool/InfoTool'
-import { getSetting }     from '../../settings/settings'
+import { getSetting, qcFail, apiBase } from '../../settings/settings'
 
 import '../../styles/home.scss'
 
-const API = process.env.REACT_APP_API_URL || ''
+const API = apiBase()
 
 const SCALARS   = ['FA', 'MD', 'RD', 'AD']
 
@@ -39,9 +39,10 @@ function meanOf(data, methodKey, scalar) {
     return vals.reduce((a, b) => a + Number(b), 0) / vals.length
 }
 
-function fmt(v, decimals = 6) {
+function fmt(v, decimals) {
     if (v == null) return '—'
-    return Number(v).toFixed(decimals)
+    const d = decimals == null ? getSetting('decimals') : decimals
+    return Number(v).toFixed(d)
 }
 
 // ── Image path per method ─────────────────────────────────────────────────────
@@ -142,9 +143,10 @@ function SubjectBanner({ subject, onDeselect }) {
                             { method: 'Watershed', q: qc.Watershed },
                             { method: 'CNN',       q: qc.CNN        },
                         ].map(({ method, q }) => {
-                            if (!q || q.flag == null) return null
-                            const cls   = q.flag === true ? 'fail' : 'pass'
-                            const label = q.flag === true ? 'FAIL' : 'PASS'
+                            if (!q || (q.flag == null && q.prob == null)) return null
+                            const bad   = qcFail(q)
+                            const cls   = bad ? 'fail' : 'pass'
+                            const label = bad ? 'FAIL' : 'PASS'
                             return (
                                 <div key={method} className='sb-qc-item'>
                                     <span className='sqc-method'>{method}</span>
@@ -180,9 +182,9 @@ function SubjectBanner({ subject, onDeselect }) {
                                 {SCALARS.map(sc => (
                                     <tr key={sc}>
                                         <td className='sbt-label'>{sc}</td>
-                                        <td>{fmt(subject.ROQS_scalar?.[sc], 4)}</td>
-                                        <td>{fmt(subject.Watershed_scalar?.[sc], 4)}</td>
-                                        {hasCNN && <td>{fmt(subject.CNN_scalar?.[sc], 4)}</td>}
+                                        <td>{fmt(subject.ROQS_scalar?.[sc])}</td>
+                                        <td>{fmt(subject.Watershed_scalar?.[sc])}</td>
+                                        {hasCNN && <td>{fmt(subject.CNN_scalar?.[sc])}</td>}
                                     </tr>
                                 ))}
                             </tbody>
@@ -227,9 +229,9 @@ function SubjectBanner({ subject, onDeselect }) {
                                 {PARC_PARTS.map(part => (
                                     <tr key={part}>
                                         <td className='sbt-label'>{part}</td>
-                                        <td>{fmt(subject.ROQS_parcellation?.[parcKey(part)], 4)}</td>
-                                        <td>{fmt(subject.Watershed_parcellation?.[parcKey(part)], 4)}</td>
-                                        {hasCNNP && <td>{fmt(subject.CNN_parcellation?.[parcKey(part)], 4)}</td>}
+                                        <td>{fmt(subject.ROQS_parcellation?.[parcKey(part)])}</td>
+                                        <td>{fmt(subject.Watershed_parcellation?.[parcKey(part)])}</td>
+                                        {hasCNNP && <td>{fmt(subject.CNN_parcellation?.[parcKey(part)])}</td>}
                                     </tr>
                                 ))}
                             </tbody>

@@ -3,7 +3,7 @@ import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
 import InfoTool from '../InfoTool/InfoTool'
 import { getGroupColors } from '../../settings/palettes'
-import { getSetting } from '../../settings/settings'
+import { getSetting, buildCsv } from '../../settings/settings'
 
 const GROUP_COLORS  = getGroupColors()
 const SCALARS       = ['FA', 'MD', 'RD', 'AD']
@@ -66,13 +66,6 @@ function bandTraces(xArr, stats, color, name) {
             name, legendgroup: name, line: { color, width: 2.5 },
         },
     ]
-}
-
-// CSV cell escaping (RFC 4180)
-function csvCell(v) {
-    if (v == null) return ''
-    const s = String(v)
-    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 const CHART_LAYOUT_BASE = {
@@ -368,11 +361,11 @@ function SubjectTable({ allSubjects, allGroups, segMethod }) {
             ...SCALARS.map(sc => {
                 const v = s?.[segMethod]?.[sc]
                 const n = typeof v === 'number' ? v : parseFloat(v)
-                return !isNaN(n) ? n.toFixed(6) : ''
+                return !isNaN(n) ? n.toFixed(getSetting('decimals')) : ''
             }),
-        ].map(csvCell).join(','))
+        ])
 
-        const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+        const csv = buildCsv(rows, { header: cols })
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
         const url  = URL.createObjectURL(blob)
         const a    = document.createElement('a')
