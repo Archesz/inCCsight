@@ -4,15 +4,17 @@ import ReactDOM from 'react-dom/client';
 import Enter from "./components/Enter/Enter";
 import Loading from './components/Loading/Loading'
 import './styles/global.scss'
+import './styles/theme-dark.scss'
 
 // Apply the saved theme before first paint (foundation for dark mode)
 import { applyTheme } from './settings/settings'
-applyTheme()
 
 import {
   createBrowserRouter,
   RouterProvider,
 } from "react-router-dom";
+
+applyTheme()
 
 // Home pulls in the heavy charting/3D libraries (plotly, three). Load it
 // lazily so the landing page (Enter) ships a much smaller initial bundle;

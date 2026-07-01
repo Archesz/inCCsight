@@ -7,12 +7,13 @@ import View from './View'
 import Loading from '../Loading/Loading'
 import Tutorial from '../Tutorial/Tutorial'
 import { getSetting, saveSettings } from '../../settings/settings'
+import { t } from '../../settings/i18n'
 
 const NAV = [
-    { icon: TbHome2,          name: 'Input',    title: 'Select data'   },
-    { icon: TbQuestionCircle, name: 'Help',     title: 'Help'          },
-    { icon: TbBrandGithub,    name: 'Github',   title: 'GitHub'        },
-    { icon: TbSettings,       name: 'Settings', title: 'Settings'      },
+    { icon: TbHome2,          name: 'Input',    key: 'nav.input'    },
+    { icon: TbQuestionCircle, name: 'Help',     key: 'nav.help'     },
+    { icon: TbBrandGithub,    name: 'Github',   key: 'nav.github'   },
+    { icon: TbSettings,       name: 'Settings', key: 'nav.settings' },
 ]
 
 // ── Tutorial preference ────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ function Enter() {
                     <img src={logo} className='header-logo' alt='InCCsight logo' />
                     <div className='header-title'>
                         <span className='header-name'>InCCsight</span>
-                        <span className='header-sub'>Corpus Callosum Analysis Tool</span>
+                        <span className='header-sub'>{t('enter.subtitle')}</span>
                     </div>
 
                     {/* Tutorial controls */}
@@ -106,7 +107,7 @@ function Enter() {
                                 checked={tutorialEnabled}
                                 onChange={e => toggleTutorialEnabled(e.target.checked)}
                             />
-                            <span>Show tutorial on startup</span>
+                            <span>{t('tutorial.onStartup')}</span>
                         </label>
                         <button
                             className='tut-launch-btn'
@@ -114,7 +115,7 @@ function Enter() {
                             title='Open the guided tutorial'
                         >
                             <TbQuestionCircle />
-                            <span>Tutorial</span>
+                            <span>{t('tutorial.button')}</span>
                         </button>
                     </div>
                 </div>
@@ -122,17 +123,20 @@ function Enter() {
                 {/* Corpo: sidebar + conteúdo */}
                 <div className='enter-body'>
                     <nav className='enter-sidebar'>
-                        {NAV.map(({ icon: Icon, name, title }) => (
-                            <button
-                                key={name}
-                                className={`nav-btn${page === name ? ' active' : ''}`}
-                                title={title}
-                                onClick={() => setPage(name)}
-                            >
-                                <Icon />
-                                <span className='nav-label'>{title}</span>
-                            </button>
-                        ))}
+                        {NAV.map(({ icon: Icon, name, key }) => {
+                            const title = t(key)
+                            return (
+                                <button
+                                    key={name}
+                                    className={`nav-btn${page === name ? ' active' : ''}`}
+                                    title={title}
+                                    onClick={() => setPage(name)}
+                                >
+                                    <Icon />
+                                    <span className='nav-label'>{title}</span>
+                                </button>
+                            )
+                        })}
                     </nav>
 
                     <div className='enter-content'>

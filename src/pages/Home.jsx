@@ -14,6 +14,7 @@ import { TbAlertTriangle } from 'react-icons/tb'
 import '../styles/home.scss'
 import { getGroupColors } from '../settings/palettes'
 import { qcFail, apiBase } from '../settings/settings'
+import { t } from '../settings/i18n'
 
 const API = apiBase()
 
@@ -190,13 +191,13 @@ function Home() {
 
                 <div className='topbar-tabs'>
                     {[
-                        { id: 'qc',      label: 'Quality Control'  },
-                        { id: '2D',      label: '2D Segmentation'  },
-                        { id: '3D',      label: '3D Volumetric'    },
+                        { id: 'qc',      label: t('tab.qc')  },
+                        { id: '2D',      label: t('tab.2d')  },
+                        { id: '3D',      label: t('tab.3d')    },
                         ...(allGroups.length >= 2
-                            ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
+                            ? [{ id: 'compare', label: t('tab.compare'), badge: allGroups.length }]
                             : []),
-                        { id: 'demograph', label: 'Demographics' },
+                        { id: 'demograph', label: t('tab.demograph') },
                     ].map(tab => (
                         <button
                             key={tab.id}

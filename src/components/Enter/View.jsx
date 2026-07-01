@@ -5,6 +5,7 @@ import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
 import Question from '../Question/Question'
 import SettingsPanel from '../Settings/SettingsPanel'
 import { getSetting, apiBase } from '../../settings/settings'
+import { t } from '../../settings/i18n'
 
 // API base URL. In production the React build is served by the same Express
 // server, so an empty string (relative URLs) hits the right origin. In dev the
@@ -258,7 +259,7 @@ function View({ type }) {
     if (type === 'Input') {
         return (
             <>
-                <span className='enter-name'>Select the folders to analyse — one per group.</span>
+                <span className='enter-name'>{t('enter.selectFolders')}</span>
 
                 {/* Group list */}
                 <div className='folders-inputs'>
@@ -276,13 +277,13 @@ function View({ type }) {
 
                     <button className='add-btn' onClick={addGroup}>
                         <TbPlus className='add-icon' />
-                        <span>Add group</span>
+                        <span>{t('enter.addGroup')}</span>
                     </button>
                 </div>
 
                 {/* Method selector — multi-select */}
                 <div className='method-selector'>
-                    <span className='method-label'>Segmentation methods</span>
+                    <span className='method-label'>{t('enter.segMethods')}</span>
                     <div className='method-pills'>
                         {METHODS.map(m => {
                             const checked = selectedMethods.has(m.id)
@@ -323,14 +324,14 @@ function View({ type }) {
                 <div className='row-btns'>
                     <div className='secondary-btns'>
                         <div className='btn-history' onClick={loadLast}>
-                            <span>Last analysis</span>
+                            <span>{t('enter.lastAnalysis')}</span>
                         </div>
                         <div className='btn-demo' onClick={runDemo}>
-                            <span>Demo data</span>
+                            <span>{t('enter.demoData')}</span>
                         </div>
                     </div>
                     <button className='btn-start' onClick={startAnalyzes}>
-                        Run analysis
+                        {t('enter.runAnalysis')}
                     </button>
                 </div>
             </>
@@ -345,7 +346,7 @@ function View({ type }) {
         return (
             <div className='enter-question'>
                 <div className='search-field'>
-                    <span className='enter-name'>Frequently asked questions about the tool.</span>
+                    <span className='enter-name'>{t('enter.help')}</span>
                     <input
                         className='search-input'
                         placeholder='Search questions...'

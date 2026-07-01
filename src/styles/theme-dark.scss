@@ -1,0 +1,116 @@
+/* ── Dark theme ───────────────────────────────────────────────────────────────
+ * Additive overrides applied only when <html data-theme="dark">. This keeps the
+ * light theme (the default SCSS) untouched, so toggling can never break it.
+ * Coverage focuses on the app chrome (shells, cards, tables, forms). Plotly
+ * chart interiors keep their light canvas for now — themed in a later pass.
+ * ------------------------------------------------------------------------- */
+
+$d-bg:        #0f1626;   // page background
+$d-surface:   #18202f;   // cards / panels
+$d-surface-2: #212b3d;   // raised / hover
+$d-text:      #e6e9f2;   // primary text
+$d-muted:     #97a0bd;   // secondary text
+$d-border:    #2a344a;   // borders / dividers
+$d-accent:    #6d84f7;   // accent
+
+html[data-theme='dark'] {
+
+    background: $d-bg;
+
+    .container { color: $d-text; background: $d-bg; }
+
+    /* ── Dashboard shell ─────────────────────────────────────────────── */
+    .dash-root, .dash-body, .dash-main { background: $d-bg; }
+
+    .dash-sidebar {
+        background: $d-surface;
+        border-right-color: $d-border;
+
+        .sidebar-title, .sidebar-footer, .sub-name { color: $d-text; }
+        .sidebar-search {
+            background: $d-surface-2;
+            border-color: $d-border;
+            color: $d-text;
+            &::placeholder { color: $d-muted; }
+        }
+        .sub-item:hover { background: rgba(109, 132, 247, 0.12); }
+        .sub-item--active { background: rgba(109, 132, 247, 0.18); }
+        .group-pill { background: $d-surface-2; color: $d-text; border-color: $d-border; }
+    }
+    .sidebar-toggle-btn { background: $d-surface-2; color: $d-text; border-color: $d-border; }
+
+    /* ── Cards ───────────────────────────────────────────────────────── */
+    .dash-card {
+        background: $d-surface;
+        border-color: $d-border;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+    }
+    .dc-header { border-bottom-color: $d-border; }
+    .dc-header--collapsible:hover { background: $d-surface-2; }
+    .dc-title { color: $d-text; }
+
+    /* ── Subject banner / KPI / morpho ───────────────────────────────── */
+    .subject-banner, .kpi-card, .sb-section, .sb-morpho-row {
+        background: $d-surface-2;
+        border-color: $d-border;
+        color: $d-text;
+    }
+    .kpi-value, .sb-id, .sbm-value { color: $d-text; }
+    .kpi-label, .kpi-sub, .sb-path, .sbm-label, .sbm-unit { color: $d-muted; }
+
+    /* ── Tables (generic) ────────────────────────────────────────────── */
+    table, .sb-table, .gc-table, .subject-table {
+        color: $d-text;
+        th { color: $d-muted; border-color: $d-border; }
+        td { border-color: $d-border; }
+    }
+    .gc-table-total td { background: $d-surface-2; }
+    .sbt-label { color: $d-muted; }
+
+    /* ── Form controls ───────────────────────────────────────────────── */
+    select, input[type='text'], input[type='search'], textarea {
+        background: $d-surface-2;
+        color: $d-text;
+        border-color: $d-border;
+    }
+    option { background: $d-surface-2; color: $d-text; }
+
+    /* ── Group comparison / pills ────────────────────────────────────── */
+    .gc-container, .gc-section, .gc-chart-card, .gc-legend {
+        color: $d-text;
+    }
+    .gc-chart-card { background: $d-surface; border-color: $d-border; }
+    .gc-section-title, .gc-title { color: $d-text; }
+    .gc-pill, .gc-pill-sm { background: $d-surface-2; color: $d-text; border-color: $d-border; }
+    .gc-pill.active, .gc-pill-sm.active { background: $d-accent; color: #fff; }
+
+    /* ── Landing / Enter card ────────────────────────────────────────── */
+    .enter-card { background: $d-surface; }
+    .enter-sidebar { background: $d-surface-2; border-right-color: $d-border; }
+    .enter-content { color: $d-text; }
+    .enter-name, .method-label { color: $d-text; }
+    .nav-btn { color: $d-muted; &.active, &:hover { color: $d-text; background: rgba(109,132,247,0.12); } }
+    .folder-selector, .method-pill { background: $d-surface-2; border-color: $d-border; color: $d-text; }
+
+    /* ── Settings panel ──────────────────────────────────────────────── */
+    .set-section { background: $d-surface-2; border-color: $d-border; }
+    .set-section-title { border-bottom-color: $d-border; }
+    .set-row { border-bottom-color: $d-border; }
+    .set-row-label span:first-child { color: $d-text; }
+    .set-pill { background: $d-surface; color: $d-text; border-color: $d-border; }
+    .set-pill.active { background: rgba(109, 132, 247, 0.22); color: #cdd6ff; border-color: $d-accent; }
+    .set-toggle:not(.on) { background: #3a445e; }
+    .set-soon { background: $d-surface; color: $d-muted; }
+    .set-text { background: $d-surface; color: $d-text; border-color: $d-border; }
+
+    /* ── Tutorial modal ──────────────────────────────────────────────── */
+    .tut-modal { background: $d-surface; color: $d-text; }
+    .tut-title { color: $d-text; }
+    .tut-body { color: #c3cae0; }
+    .tut-footer { border-top-color: $d-border; }
+    .tut-btn--ghost { background: $d-surface-2; color: $d-text; }
+    .tut-close:hover { color: $d-text; }
+
+    /* ── Glossary / modals ───────────────────────────────────────────── */
+    .glossary-modal, .modal-container { background: $d-surface; color: $d-text; }
+}

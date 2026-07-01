@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import './SettingsPanel.scss'
 import { loadSettings, saveSettings, resetSettings, applyTheme } from '../../settings/settings'
 import { PALETTES } from '../../settings/palettes'
+import { t } from '../../settings/i18n'
 
 // Pipeline methods (mirror of the Input screen)
 const METHODS = [
@@ -68,6 +69,8 @@ function SettingsPanel() {
         const next = saveSettings(patch)
         setS({ ...next })
         if ('theme' in patch) applyTheme(patch.theme)
+        // Language change re-evaluates every t() call — reload to apply everywhere.
+        if ('language' in patch) { window.location.reload(); return }
         setSavedFlash(true)
         clearTimeout(update._t)
         update._t = setTimeout(() => setSavedFlash(false), 1100)
@@ -87,13 +90,13 @@ function SettingsPanel() {
     return (
         <div className='settings-panel'>
             <div className='set-head'>
-                <span className='enter-name'>Preferences that personalise the tool for each user.</span>
-                <span className={`set-saved${savedFlash ? ' show' : ''}`}>✓ Saved</span>
+                <span className='enter-name'>{t('set.intro')}</span>
+                <span className={`set-saved${savedFlash ? ' show' : ''}`}>{t('set.saved')}</span>
             </div>
 
             {/* ── Appearance & accessibility ─────────────────────────────── */}
-            <Section title='Appearance & accessibility'>
-                <Row label='Group colour palette' hint='Used in every group-coloured chart'>
+            <Section title={t('set.appearance')}>
+                <Row label={t('set.palette')} hint='Used in every group-coloured chart'>
                     <div className='set-pills'>
                         {Object.keys(PALETTES).map(p => (
                             <button
@@ -111,7 +114,7 @@ function SettingsPanel() {
                         ))}
                     </div>
                 </Row>
-                <Row label='Theme' hint='Light / Dark'>
+                <Row label={t('set.theme')} hint='Light / Dark'>
                     <div className='set-pills'>
                         {[{ v: 'light', l: '☀ Light' }, { v: 'dark', l: '🌙 Dark' }].map(o => (
                             <button
@@ -124,7 +127,7 @@ function SettingsPanel() {
                         ))}
                     </div>
                 </Row>
-                <Row label='Decimal places in tables' hint='Numeric precision'>
+                <Row label={t('set.decimals')} hint='Numeric precision'>
                     <select value={s.decimals} onChange={e => update({ decimals: parseInt(e.target.value, 10) })}>
                         {[2, 3, 4, 5, 6].map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
@@ -132,8 +135,8 @@ function SettingsPanel() {
             </Section>
 
             {/* ── Analysis defaults ──────────────────────────────────────── */}
-            <Section title='Analysis defaults'>
-                <Row label='Pre-selected methods' hint='Checked by default on the Select-data screen'>
+            <Section title={t('set.analysis')}>
+                <Row label={t('set.methods')} hint='Checked by default on the Select-data screen'>
                     <div className='set-pills'>
                         {METHODS.map(m => (
                             <button
@@ -146,34 +149,34 @@ function SettingsPanel() {
                         ))}
                     </div>
                 </Row>
-                <Row label='Default scalar' hint='Pre-selected in the dashboard charts'>
+                <Row label={t('set.defaultScalar')} hint='Pre-selected in the dashboard charts'>
                     <select value={s.defaultScalar} onChange={e => update({ defaultScalar: e.target.value })}>
                         {SCALARS.map(sc => <option key={sc} value={sc}>{sc}</option>)}
                     </select>
                 </Row>
-                <Row label='Default segmentation method'>
+                <Row label={t('set.defaultSeg')}>
                     <select value={s.defaultSegMethod} onChange={e => update({ defaultSegMethod: e.target.value })}>
                         {SEG_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
                 </Row>
-                <Row label='Default parcellation scheme'>
+                <Row label={t('set.defaultParc')}>
                     <select value={s.defaultParcellation} onChange={e => update({ defaultParcellation: e.target.value })}>
                         {PARC_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                 </Row>
-                <Row label='Default chart type' hint='Group comparison distributions'>
+                <Row label={t('set.defaultChart')} hint='Group comparison distributions'>
                     <select value={s.defaultChartType} onChange={e => update({ defaultChartType: e.target.value })}>
                         {CHART_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
                 </Row>
-                <Row label='Show tutorial on startup'>
+                <Row label={t('tutorial.onStartup')}>
                     <Toggle checked={s.tutorialOnStartup} onChange={v => update({ tutorialOnStartup: v })} />
                 </Row>
             </Section>
 
             {/* ── Scientific parameters ──────────────────────────────────── */}
-            <Section title='Scientific parameters'>
-                <Row label='QC PASS/FAIL threshold' hint='P(incorrect) above this = FAIL · applied live'>
+            <Section title={t('set.scientific')}>
+                <Row label={t('set.qcThreshold')} hint='P(incorrect) above this = FAIL · applied live'>
                     <div className='set-slider'>
                         <input
                             type='range' min='0.05' max='0.95' step='0.05'
@@ -183,7 +186,7 @@ function SettingsPanel() {
                         <span className='set-slider-val'>{Number(s.qcThreshold).toFixed(2)}</span>
                     </div>
                 </Row>
-                <Row label='CNN compute device' hint='Used when running the pipeline'>
+                <Row label={t('set.cnnDevice')} hint='Used when running the pipeline'>
                     <select value={s.cnnDevice} onChange={e => update({ cnnDevice: e.target.value })}>
                         <option value='auto'>Auto</option>
                         <option value='cpu'>CPU</option>
@@ -193,8 +196,8 @@ function SettingsPanel() {
             </Section>
 
             {/* ── Language & infrastructure ──────────────────────────────── */}
-            <Section title='Language & infrastructure'>
-                <Row label='Language'>
+            <Section title={t('set.langInfra')}>
+                <Row label={t('set.language')}>
                     <div className='set-pills'>
                         {[{ v: 'en', l: 'English' }, { v: 'pt', l: 'Português' }].map(o => (
                             <button
@@ -207,7 +210,7 @@ function SettingsPanel() {
                         ))}
                     </div>
                 </Row>
-                <Row label='Exported CSV delimiter' hint='Excel (pt-BR) expects “;”'>
+                <Row label={t('set.csvDelim')} hint='Excel (pt-BR) expects “;”'>
                     <div className='set-pills'>
                         {[{ v: ',', l: 'Comma  ,' }, { v: ';', l: 'Semicolon  ;' }].map(o => (
                             <button
@@ -220,7 +223,7 @@ function SettingsPanel() {
                         ))}
                     </div>
                 </Row>
-                <Row label='API endpoint' hint='Blank = same origin · reload to apply'>
+                <Row label={t('set.apiEndpoint')} hint='Blank = same origin · reload to apply'>
                     <input
                         className='set-text'
                         type='text'
@@ -232,8 +235,8 @@ function SettingsPanel() {
             </Section>
 
             <div className='set-footer'>
-                <button className='set-reset' onClick={handleReset}>↺ Reset to defaults</button>
-                <span className='set-note'>Saved automatically · stored locally in this browser</span>
+                <button className='set-reset' onClick={handleReset}>{t('set.reset')}</button>
+                <span className='set-note'>{t('set.savedNote')}</span>
             </div>
         </div>
     )
