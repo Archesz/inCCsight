@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import FolderSelector from '../FolderSelector/FolderSelector'
 import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
 import Question from '../Question/Question'
+import SettingsPanel from '../Settings/SettingsPanel'
+import { getSetting } from '../../settings/settings'
 
 // API base URL. In production the React build is served by the same Express
 // server, so an empty string (relative URLs) hits the right origin. In dev the
@@ -49,8 +51,8 @@ function View({ type }) {
     const [folderGroups, setFolderGroups] = useState([
         { id: 1, path: '', groupName: 'Group 1' }
     ])
-    // set of selected methods (multi-select)
-    const [selectedMethods, setSelectedMethods] = useState(new Set(['roqs', 'watershed', 'cnn']))
+    // set of selected methods (multi-select) — initialised from saved preferences
+    const [selectedMethods, setSelectedMethods] = useState(() => new Set(getSetting('defaultMethods')))
     const [filter, setFilter] = useState('')
     const [error, setError]     = useState('')
 
@@ -359,6 +361,10 @@ function View({ type }) {
                 </div>
             </div>
         )
+    }
+
+    if (type === 'Settings') {
+        return <SettingsPanel />
     }
 
     return <div className='news-container'><span>Coming soon</span></div>

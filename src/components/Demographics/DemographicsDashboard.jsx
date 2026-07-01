@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import Plot from 'react-plotly.js'
 import './DemographicsDashboard.scss'
+import { getGroupColors } from '../../settings/palettes'
 
-const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+const GROUP_COLORS = getGroupColors()
 
 // ── Known column metadata ─────────────────────────────────────────────────────
 const COL_META = {

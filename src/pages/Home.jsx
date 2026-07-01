@@ -12,10 +12,11 @@ import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
 
 import '../styles/home.scss'
+import { getGroupColors } from '../settings/palettes'
 
 const API = process.env.REACT_APP_API_URL || ''
 
-const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+const GROUP_COLORS = getGroupColors()
 
 // ── Demographics fallback (shown when demograph.csv is absent) ─────────────────
 function DemographNoData({ subjects, allGroups, onReload }) {

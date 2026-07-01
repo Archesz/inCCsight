@@ -9,6 +9,7 @@ import Midline             from '../../graphs/Line/Midline'
 import VolumetricView      from '../../graphs/Volume/VolumetricView'
 import { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
 import InfoTool           from '../../components/InfoTool/InfoTool'
+import { getSetting }     from '../../settings/settings'
 
 import '../../styles/home.scss'
 
@@ -73,8 +74,8 @@ function calcAsymmetryIndex(parcellation, method) {
 function SubjectBanner({ subject, onDeselect }) {
     const [imgMethod,   setImgMethod]   = useState('ROQS')
     const [imgErrors,   setImgErrors]   = useState({})
-    const [parcMethod,  setParcMethod]  = useState('Witelson')
-    const [parcScalar,  setParcScalar]  = useState('FA')
+    const [parcMethod,  setParcMethod]  = useState(() => getSetting('defaultParcellation'))
+    const [parcScalar,  setParcScalar]  = useState(() => getSetting('defaultScalar'))
 
     const qc      = subject.qc || {}
     const hasCNN  = Object.keys(subject.CNN_scalar  || {}).length > 0
@@ -356,7 +357,7 @@ function Card({ title, info, controls, children, collapsible = false, defaultOpe
 
 // ── Main view component ───────────────────────────────────────────────────────
 function View({ view, data, selectedId, onDeselect }) {
-    const [kpiMethod,       setKpiMethod]       = useState('ROQS_scalar')
+    const [kpiMethod,       setKpiMethod]       = useState(() => getSetting('defaultSegMethod'))
     const [selectedCNNIdx,  setSelectedCNNIdx]  = useState(0)
     const cnnSubjects = useCNNSubjects(data)
 

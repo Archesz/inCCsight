@@ -2,8 +2,10 @@ import React, { useState, useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
 import InfoTool from '../InfoTool/InfoTool'
+import { getGroupColors } from '../../settings/palettes'
+import { getSetting } from '../../settings/settings'
 
-const GROUP_COLORS  = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+const GROUP_COLORS  = getGroupColors()
 const SCALARS       = ['FA', 'MD', 'RD', 'AD']
 
 // DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
@@ -180,7 +182,7 @@ function ThicknessProfile({ allSubjects, allGroups, segMethod }) {
 // ── Scalar along CC midline ───────────────────────────────────────────────
 
 function MidlineProfile({ allSubjects, allGroups, segMethod }) {
-    const [scalar, setScalar] = useState('FA')
+    const [scalar, setScalar] = useState(() => getSetting('defaultScalar'))
     const midlineKey = segMethod.replace('_scalar', '_midlines')
     const traces = []
 
@@ -227,8 +229,8 @@ function MidlineProfile({ allSubjects, allGroups, segMethod }) {
 // ── Parcellation by CC region ─────────────────────────────────────────────
 
 function ParcellationBar({ allSubjects, allGroups, segMethod }) {
-    const [scalar,     setScalar]     = useState('FA')
-    const [parcMethod, setParcMethod] = useState('Witelson')
+    const [scalar,     setScalar]     = useState(() => getSetting('defaultScalar'))
+    const [parcMethod, setParcMethod] = useState(() => getSetting('defaultParcellation'))
     const parcKey = segMethod.replace('_scalar', '_parcellation')
     const regions = ['P1', 'P2', 'P3', 'P4', 'P5']
 
@@ -501,8 +503,8 @@ function MeanTable({ allSubjects, allGroups, segMethod }) {
 // ── Main ──────────────────────────────────────────────────────────────────
 
 function GroupComparison({ allSubjects, allGroups }) {
-    const [segMethod,       setSegMethod]       = useState('ROQS_scalar')
-    const [chartType,       setChartType]       = useState('box')
+    const [segMethod,       setSegMethod]       = useState(() => getSetting('defaultSegMethod'))
+    const [chartType,       setChartType]       = useState(() => getSetting('defaultChartType'))
     const [normalize,       setNormalize]       = useState(false)
 
     // ── Per-scalar Y-axis ranges — computed across ALL methods so scale is stable when switching ──

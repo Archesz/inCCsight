@@ -1,0 +1,201 @@
+/* ── Settings panel (rendered inside the Enter content area) ─────────────────── */
+
+.settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: 640px;
+}
+
+.set-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    .enter-name { margin: 0; }
+}
+
+.set-saved {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #00a06b;
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.15s, transform 0.15s;
+
+    &.show { opacity: 1; transform: translateY(0); }
+}
+
+.set-section {
+    border: 1px solid #e6e9f2;
+    border-radius: 12px;
+    padding: 6px 18px;
+    background: #fbfcff;
+}
+
+.set-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #4C6EF5;
+    padding: 12px 0 4px;
+    border-bottom: 1px solid #eef0f7;
+    margin-bottom: 4px;
+}
+
+.set-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: #8a6d00;
+    background: #fff4cc;
+    border-radius: 6px;
+    padding: 2px 7px;
+    text-transform: none;
+}
+
+.set-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f2f8;
+
+    &:last-child { border-bottom: none; }
+}
+
+.set-row-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    span:first-child { font-size: 14px; font-weight: 600; color: #2a3354; }
+}
+
+.set-hint {
+    font-size: 11.5px;
+    color: #97a0bd;
+}
+
+.set-row-control {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+
+    select {
+        min-width: 150px;
+        height: 34px;
+    }
+}
+
+/* Pills (palette / methods / delimiter) */
+.set-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.set-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1.5px solid #d8deee;
+    background: #fff;
+    color: #41496a;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 13px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover { border-color: #b9c2de; }
+    &.active {
+        border-color: #4C6EF5;
+        background: #eef2ff;
+        color: #2b3ba8;
+    }
+}
+
+.set-swatches { display: inline-flex; gap: 2px; }
+.set-swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+/* Toggle switch */
+.set-toggle {
+    width: 42px;
+    height: 24px;
+    border-radius: 13px;
+    border: none;
+    background: #cfd6e8;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.18s;
+
+    &.on { background: #4C6EF5; }
+
+    .set-toggle-knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        transition: left 0.18s;
+    }
+    &.on .set-toggle-knob { left: 21px; }
+}
+
+/* "Planned" tag for not-yet-wired settings */
+.set-soon {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #9aa3bf;
+    background: #eef0f7;
+    border-radius: 6px;
+    padding: 4px 10px;
+    letter-spacing: 0.3px;
+}
+
+.set-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 4px;
+}
+
+.set-reset {
+    border: 1.5px solid #e0d0d0;
+    background: #fff;
+    color: #b14a4a;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover { background: #fff0f0; border-color: #d99; }
+}
+
+.set-note { font-size: 11.5px; color: #97a0bd; }
+
+@media (max-width: 560px) {
+    .set-row { flex-direction: column; align-items: flex-start; }
+    .set-row-control { width: 100%; justify-content: flex-start; }
+    .set-pills { justify-content: flex-start; }
+}

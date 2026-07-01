@@ -2,8 +2,9 @@ import React, { useState, useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import VolumetricView from '../../graphs/Volume/VolumetricView'
 import './TractographyDashboard.scss'
+import { getGroupColors } from '../../settings/palettes'
 
-const GROUP_COLORS    = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+const GROUP_COLORS    = getGroupColors()
 // Keep in sync with WITELSON_REGION_META in VolumetricView.jsx
 const WITELSON_LABELS = ['W1 Anterior', 'W2 Mid-ant.', 'W3 Central', 'W4 Mid-post.', 'W5 Posterior']
 const WITELSON_COLORS = ['#636EFA', '#00CC96', '#FFA15A', '#AB63FA', '#EF553B']

@@ -6,6 +6,7 @@ import { TbHome2, TbQuestionCircle, TbBrandGithub, TbSettings } from 'react-icon
 import View from './View'
 import Loading from '../Loading/Loading'
 import Tutorial from '../Tutorial/Tutorial'
+import { getSetting, saveSettings } from '../../settings/settings'
 
 const NAV = [
     { icon: TbHome2,          name: 'Input',    title: 'Select data'   },
@@ -15,21 +16,17 @@ const NAV = [
 ]
 
 // ── Tutorial preference ────────────────────────────────────────────────────────
-// `enabled` is persisted in localStorage (survives across visits). First-time
-// users have no stored value → the tutorial is ON by default.
+// Stored under the unified settings object (settings.tutorialOnStartup) so the
+// Settings page and this toggle stay in sync. First-time users default to ON.
 // A per-session flag (sessionStorage) makes it auto-open once per app launch
 // rather than on every in-app navigation back to the landing screen.
-const TUT_ENABLED_KEY = 'inccsight.tutorial.enabled'
-const TUT_SHOWN_KEY   = 'inccsight.tutorial.shownThisSession'
+const TUT_SHOWN_KEY = 'inccsight.tutorial.shownThisSession'
 
 function readTutorialEnabled() {
-    try {
-        const v = localStorage.getItem(TUT_ENABLED_KEY)
-        return v === null ? true : v === '1'
-    } catch (_) { return true }
+    return getSetting('tutorialOnStartup') !== false
 }
 function persistEnabled(val) {
-    try { localStorage.setItem(TUT_ENABLED_KEY, val ? '1' : '0') } catch (_) {}
+    saveSettings({ tutorialOnStartup: !!val })
 }
 function shownThisSession() {
     try { return sessionStorage.getItem(TUT_SHOWN_KEY) === '1' } catch (_) { return false }

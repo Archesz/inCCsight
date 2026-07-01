@@ -5,6 +5,10 @@ import Enter from "./components/Enter/Enter";
 import Loading from './components/Loading/Loading'
 import './styles/global.scss'
 
+// Apply the saved theme before first paint (foundation for dark mode)
+import { applyTheme } from './settings/settings'
+applyTheme()
+
 import {
   createBrowserRouter,
   RouterProvider,
