@@ -26,7 +26,6 @@ const STEPS = [
         title: '2 · Choose the methods',
         body: [
             'Pick the segmentation methods to run: ROQS (2D), Watershed (2D) and CNN (3D, requires PyTorch).',
-            'Under Pipeline options you can “Skip Tractography” for a faster run.',
             'A Vision-Transformer Quality-Control model scores every segmentation automatically.',
         ],
     },
@@ -81,15 +80,8 @@ const STEPS = [
         ],
     },
     {
-        icon: '🧵',
-        title: '9 · Tractography',
-        body: [
-            'When the pipeline produces streamlines, a Tractography tab appears with the reconstructed corpus-callosum tracts and their statistics.',
-        ],
-    },
-    {
         icon: '✅',
-        title: '10 · Quality Control',
+        title: '9 · Quality Control',
         body: [
             'The Quality Control tab shows the automatic PASS / FAIL flag and confidence for each segmentation, produced by the ViT QC model.',
             'Remove problematic subjects from the analysis (and restore them later) — the dashboard recomputes instantly.',

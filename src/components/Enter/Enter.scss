@@ -115,6 +115,26 @@ $text-muted:    #7a849e;
         svg { font-size: 16px; }
         &:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.6); }
     }
+
+    .enter-site-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        background: $accent;
+        color: $white;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 7px 14px;
+        border-radius: 9px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s;
+
+        svg { font-size: 16px; }
+        .esl-ext { font-size: 13px; opacity: 0.85; }
+        &:hover { background: lighten($accent, 6%); }
+    }
 }
 
 @media (max-width: 620px) {

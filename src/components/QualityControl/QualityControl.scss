@@ -458,6 +458,46 @@ $text    : #1a1f36;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+
+    .qcc-method-tabs {
+        display: flex;
+        gap: 4px;
+    }
+
+    .qcc-mtab {
+        padding: 6px 14px;
+        border-radius: 7px;
+        border: 1.5px solid $border;
+        background: $surface;
+        color: $muted;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.14s, border-color 0.14s, color 0.14s;
+
+        &:hover { border-color: $accent; color: $accent; }
+        &.active { background: $primary; border-color: $primary; color: #fff; }
+    }
+
+    .qcg-download-btn {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 7px 15px;
+        border-radius: 8px;
+        border: 1.5px solid $border;
+        background: $surface;
+        color: $primary;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+        &:hover { border-color: $accent; color: $accent; background: rgba($accent, 0.06); }
+    }
 }
 
 .qco-hint {

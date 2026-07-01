@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import './Enter.scss'
 import logo from '../../assets/inccsight.png'
 
-import { TbHome2, TbQuestionCircle, TbBrandGithub, TbSettings } from 'react-icons/tb'
+import { TbHome2, TbQuestionCircle, TbBrandGithub, TbSettings, TbWorld, TbExternalLink } from 'react-icons/tb'
 import View from './View'
 import Loading from '../Loading/Loading'
 import Tutorial from '../Tutorial/Tutorial'
@@ -117,6 +117,17 @@ function Enter() {
                             <TbQuestionCircle />
                             <span>{t('tutorial.button')}</span>
                         </button>
+                        <a
+                            className='enter-site-link'
+                            href='https://inccsight-site.vercel.app'
+                            target='_blank'
+                            rel='noreferrer'
+                            title='Open the inCCsight website'
+                        >
+                            <TbWorld />
+                            <span>Website</span>
+                            <TbExternalLink className='esl-ext' />
+                        </a>
                     </div>
                 </div>
 
