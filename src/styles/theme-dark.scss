@@ -113,4 +113,23 @@ html[data-theme='dark'] {
 
     /* ── Glossary / modals ───────────────────────────────────────────── */
     .glossary-modal, .modal-container { background: $d-surface; color: $d-text; }
+
+    /* ── Help & Contribute panels ────────────────────────────────────── */
+    .hp-title, .cp-title { color: $d-text; }
+    .hp-sub, .cp-sub, .hp-step-text, .cp-way-text, .cp-note { color: $d-muted; }
+    .hp-step, .cp-way { background: $d-surface-2; border-color: $d-border; }
+    .hp-step-title, .cp-way-title, .hp-step-title { color: $d-text; }
+    .hp-step-badge, .cp-way-icon { background: rgba(109, 132, 247, 0.15); color: #9fb0f5; }
+    .hp-card, .cp-card, .hp-faq-item, .cp-guide { background: $d-surface; border-color: $d-border; }
+    .hp-code, .cp-code { background: #0d1420; border-color: $d-border; color: #cdd6ee; }
+    .hp-faq-q, .cp-guide-title { color: $d-text; }
+    .hp-faq-q:hover, .cp-guide-head:hover { background: $d-surface-2; }
+    .hp-faq-a, .cp-steps li { color: #b9c2dd; }
+    .hp-search input { background: $d-surface-2; color: $d-text; border-color: $d-border; }
+    .cp-guide-head { background: $d-surface-2; }
+    .hp-faq-cat { color: $d-muted; }
+    .hp-links, .cp-note code { color: $d-muted; }
+    .cp-note code { background: rgba(109, 132, 247, 0.15); color: #cdd6ff; }
+    .cp-todos li { color: #c3cae0; }
+    .cp-repo-btn { background: $d-accent; }
 }

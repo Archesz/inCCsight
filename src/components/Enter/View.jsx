@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FolderSelector from '../FolderSelector/FolderSelector'
 import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
-import Question from '../Question/Question'
+import HelpPanel from '../Help/HelpPanel'
+import ContributePanel from '../Contribute/ContributePanel'
 import SettingsPanel from '../Settings/SettingsPanel'
 import { getSetting, apiBase } from '../../settings/settings'
 import { t } from '../../settings/i18n'
@@ -32,14 +33,6 @@ const METHODS = [
     { id: 'cnn',       label: 'CNN (3D)',        desc: 'Volumetric 3D segmentation (requires PyTorch)' },
 ]
 
-const questions = [
-    { question: 'How do I add data?',            response: 'Paste the absolute path to each group folder (e.g. C:\\data\\controls). Each sub-folder should be a subject containing DTI files.' },
-    { question: 'How do I add more groups?',     response: 'Click "+ Add group", give the group a name, and provide the corresponding folder path.' },
-    { question: 'How do I compare groups?',      response: 'After analysis, the dashboard shows per-group tabs and a "Compare Groups" tab with side-by-side boxplots.' },
-    { question: 'What are ROQS and CNN?',        response: 'ROQS produces 2D corpus callosum segmentation. CNN produces volumetric 3D segmentation. Selecting both runs the full pipeline.' },
-    { question: 'What files are required?',      response: 'DTI data in NIfTI format (.nii / .nii.gz) with eigenvector/eigenvalue files: dti_L1–3, dti_V1–3.' },
-]
-
 // Message shown when the Express backend can't be reached.
 const SERVER_UNREACHABLE =
     'Cannot reach the analysis server. Make sure inCCsight is running ' +
@@ -53,7 +46,6 @@ function View({ type }) {
     ])
     // set of selected methods (multi-select) — initialised from saved preferences
     const [selectedMethods, setSelectedMethods] = useState(() => new Set(getSetting('defaultMethods')))
-    const [filter, setFilter] = useState('')
     const [error, setError]     = useState('')
 
     // Stable, render-independent counter for unique group ids.
@@ -339,28 +331,11 @@ function View({ type }) {
     }
 
     if (type === 'Help') {
-        const filtered = questions.filter(q =>
-            q.question.toLowerCase().includes(filter.toLowerCase()) ||
-            q.response.toLowerCase().includes(filter.toLowerCase())
-        )
-        return (
-            <div className='enter-question'>
-                <div className='search-field'>
-                    <span className='enter-name'>{t('enter.help')}</span>
-                    <input
-                        className='search-input'
-                        placeholder='Search questions...'
-                        value={filter}
-                        onChange={e => setFilter(e.target.value)}
-                    />
-                </div>
-                <div className='questions-container'>
-                    {filtered.map((q, i) => (
-                        <Question key={i} question={q.question} response={q.response} />
-                    ))}
-                </div>
-            </div>
-        )
+        return <HelpPanel />
+    }
+
+    if (type === 'Github') {
+        return <ContributePanel />
     }
 
     if (type === 'Settings') {
