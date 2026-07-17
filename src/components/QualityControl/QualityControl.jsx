@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import './QualityControl.scss'
-import { qcFail, buildCsv, apiBase } from '../../settings/settings'
+import { qcFail, buildCsv, apiBase, getSetting, saveSettings } from '../../settings/settings'
 
 const API      = apiBase()
 const SCALARS  = ['FA', 'MD', 'RD', 'AD']
@@ -99,7 +99,7 @@ function downloadOverviewCsv(subjects) {
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
     a.href     = url
-    a.download = `qc_method_overview_${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `qc_method_overview_thr${getSetting('qcThreshold')}_${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -303,7 +303,9 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
 export default function QualityControl({ allSubjects, onReload }) {
     const [viewMode,   setViewMode]   = useState('cards')   // 'cards' | 'overview'
     const [method,     setMethod]     = useState('ROQS')
-    const [threshold,  setThreshold]  = useState(0.5)
+    // Unified with Settings → Scientific parameters (qcThreshold), so Cards,
+    // Method Overview, the sidebar badges and the subject banner all agree.
+    const [threshold,  setThreshold]  = useState(() => getSetting('qcThreshold'))
     const [scalar,     setScalar]     = useState('FA')
     const [zThresh,    setZThresh]    = useState(2.0)
     const [perGroup,   setPerGroup]   = useState(false)
@@ -412,11 +414,11 @@ export default function QualityControl({ allSubjects, onReload }) {
                     </div>
 
                     <div className='qcc-group'>
-                        <span className='qcc-label'>Shape threshold: <strong>{threshold.toFixed(2)}</strong></span>
+                        <span className='qcc-label' title='Shared with Settings → Scientific parameters'>QC threshold: <strong>{threshold.toFixed(2)}</strong></span>
                         <input
                             type='range' min='0' max='1' step='0.01'
                             value={threshold}
-                            onChange={e => setThreshold(+e.target.value)}
+                            onChange={e => { const v = +e.target.value; setThreshold(v); saveSettings({ qcThreshold: v }) }}
                             className='qcc-slider'
                         />
                     </div>

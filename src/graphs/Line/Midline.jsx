@@ -1,6 +1,7 @@
 import React, { useState, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Midline.scss'
+import { plotTheme } from '../../settings/settings'
 
 const COLORS = {
     ROQS:      '#636EFA',
@@ -190,13 +191,16 @@ function Midline(props) {
         font: { size: 11, color: '#555' },
     }))
 
+    const PT = plotTheme()
     const layout = {
         height: 420,
         margin: { t: 30, l: 50, r: 10 },
         legend: { orientation: 'h', x: 1, y: 1.1, xanchor: 'right', groupclick: 'togglegroup' },
-        plot_bgcolor: '#E5ECF6',
-        yaxis: { gridcolor: 'rgb(255,255,255)', title: yAxisTitle },
-        xaxis: { gridcolor: 'rgb(255,255,255)', title: 'Points Along CC Body' },
+        plot_bgcolor: PT.plot,
+        paper_bgcolor: PT.paper,
+        font: { color: PT.font },
+        yaxis: { gridcolor: PT.grid, title: yAxisTitle },
+        xaxis: { gridcolor: PT.grid, title: 'Points Along CC Body' },
         shapes,
         annotations,
     }

@@ -151,7 +151,6 @@ class Subject:
         groups_map=None,
         roqs_shape=None,
         removed=False,
-        tract_stats=None,
     ):
         self.name                  = self._normalize_name(str(name))
         self.watershed_scalar      = watershed_scalar
@@ -175,7 +174,6 @@ class Subject:
         self.group                 = _find_group(self.img_path, groups_map or {})
         self.roqs_shape            = roqs_shape or {}
         self.removed               = bool(removed)
-        self.tract_stats           = tract_stats or {}
 
     @staticmethod
     def _normalize_name(name: str) -> str:
@@ -245,7 +243,6 @@ class Subject:
             "CNN_parcellation":       dict(self.cnn_parcellation),
             "CNN_midlines":           dict(self.cnn_midlines),
             "ROQS_shape":             dict(self.roqs_shape),
-            "tract_stats":            dict(self.tract_stats),
         }
 
 
@@ -431,34 +428,6 @@ def main():
 
     names = list(roqs_parcellation["Name"])
 
-    # ── Tractography stats (optional — produced by methods/tractography/main.py) ─
-    _tract_stats_by_name: dict = {}
-    for i, img_p in enumerate(img_paths):
-        if not img_p:
-            continue
-        # img_path points to a file inside the inCCsight/ subfolder,
-        # so the actual subject folder is one level up from dirname(img_path).
-        subj_folder = os.path.dirname(os.path.dirname(img_p))
-        tract_csv = os.path.join(subj_folder, 'tract_stats.csv')
-        if not os.path.isfile(tract_csv):
-            continue
-        try:
-            df = pd.read_csv(tract_csv)
-            if df.empty:
-                continue
-            row = df.iloc[0].to_dict()
-            norm = str(names[i]) if i < len(names) else ""
-            if norm.startswith("Subject_"):
-                norm = norm[len("Subject_"):]
-            norm = norm.zfill(7)
-            _tract_stats_by_name[norm] = {
-                k: _safe_num(v) for k, v in row.items()
-            }
-        except Exception as exc:
-            print(f"[WARNING] tract_stats.csv parse error ({subj_folder}): {exc}", flush=True)
-    if _tract_stats_by_name:
-        print(f"[OK] Tractography stats: {len(_tract_stats_by_name)} subject(s)", flush=True)
-
     # ── Build subjects ────────────────────────────────────────────────────────
     subjects_list = []
     for i, name in enumerate(names):
@@ -507,7 +476,6 @@ def main():
             groups_map        = groups_map,
             roqs_shape        = roqs_shape_rows[i] if i < len(roqs_shape_rows) else {},
             removed           = norm_name in _removed_ids,
-            tract_stats       = _tract_stats_by_name.get(norm_name, {}),
         )
         subjects_list.append(sub.to_dict())
 

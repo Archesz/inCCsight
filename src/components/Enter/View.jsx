@@ -230,8 +230,7 @@ function View({ type }) {
         const skipRoqs = !selectedMethods.has('roqs') && !selectedMethods.has('watershed')
         const skipCnn  = !selectedMethods.has('cnn')
 
-        // Tractography is deferred to a future version — always skip it for now.
-        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, skipTract: true, cnnDevice: getSetting('cnnDevice') })
+        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, cnnDevice: getSetting('cnnDevice') })
     }
 
     async function loadLast() {

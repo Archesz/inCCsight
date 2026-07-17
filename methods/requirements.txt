@@ -39,11 +39,9 @@ Pillow==10.2.0
 # --- Connectivity / labelling ---
 connected-components-3d==3.12.4
 
-# --- Model loading + JIT acceleration (tractography tracker) ---
+# --- Model loading (.joblib shape-signature references) ---
 joblib==1.3.2
-numba==0.60.0
 
 # --- Optional (not installed by default; only used by inactive code paths) ---
-# siamxt        # Max-Tree watershed markers — segmentation falls back to skimage when absent
-# SimpleITK     # STAPLE mask fusion (segm_staple)
-# opencv-python # cv2 — used by CNNBased/return_patch.py
+# siamxt     # Max-Tree watershed markers — segmentation falls back to skimage when absent
+# SimpleITK  # STAPLE mask fusion (segm_staple)

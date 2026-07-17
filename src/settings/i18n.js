@@ -39,6 +39,20 @@ const DICT = {
         'dash.subjects':    'subjects',
         'dash.subject':     'subject',
 
+        // 2D / 3D view card titles
+        'view.overview':    'Overview — Mean per Scalar',
+        'view.segTable':    'Segmentation Table',
+        'view.parcTable':   'Parcellation Table',
+        'view.midline':     'Midline Profile Along the Corpus Callosum',
+        'view.correlation': 'Scalar Correlation',
+        'view.distSeg':     'Distributions — Scalars by Segmentation Method',
+        'view.distParc':    'Distributions — Parcellation by Part',
+        'view.radarSeg':    'Segmentations by Parcellation',
+        'view.radarParc':   'Parcellations by Segmentation',
+        'view.segTableCNN': 'Segmentation Table — CNN-Based',
+        'view.parcTableCNN':'Parcellation Table — CNN-Based',
+        'view.viewer3d':    '3D Volumetric Viewer',
+
         // Settings
         'set.intro':        'Preferences that personalise the tool for each user.',
         'set.saved':        '✓ Saved',
@@ -89,6 +103,19 @@ const DICT = {
         'dash.newAnalysis': 'Nova análise',
         'dash.subjects':    'sujeitos',
         'dash.subject':     'sujeito',
+
+        'view.overview':    'Visão geral — Média por escalar',
+        'view.segTable':    'Tabela de segmentação',
+        'view.parcTable':   'Tabela de parcelação',
+        'view.midline':     'Perfil da linha média ao longo do corpo caloso',
+        'view.correlation': 'Correlação de escalares',
+        'view.distSeg':     'Distribuições — Escalares por método de segmentação',
+        'view.distParc':    'Distribuições — Parcelação por região',
+        'view.radarSeg':    'Segmentações por parcelação',
+        'view.radarParc':   'Parcelações por segmentação',
+        'view.segTableCNN': 'Tabela de segmentação — CNN',
+        'view.parcTableCNN':'Tabela de parcelação — CNN',
+        'view.viewer3d':    'Visualizador volumétrico 3D',
 
         'set.intro':        'Preferências que personalizam a ferramenta para cada usuário.',
         'set.saved':        '✓ Salvo',

@@ -96,6 +96,21 @@ export function applyTheme(theme = getSetting('theme')) {
     try { document.documentElement.setAttribute('data-theme', theme) } catch (_) {}
 }
 
+// Theme-aware colours for Plotly charts. Spread into a chart layout, e.g.:
+//   const PT = plotTheme()
+//   layout={{ paper_bgcolor: PT.paper, plot_bgcolor: PT.plot, font: { color: PT.font }, ... }}
+// Read at render time so charts pick up the theme when the dashboard mounts.
+export function plotTheme() {
+    const dark = getSetting('theme') === 'dark'
+    return {
+        paper:    'transparent',
+        plot:     dark ? '#141c2b' : '#fafbff',
+        font:     dark ? '#c3cce0' : '#333333',
+        grid:     dark ? '#2a344a' : '#eeeeee',
+        zeroline: dark ? '#3a445e' : '#cccccc',
+    }
+}
+
 // ── Derived helpers ────────────────────────────────────────────────────────
 
 // Re-derive a QC PASS/FAIL decision from the stored probability using the

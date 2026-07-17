@@ -25,22 +25,26 @@ const ROADMAP = [
     { done: false, text: 'Automated tests for the Python pipeline and React components' },
 ]
 
-const WORKFLOW = `# 1. Fork on GitHub, then clone your fork
+const WORKFLOW = `# 1. Fork on GitHub, then clone your fork (with Git LFS for the model files)
+git lfs install
 git clone https://github.com/<you>/inCCsight.git
 cd inCCsight
 
 # 2. Create a branch for your change
 git checkout -b feat/my-improvement
 
-# 3. Install and run locally
-npm install --legacy-peer-deps
-npm run dev            # React :3000 + Express :3001
+# 3. Install everything ONCE — Node + Python venv + PyTorch (auto-detected).
+#    This is required: the pipeline is Python, 'npm install' alone is not enough.
+./setup.sh             # Windows: setup.bat
 
-# 4. Make your change, then verify
-npm test              # React tests
-npm run build         # must compile cleanly
+# 4. Run locally
+./start.sh             # Windows: start.bat   (React :3000 + Express :3001)
 
-# 5. Commit and push, then open a Pull Request
+# 5. Make your change, then verify
+npm test               # React component tests
+npm run build          # must compile cleanly
+
+# 6. Commit and push, then open a Pull Request
 git commit -am "feat: my improvement"
 git push origin feat/my-improvement`
 

@@ -3,7 +3,7 @@ import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
 import InfoTool from '../InfoTool/InfoTool'
 import { getGroupColors } from '../../settings/palettes'
-import { getSetting, buildCsv } from '../../settings/settings'
+import { getSetting, buildCsv, plotTheme } from '../../settings/settings'
 
 const GROUP_COLORS  = getGroupColors()
 const SCALARS       = ['FA', 'MD', 'RD', 'AD']
@@ -68,11 +68,16 @@ function bandTraces(xArr, stats, color, name) {
     ]
 }
 
-const CHART_LAYOUT_BASE = {
-    margin: { t: 12, b: 48, l: 56, r: 16 },
-    paper_bgcolor: 'transparent',
-    plot_bgcolor: '#fafbff',
-    legend: { orientation: 'h', y: -0.32, groupclick: 'togglegroup' },
+// Theme-aware base layout (read at render so dark mode applies).
+function chartBase() {
+    const PT = plotTheme()
+    return {
+        margin: { t: 12, b: 48, l: 56, r: 16 },
+        paper_bgcolor: PT.paper,
+        plot_bgcolor: PT.plot,
+        font: { color: PT.font },
+        legend: { orientation: 'h', y: -0.32, groupclick: 'togglegroup' },
+    }
 }
 
 // ── Distribution (box, violin, or grouped bar) ────────────────────────────
@@ -119,17 +124,17 @@ function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartTy
         <Plot
             data={traces}
             layout={{
-                title: { text: scalar, font: { size: 13, color: '#333' } },
+                title: { text: scalar, font: { size: 13, color: plotTheme().font } },
                 height: 260, margin: { t: 36, b: 36, l: 44, r: 10 },
                 showlegend: false,
                 barmode: chartType === 'bar' ? 'group' : undefined,
                 yaxis: {
-                    gridcolor: '#eee', zeroline: false,
+                    gridcolor: plotTheme().grid, zeroline: false,
                     ...(effectiveRange ? { range: effectiveRange } : {}),
                     ...(normalize ? { title: { text: 'normalized [0–1]', font: { size: 9, color: '#aaa' } } } : {}),
                 },
                 xaxis: { showgrid: false },
-                paper_bgcolor: 'transparent', plot_bgcolor: '#fafbff',
+                paper_bgcolor: 'transparent', plot_bgcolor: plotTheme().plot, font: { color: plotTheme().font },
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: '100%' }} useResizeHandler
@@ -162,9 +167,9 @@ function ThicknessProfile({ allSubjects, allGroups, segMethod }) {
         <Plot
             data={traces}
             layout={{
-                ...CHART_LAYOUT_BASE, height: 290,
-                xaxis: { title: 'Position along CC (posterior → anterior)', gridcolor: '#eee', zeroline: false },
-                yaxis: { title: 'Thickness (mm)', gridcolor: '#eee', zeroline: false },
+                ...chartBase(), height: 290,
+                xaxis: { title: 'Position along CC (posterior → anterior)', gridcolor: plotTheme().grid, zeroline: false },
+                yaxis: { title: 'Thickness (mm)', gridcolor: plotTheme().grid, zeroline: false },
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: '100%' }} useResizeHandler
@@ -203,9 +208,9 @@ function MidlineProfile({ allSubjects, allGroups, segMethod }) {
             <Plot
                 data={traces}
                 layout={{
-                    ...CHART_LAYOUT_BASE, height: 290,
-                    xaxis: { title: 'Position along CC', gridcolor: '#eee', zeroline: false },
-                    yaxis: { title: scalar, gridcolor: '#eee', zeroline: false },
+                    ...chartBase(), height: 290,
+                    xaxis: { title: 'Position along CC', gridcolor: plotTheme().grid, zeroline: false },
+                    yaxis: { title: scalar, gridcolor: plotTheme().grid, zeroline: false },
                     annotations: !traces.length ? [{
                         text: 'No data', xref: 'paper', yref: 'paper',
                         x: 0.5, y: 0.5, showarrow: false,
@@ -275,11 +280,11 @@ function ParcellationBar({ allSubjects, allGroups, segMethod }) {
             <Plot
                 data={traces}
                 layout={{
-                    ...CHART_LAYOUT_BASE,
+                    ...chartBase(),
                     barmode: 'group', height: 360,
                     margin: { t: 12, b: 52, l: 52, r: 12 },
-                    xaxis: { title: 'CC Region', gridcolor: '#eee' },
-                    yaxis: { title: scalar, gridcolor: '#eee', zeroline: false },
+                    xaxis: { title: 'CC Region', gridcolor: plotTheme().grid },
+                    yaxis: { title: scalar, gridcolor: plotTheme().grid, zeroline: false },
                     bargap: 0.25, bargroupgap: 0.08,
                 }}
                 config={{ displayModeBar: false, responsive: true }}
@@ -320,12 +325,12 @@ function ShapeMetrics({ allSubjects, allGroups, chartType }) {
                         <Plot
                             data={traces}
                             layout={{
-                                title: { text: label, font: { size: 12, color: '#333' } },
+                                title: { text: label, font: { size: 12, color: plotTheme().font } },
                                 height: 230, margin: { t: 36, b: 36, l: 44, r: 10 },
                                 showlegend: false,
-                                yaxis: { gridcolor: '#eee', zeroline: false },
+                                yaxis: { gridcolor: plotTheme().grid, zeroline: false },
                                 xaxis: { showgrid: false },
-                                paper_bgcolor: 'transparent', plot_bgcolor: '#fafbff',
+                                paper_bgcolor: 'transparent', plot_bgcolor: plotTheme().plot, font: { color: plotTheme().font },
                             }}
                             config={{ displayModeBar: false, responsive: true }}
                             style={{ width: '100%' }} useResizeHandler

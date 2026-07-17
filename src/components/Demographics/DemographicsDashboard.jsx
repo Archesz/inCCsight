@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import Plot from 'react-plotly.js'
 import './DemographicsDashboard.scss'
 import { getGroupColors } from '../../settings/palettes'
+import { plotTheme } from '../../settings/settings'
 
 const GROUP_COLORS = getGroupColors()
 
@@ -41,11 +42,15 @@ function parseDtiCol(col) {
 
 const STORAGE_KEY = 'inccsight.demograph.panels'
 
-const LAYOUT_BASE = {
-    margin:        { t: 10, b: 48, l: 56, r: 16 },
-    paper_bgcolor: 'transparent',
-    plot_bgcolor:  '#fafbff',
-    font:          { size: 12 },
+// Theme-aware base layout (read at render so dark mode applies).
+function dmLayoutBase() {
+    const PT = plotTheme()
+    return {
+        margin:        { t: 10, b: 48, l: 56, r: 16 },
+        paper_bgcolor: PT.paper,
+        plot_bgcolor:  PT.plot,
+        font:          { size: 12, color: PT.font },
+    }
 }
 const PLOT_CONFIG = { displayModeBar: false, responsive: true }
 
@@ -184,12 +189,12 @@ function CategoricalCountChart({ data, xCol, keyOf, cats }) {
         <Plot
             data={traces}
             layout={{
-                ...LAYOUT_BASE,
+                ...dmLayoutBase(),
                 barmode: 'group',
                 height: 280,
                 legend: { orientation: 'h', y: -0.25 },
                 xaxis: { automargin: true, showgrid: false },
-                yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false },
+                yaxis: { title: 'Count', gridcolor: plotTheme().grid, zeroline: false },
             }}
             config={PLOT_CONFIG}
             style={{ width: '100%' }}
@@ -269,16 +274,16 @@ function DistributionBody({ data, xCol, colorBy, vizSubtype, isNumeric, axisTitl
             <Plot
                 data={traces}
                 layout={{
-                    ...LAYOUT_BASE,
+                    ...dmLayoutBase(),
                     barmode: isHist ? 'overlay' : undefined,
                     height: 300,
                     legend: { orientation: 'h', y: -0.22 },
                     xaxis: isHist
-                        ? { title: axisTitle, gridcolor: '#eee', zeroline: false }
+                        ? { title: axisTitle, gridcolor: plotTheme().grid, zeroline: false }
                         : { showgrid: false },
                     yaxis: isHist
-                        ? { title: 'Count', gridcolor: '#eee', zeroline: false }
-                        : { title: axisTitle, gridcolor: '#eee', zeroline: false },
+                        ? { title: 'Count', gridcolor: plotTheme().grid, zeroline: false }
+                        : { title: axisTitle, gridcolor: plotTheme().grid, zeroline: false },
                 }}
                 config={PLOT_CONFIG}
                 style={{ width: '100%' }}
@@ -349,11 +354,11 @@ function ScatterBody({ data, xCol, yCol, colorBy, xTitle, yTitle }) {
             <Plot
                 data={traces}
                 layout={{
-                    ...LAYOUT_BASE,
+                    ...dmLayoutBase(),
                     height: 320,
                     legend: { orientation: 'h', y: -0.25 },
-                    xaxis: { title: xTitle, gridcolor: '#eee', zeroline: false },
-                    yaxis: { title: yTitle, gridcolor: '#eee', zeroline: false },
+                    xaxis: { title: xTitle, gridcolor: plotTheme().grid, zeroline: false },
+                    yaxis: { title: yTitle, gridcolor: plotTheme().grid, zeroline: false },
                 }}
                 config={PLOT_CONFIG}
                 style={{ width: '100%' }}
@@ -429,12 +434,12 @@ function BarBody({ data, xCol, colorBy, isNumeric, label }) {
         <Plot
             data={traces}
             layout={{
-                ...LAYOUT_BASE,
+                ...dmLayoutBase(),
                 barmode: 'group',
                 height: 280,
                 legend: { orientation: 'h', y: -0.25 },
                 xaxis: { title: `${label} quartiles`, automargin: true, showgrid: false },
-                yaxis: { title: 'Count', gridcolor: '#eee', zeroline: false },
+                yaxis: { title: 'Count', gridcolor: plotTheme().grid, zeroline: false },
             }}
             config={PLOT_CONFIG}
             style={{ width: '100%' }}

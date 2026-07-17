@@ -47,8 +47,11 @@ network access is the optional one-time model download during setup.
   per-region parcellation and a statistics table across two or more groups.
 - **Demographics** — exploratory analysis correlating demographic variables with
   DTI metrics (when a `demograph.csv` is provided).
-- **Quality control** — automatic PASS/FAIL flag with confidence per method, and
-  manual subject removal.
+- **Quality control** — automatic PASS/FAIL flag with confidence per method
+  (adjustable threshold), and manual subject removal.
+- **Guided tutorial & per-user Settings** — an onboarding walkthrough plus
+  preferences for palette (colour-blind-safe), analysis defaults, decimal
+  precision, QC threshold, CNN device, CSV delimiter, dark mode and language.
 - **Reproducible output** — every `data/mydata.json` embeds a `_metadata` block
   (version, timestamp, model checkpoint, package versions).
 
@@ -66,9 +69,14 @@ You only need these once. Pick the path that matches how you want to run the too
 | Tool | Needed for | Version | Download |
 |---|---|---|---|
 | **Git** | both | any | https://git-scm.com/downloads |
+| **Git LFS** | both | any | https://git-lfs.com |
 | **Docker Desktop** | Docker option | latest | https://www.docker.com/products/docker-desktop/ |
 | **Python** | local option | **3.10 or 3.11** | https://www.python.org/downloads/ |
 | **Node.js** | local option | **18 LTS or newer** | https://nodejs.org/en/download/ |
+
+> **Git LFS is required** — the Quality-Control model (`.pth`, ~340 MB) is stored
+> with [Git LFS](https://git-lfs.com). Run `git lfs install` **once** before
+> cloning, otherwise that file arrives as a small text pointer and QC won't work.
 
 > **Windows tip:** when installing Python, tick **“Add python.exe to PATH”** on
 > the first screen of the installer — otherwise `python` won’t be found.
@@ -171,23 +179,23 @@ npm run dev
 
 ### Models
 
-| Model | Used by | Shipped in the repo? | Action needed |
+Both models ship **with the clone** — no manual download needed.
+
+| Model | Used by | Shipped in the repo? | How |
 |---|---|---|---|
-| **CNN 3D checkpoint** (`.ckpt`) | 3D volumetric segmentation | ✅ Yes — in `methods/CNNBased/peso/` | None |
-| **ViT QC model** (`.pth`) | automatic PASS/FAIL scores | ❌ No | Optional: place it manually |
+| **CNN 3D checkpoint** (`.ckpt`) | 3D volumetric segmentation | ✅ Yes | regular git, in `methods/CNNBased/peso/` |
+| **ViT QC model** (`.pth`) | automatic PASS/FAIL scores | ✅ Yes | **Git LFS**, in `methods/models/` |
 
-The CNN checkpoint comes **with the clone**, so 2D and 3D segmentation work out
-of the box. The Quality-Control ViT model is **not** bundled; without it the
-pipeline simply skips the automatic QC scoring and continues normally. To enable
-QC, place the file here:
+Because the QC model is stored with **Git LFS**, make sure you ran
+`git lfs install` before cloning (Step 0). If `methods/models/*.pth` is only a
+few kilobytes (an LFS pointer instead of the real file), fetch it with:
 
+```bash
+git lfs pull
 ```
-methods/models/vit_with_area_binary_best_combined_auc.pth
-```
 
-> If you host the checkpoints yourself, you can also fetch the CNN one
-> automatically: set `INCCSIGHT_MODEL_URL` and run
-> `python scripts/download_model.py`.
+Without the QC model the pipeline still runs — it just skips the automatic QC
+scoring and continues normally.
 
 ---
 

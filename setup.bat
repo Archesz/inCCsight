@@ -107,15 +107,12 @@ echo.
 echo   To start inCCsight, run:  start.bat
 echo.
 echo   -----------------------------------------------
-echo   MANUAL STEPS — model files not tracked by git:
+echo   Model files ship with the repository:
 echo   -----------------------------------------------
 echo.
-echo   [QC model]  Copy the file:
-echo     vit_with_area_binary_best_combined_auc.pth
-echo   to:
-echo     methods\models\
-echo.
-echo   [CNN model]  Place the 3D segmentation checkpoint (.ckpt) in:
-echo     methods\CNNBased\peso\
+echo   [CNN model]  .ckpt files are in methods\CNNBased\peso\ (regular git).
+echo   [QC model]   .pth is stored via Git LFS. If methods\models\*.pth is
+echo                only a few KB (an LFS pointer), fetch the real file with:
+echo                    git lfs pull
 echo.
 pause

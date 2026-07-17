@@ -1,5 +1,6 @@
 import React from 'react'
 import Plot from 'react-plotly.js'
+import { plotTheme } from '../../settings/settings'
 
 const COLORS = {
     ROQS: "#636EFA",
@@ -49,17 +50,19 @@ function Boxplot(props) {
         })
     }
 
+    const PT = plotTheme()
     let layout = {
-        title:  { text: props.title, font: { size: 13 } },
+        title:  { text: props.title, font: { size: 13, color: PT.font } },
         height: 320,
         autosize: true,
         margin: { t: 36, b: 36, l: 44, r: 10 },
         legend: { orientation: 'h', y: -0.18 },
-        plot_bgcolor: '#fafbff',
-        paper_bgcolor: 'transparent',
+        plot_bgcolor: PT.plot,
+        paper_bgcolor: PT.paper,
+        font: { color: PT.font },
         yaxis: {
-            gridcolor: '#eee',
-            zerolinecolor: '#eee',
+            gridcolor: PT.grid,
+            zerolinecolor: PT.grid,
             ...(props.yRange ? { range: props.yRange } : {}),
             ...(props.yRange ? { title: { text: 'normalized [0–1]', font: { size: 9, color: '#aaa' } } } : {}),
         },

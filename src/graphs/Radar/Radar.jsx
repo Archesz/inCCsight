@@ -1,6 +1,7 @@
 import React, { useState, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Radar.scss'
+import { plotTheme } from '../../settings/settings'
 
 const COLORS = {
     ROQS:      '#636EFA',
@@ -118,7 +119,9 @@ function RadarBySegmentation({ data }) {
 
     const layout = {
         legend: { orientation: 'h' },
-        polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
+        polar:  { bgcolor: plotTheme().plot, radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
+        paper_bgcolor: plotTheme().paper,
+        font: { color: plotTheme().font },
         margin: { t: 20, l: 20, r: 20, b: 8 },
         height: 300,
     }
@@ -194,7 +197,9 @@ function RadarByParcellation({ data }) {
 
     const layout = {
         legend: { orientation: 'h' },
-        polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
+        polar:  { bgcolor: plotTheme().plot, radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
+        paper_bgcolor: plotTheme().paper,
+        font: { color: plotTheme().font },
         margin: { t: 20, l: 20, r: 20, b: 8 },
         height: 300,
     }
