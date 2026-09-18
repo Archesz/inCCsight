@@ -130,8 +130,13 @@ function computeZScores(subjects, scalar, methodKey) {
 // ── SubjectCard ───────────────────────────────────────────────────────────────
 
 function SubjectCard({ subject, method, flagShape, flagZ, zVal, prob, isSelected, onToggle, isRemoved }) {
-    const [imgErr, setImgErr] = useState(false)
+    // Tracks which path failed to load, not just whether *a* path failed —
+    // otherwise switching methods on the same card (same React key) carries
+    // a stale error over from a method whose image is missing (e.g. Watershed)
+    // and hides the image for a method that has one (e.g. ROQS).
+    const [erroredPath, setErroredPath] = useState(null)
     const imgPath = imgPathForMethod(subject, method)
+    const imgErr = imgPath != null && erroredPath === imgPath
     const flagged = flagShape || flagZ
 
     return (
@@ -151,7 +156,7 @@ function SubjectCard({ subject, method, flagShape, flagZ, zVal, prob, isSelected
                     ? <img
                         src={`${API}/api/file?path=${encodeURIComponent(imgPath)}`}
                         alt={subject['Id']}
-                        onError={() => setImgErr(true)}
+                        onError={() => setErroredPath(imgPath)}
                       />
                     : <div className='qcc-no-img'>{isRemoved ? '×' : '—'}</div>
                 }

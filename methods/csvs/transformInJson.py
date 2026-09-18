@@ -246,6 +246,24 @@ def _read_csv(filename: str, required: bool = True) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _read_named_csv(filename: str, required: bool = True) -> pd.DataFrame:
+    """Like _read_csv, but treats the first (unnamed) CSV column as the subject
+    name and uses it as the DataFrame index. Per-subject CSVs from different
+    methods (ROQS/Watershed) don't always list subjects in the same order or
+    contain the exact same subjects (a method can fail for one subject without
+    the others being affected), so rows must be looked up by name rather than
+    by position."""
+    try:
+        df = pd.read_csv(filename, sep=";", index_col=0)
+    except FileNotFoundError:
+        if required:
+            print(f"\n[ERROR] File not found: {filename}")
+            print("        Run the ROQS analysis before converting to JSON.")
+            raise
+        return pd.DataFrame()
+    return _drop_unnamed(df)
+
+
 # ── Metadata builder ──────────────────────────────────────────────────────────
 
 def _build_metadata() -> dict:
@@ -325,40 +343,46 @@ def main():
         print(f"[WARNING] Could not read vit_qc_scores.csv: {exc}", flush=True)
 
     # ── Read required CSVs ────────────────────────────────────────────────────
-    roqs_scalar_raw = _read_csv("ROQS_scalar_statistics.csv")
-    img_paths       = (roqs_scalar_raw["img_path"].tolist()
-                       if "img_path" in roqs_scalar_raw.columns else [])
-    roqs_qc_flags   = (roqs_scalar_raw["qc_flag"].tolist()
-                       if "qc_flag" in roqs_scalar_raw.columns else [])
-    roqs_qc_probs   = (roqs_scalar_raw["qc_prob"].tolist()
-                       if "qc_prob" in roqs_scalar_raw.columns else [])
+    # Read by subject name (see _read_named_csv) rather than by row position:
+    # a subject can be present in ROQS's output but missing from Watershed's
+    # (or vice versa) if segmentation failed for just one method, which used
+    # to desync positional row indices across files and crash the export.
+    roqs_scalar_raw = _read_named_csv("ROQS_scalar_statistics.csv")
+    img_path_by_name     = (roqs_scalar_raw["img_path"].to_dict()
+                            if "img_path" in roqs_scalar_raw.columns else {})
+    roqs_qc_flag_by_name = (roqs_scalar_raw["qc_flag"].to_dict()
+                            if "qc_flag" in roqs_scalar_raw.columns else {})
+    roqs_qc_prob_by_name = (roqs_scalar_raw["qc_prob"].to_dict()
+                            if "qc_prob" in roqs_scalar_raw.columns else {})
 
     # ── Shape metrics (new columns, optional for backward compat) ────────────
     _SHAPE_COLS = ["shape_area", "shape_cc_length", "shape_max_thickness",
                    "shape_mean_thickness", "shape_cci"]
-    roqs_shape_rows = []
+    roqs_shape_by_name = {}
     if all(c in roqs_scalar_raw.columns for c in _SHAPE_COLS):
-        for _, row in roqs_scalar_raw.iterrows():
-            roqs_shape_rows.append({
+        for subj_name, row in roqs_scalar_raw.iterrows():
+            roqs_shape_by_name[str(subj_name)] = {
                 "area":            _safe_num(row["shape_area"]),
                 "cc_length":       _safe_num(row["shape_cc_length"]),
                 "max_thickness":   _safe_num(row["shape_max_thickness"]),
                 "mean_thickness":  _safe_num(row["shape_mean_thickness"]),
                 "cci":             _safe_num(row["shape_cci"]),
-            })
+            }
 
-    roqs_scalar     = roqs_scalar_raw.drop(
+    roqs_scalar = roqs_scalar_raw.drop(
         columns=["img_path", "qc_flag", "qc_prob"] + _SHAPE_COLS, errors="ignore"
     )
+    roqs_scalar_by_name = {str(subj_name): row for subj_name, row in roqs_scalar.iterrows()}
 
-    watershed_scalar_raw = _read_csv("Watershed_scalar_statistics.csv")
-    water_qc_flags  = (watershed_scalar_raw["qc_flag"].tolist()
-                       if "qc_flag" in watershed_scalar_raw.columns else [])
-    water_qc_probs  = (watershed_scalar_raw["qc_prob"].tolist()
-                       if "qc_prob" in watershed_scalar_raw.columns else [])
+    watershed_scalar_raw = _read_named_csv("Watershed_scalar_statistics.csv")
+    water_qc_flag_by_name = (watershed_scalar_raw["qc_flag"].to_dict()
+                             if "qc_flag" in watershed_scalar_raw.columns else {})
+    water_qc_prob_by_name = (watershed_scalar_raw["qc_prob"].to_dict()
+                             if "qc_prob" in watershed_scalar_raw.columns else {})
     watershed_scalar = watershed_scalar_raw.drop(
         columns=["img_path", "qc_flag", "qc_prob"], errors="ignore"
     )
+    watershed_scalar_by_name = {str(subj_name): row for subj_name, row in watershed_scalar.iterrows()}
 
     # CNN scalar lookup
     _cnn_scalar_by_name: dict = {}
@@ -376,17 +400,23 @@ def main():
         pass
 
     # Midlines
-    roqs_midlines      = _df_parse_lists(_read_csv("ROQS_scalar_midlines.csv"))
-    watershed_midlines = _df_parse_lists(_read_csv("Watershed_scalar_midlines.csv"))
+    roqs_midlines      = _df_parse_lists(_read_named_csv("ROQS_scalar_midlines.csv"))
+    watershed_midlines = _df_parse_lists(_read_named_csv("Watershed_scalar_midlines.csv"))
+    roqs_midlines_by_name      = {str(subj_name): row for subj_name, row in roqs_midlines.iterrows()}
+    watershed_midlines_by_name = {str(subj_name): row for subj_name, row in watershed_midlines.iterrows()}
 
     # Thickness
-    roqs_thickness      = _read_csv("ROQS_dict_thickness.csv")
-    watershed_thickness = _read_csv("Watershed_dict_thickness.csv")
+    roqs_thickness      = _read_named_csv("ROQS_dict_thickness.csv")
+    watershed_thickness = _read_named_csv("Watershed_dict_thickness.csv")
+    roqs_thickness_by_name      = {str(subj_name): row for subj_name, row in roqs_thickness.iterrows()}
+    watershed_thickness_by_name = {str(subj_name): row for subj_name, row in watershed_thickness.iterrows()}
 
     # Parcellations
-    roqs_parcellation      = _read_csv("ROQS_parcellation_statistics.csv")
-    watershed_parcellation = _read_csv("Watershed_parcellation_statistics.csv")
-    cnn_parcellation_df    = _read_csv("CNN_parcellation_statistics.csv", required=False)
+    roqs_parcellation_df      = _read_csv("ROQS_parcellation_statistics.csv")
+    watershed_parcellation_df = _read_csv("Watershed_parcellation_statistics.csv")
+    cnn_parcellation_df       = _read_csv("CNN_parcellation_statistics.csv", required=False)
+    roqs_parcellation_by_name = {str(row["Name"]): row for _, row in roqs_parcellation_df.iterrows()}
+    watershed_parcellation_by_name = {str(row["Name"]): row for _, row in watershed_parcellation_df.iterrows()}
 
     # CNN midlines (index_col=0 preserves subject names as index)
     cnn_mid_file = os.path.join(_HERE, "CNN_scalar_midlines.csv")
@@ -408,11 +438,12 @@ def main():
         for idx, row in cnn_midlines_df.iterrows():
             _cnn_mid_by_name[str(idx)] = row.to_dict()
 
-    names = list(roqs_parcellation["Name"])
+    names = list(roqs_parcellation_df["Name"])
 
     # ── Tractography stats (optional — produced by methods/tractography/main.py) ─
     _tract_stats_by_name: dict = {}
-    for i, img_p in enumerate(img_paths):
+    for name in names:
+        img_p = img_path_by_name.get(str(name))
         if not img_p:
             continue
         # img_path points to a file inside the inCCsight/ subfolder,
@@ -426,7 +457,7 @@ def main():
             if df.empty:
                 continue
             row = df.iloc[0].to_dict()
-            norm = str(names[i]) if i < len(names) else ""
+            norm = str(name)
             if norm.startswith("Subject_"):
                 norm = norm[len("Subject_"):]
             norm = norm.zfill(7)
@@ -439,10 +470,17 @@ def main():
         print(f"[OK] Tractography stats: {len(_tract_stats_by_name)} subject(s)", flush=True)
 
     # ── Build subjects ────────────────────────────────────────────────────────
+    # ROQS_parcellation_statistics.csv's "Name" column is the master subject
+    # list (ROQS is the required baseline method); every other CSV is looked
+    # up by name below, so a subject missing from Watershed's or CNN's output
+    # (that method failed for just that subject) just gets empty/default
+    # values for that method instead of crashing or shifting other subjects.
     subjects_list = []
-    for i, name in enumerate(names):
+    for name in names:
+        key = str(name)
+
         # Normalise name the same way Subject does (strip Subject_ prefix, zfill 7)
-        norm_name = str(name)
+        norm_name = key
         if norm_name.startswith("Subject_"):
             norm_name = norm_name[len("Subject_"):]
         norm_name = norm_name.zfill(7)
@@ -456,35 +494,35 @@ def main():
                 return fallback
             return v
 
-        roqs_flag   = _vit("roqs_flag",      roqs_qc_flags[i] if i < len(roqs_qc_flags) else None)
-        roqs_prob   = _vit("roqs_prob",       roqs_qc_probs[i] if i < len(roqs_qc_probs) else None)
-        water_flag  = _vit("watershed_flag",  water_qc_flags[i] if i < len(water_qc_flags) else None)
-        water_prob  = _vit("watershed_prob",  water_qc_probs[i] if i < len(water_qc_probs) else None)
+        roqs_flag   = _vit("roqs_flag",      roqs_qc_flag_by_name.get(key))
+        roqs_prob   = _vit("roqs_prob",       roqs_qc_prob_by_name.get(key))
+        water_flag  = _vit("watershed_flag",  water_qc_flag_by_name.get(key))
+        water_prob  = _vit("watershed_prob",  water_qc_prob_by_name.get(key))
         cnn_flag    = _vit("cnn_flag",        None)
         cnn_prob    = _vit("cnn_prob",        None)
 
         sub = Subject(
             name,
-            watershed_scalar.iloc[i],
-            roqs_scalar.iloc[i],
-            watershed_midlines.iloc[i],
-            roqs_midlines.iloc[i],
-            watershed_thickness.iloc[i],
-            roqs_thickness.iloc[i],
-            watershed_parcellation.iloc[i],
-            roqs_parcellation.iloc[i],
-            img_path          = img_paths[i] if i < len(img_paths) else "",
+            watershed_scalar_by_name.get(key, {}),
+            roqs_scalar_by_name.get(key, {}),
+            watershed_midlines_by_name.get(key, {}),
+            roqs_midlines_by_name.get(key, {}),
+            watershed_thickness_by_name.get(key, []),
+            roqs_thickness_by_name.get(key, []),
+            watershed_parcellation_by_name.get(key, {}),
+            roqs_parcellation_by_name.get(key, {}),
+            img_path          = img_path_by_name.get(key, ""),
             roqs_qc_flag      = roqs_flag,
             roqs_qc_prob      = roqs_prob,
             watershed_qc_flag = water_flag,
             watershed_qc_prob = water_prob,
             cnn_qc_flag       = cnn_flag,
             cnn_qc_prob       = cnn_prob,
-            cnn_parcellation  = _cnn_parc_by_name.get(str(name), {}),
-            cnn_midlines      = _cnn_mid_by_name.get(str(name), {}),
-            cnn_scalar        = _cnn_scalar_by_name.get(str(name), {}),
+            cnn_parcellation  = _cnn_parc_by_name.get(key, {}),
+            cnn_midlines      = _cnn_mid_by_name.get(key, {}),
+            cnn_scalar        = _cnn_scalar_by_name.get(key, {}),
             groups_map        = groups_map,
-            roqs_shape        = roqs_shape_rows[i] if i < len(roqs_shape_rows) else {},
+            roqs_shape        = roqs_shape_by_name.get(key, {}),
             removed           = norm_name in _removed_ids,
             tract_stats       = _tract_stats_by_name.get(norm_name, {}),
         )
