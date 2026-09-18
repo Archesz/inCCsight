@@ -42,6 +42,8 @@ model = LightningMRICCv2.load_from_checkpoint(_CHECKPOINT).eval().cpu()
 parser = argparse.ArgumentParser(description="CNN 3D segmentation pipeline")
 parser.add_argument("-p", "--parent", nargs="*", dest="parents",
                     help="Path(s) to subject folder(s) or parent folder(s)")
+parser.add_argument("--skip-processed", action="store_true",
+                    help="Reuse existing masks for subjects that already have an inCCsight/ folder")
 args = parser.parse_args()
 
 folder_mri = args.parents or []
@@ -76,7 +78,7 @@ for i, subj in enumerate(all_subjects, 1):
     print(f"PROGRESS:{i}:{total}:CNN {os.path.basename(subj)}", flush=True)
 
 t0 = time.time()
-test_predict(model, all_subjects)
+test_predict(model, all_subjects, skip_processed=args.skip_processed)
 elapsed = time.time() - t0
 
 print(f"[CNN] Total processing time: {elapsed:.2f}s", flush=True)

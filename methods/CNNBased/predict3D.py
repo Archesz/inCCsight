@@ -23,7 +23,7 @@ def _build_parc_row(sub, parcellation_dict):
                     row[f'{method_p}_{scalar}_{part}'] = 0.0
     return row
 
-def test_predict(model, data_paths):
+def test_predict(model, data_paths, skip_processed=False):
 	# Device preference from the UI (Settings → CNN compute device), via env var.
 	_pref = os.environ.get("INCCSIGHT_DEVICE", "auto").lower()
 	if _pref == "cpu":
@@ -68,33 +68,43 @@ def test_predict(model, data_paths):
 
 				print(f"[CNN] Processing subject: {data_path}", flush=True)
 
-				vol_path = os.path.join(data_path, vol_file)
-				vol_data = nib.load(vol_path).get_fdata().astype(np.float32)
-				vol_data = (vol_data - vol_data.min()) / (vol_data.max() - vol_data.min())
-				vol_data_affine = nib.load(vol_path).affine
+				# gm.run_analysis() below always re-reads inCCsight/cnnBased.nii.gz
+				# from disk (never the in-memory mask), so when skip_processed is
+				# set and that file already exists we can skip straight past the
+				# (expensive) model inference and reuse it — statistics/CSV rows
+				# are always rebuilt fresh afterwards, so this never drops the
+				# subject from the output.
+				_cnn_mask_path = os.path.join(data_path, "inCCsight", "cnnBased.nii.gz")
+				if skip_processed and os.path.isfile(_cnn_mask_path):
+					print(f"[CNN] Reusing existing mask for {sub} (skip already-processed)", flush=True)
+				else:
+					vol_path = os.path.join(data_path, vol_file)
+					vol_data = nib.load(vol_path).get_fdata().astype(np.float32)
+					vol_data = (vol_data - vol_data.min()) / (vol_data.max() - vol_data.min())
+					vol_data_affine = nib.load(vol_path).affine
 
-				vol_data = torch.from_numpy(vol_data).unsqueeze(0).unsqueeze(0)
+					vol_data = torch.from_numpy(vol_data).unsqueeze(0).unsqueeze(0)
 
-				test_outputs = sliding_window_inference(
-					vol_data,
-					roi_size=(112, 160, 56),
-					sw_batch_size=1, 
-					predictor=model,
-					overlap=0.1,
-					mode="gaussian",
-					device=torch.device(device)
-				)
+					test_outputs = sliding_window_inference(
+						vol_data,
+						roi_size=(112, 160, 56),
+						sw_batch_size=1,
+						predictor=model,
+						overlap=0.1,
+						mode="gaussian",
+						device=torch.device(device)
+					)
 
-				vol_data = vol_data.cpu()
+					vol_data = vol_data.cpu()
 
-				test_outputs = test_outputs.cpu().squeeze().detach()
+					test_outputs = test_outputs.cpu().squeeze().detach()
 
-				test_outputs = (test_outputs > 0.7).float()
+					test_outputs = (test_outputs > 0.7).float()
 
-				pos_process = get_post_processed_cc3d(test_outputs)
-				pos_process_save = pos_process.numpy()
+					pos_process = get_post_processed_cc3d(test_outputs)
+					pos_process_save = pos_process.numpy()
 
-				dipy.io.peaks.save_nifti(os.path.join(data_path, "inCCsight/cnnBased.nii.gz"), pos_process_save, vol_data_affine, hdr = None )
+					dipy.io.peaks.save_nifti(_cnn_mask_path, pos_process_save, vol_data_affine, hdr = None )
 
 				# 2D
 

@@ -118,6 +118,11 @@ parser.add_argument("--skip-cnn",  action="store_true", help="Skip CNN step")
 parser.add_argument("--skip-roqs", action="store_true", help="Skip ROQS step")
 parser.add_argument("--skip-qc",   action="store_true", help="Skip ViT QC step")
 parser.add_argument("--skip-json", action="store_true", help="Skip JSON conversion step")
+parser.add_argument(
+    "--skip-processed", action="store_true",
+    help="Reuse existing masks for subjects that already have an inCCsight/ folder "
+         "instead of re-running segmentation/CNN inference on them"
+)
 args = parser.parse_args()
 
 # ── Resolve folders ───────────────────────────────────────────────────────────
@@ -153,9 +158,12 @@ print(f"PROGRESS:0:{total_subjects}:Starting pipeline", flush=True)
 
 if not args.skip_roqs:
     print(f"PROGRESS:0:{total_subjects}:Running ROQS + Watershed 2D segmentation", flush=True)
+    roqs_args = [PYTHON, "main.py", "-p"] + parent_folders
+    if args.skip_processed:
+        roqs_args.append("--skip-processed")
     ok = run_step(
         "ROQS + Watershed — 2D Segmentation",
-        [PYTHON, "main.py", "-p"] + parent_folders,
+        roqs_args,
         cwd=ROQS_DIR
     )
     if not ok:
@@ -167,9 +175,12 @@ else:
 
 if not args.skip_cnn:
     print(f"PROGRESS:0:{total_subjects}:Running CNN 3D segmentation", flush=True)
+    cnn_args = [PYTHON, "main3D.py", "-p"] + parent_folders
+    if args.skip_processed:
+        cnn_args.append("--skip-processed")
     ok = run_step(
         "CNN — Volumetric 3D Segmentation",
-        [PYTHON, "main3D.py", "-p"] + parent_folders,
+        cnn_args,
         cwd=CNN_DIR
     )
     if not ok:

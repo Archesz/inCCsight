@@ -91,6 +91,15 @@ html[data-theme='dark'] {
     .enter-name, .method-label { color: $d-text; }
     .nav-btn { color: $d-muted; &.active, &:hover { color: $d-text; background: rgba(109,132,247,0.12); } }
     .folder-selector, .method-pill { background: $d-surface-2; border-color: $d-border; color: $d-text; }
+    .btn-existing { border-color: $d-border; color: $d-muted; }
+
+    .existing-analysis-panel { background: $d-surface-2; border-color: $d-border; }
+    .existing-path-input { background: $d-surface; border-color: $d-border; color: $d-text; }
+    .browse-btn-small { background: $d-surface; border-color: $d-border; color: $d-text; }
+    .subjects-check-results .subjects-col { background: $d-surface; border-color: $d-border; }
+    .subjects-check-results li { background: $d-surface-2; color: $d-text; }
+    .subject-preview { background: $d-surface; border-color: $d-border; }
+    .preview-image-card img { border-color: $d-border; }
 
     /* ── Settings panel ──────────────────────────────────────────────── */
     .set-section { background: $d-surface-2; border-color: $d-border; }

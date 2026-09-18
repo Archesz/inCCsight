@@ -192,15 +192,19 @@ function spawnSSE(res, args, cwd, extraEnv = {}, preflight = null) {
 
 // ── POST /api/run-pipeline ────────────────────────────────────────────────────
 app.post('/api/run-pipeline', (req, res) => {
-  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false, cnnDevice = 'auto' } = req.body
+  const {
+    paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false,
+    skipProcessed = false, cnnDevice = 'auto',
+  } = req.body
 
   const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
   try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
   catch (e) { console.warn('Could not save groups.json:', e.message) }
 
   const args = ['run.py', '-p', ...paths]
-  if (skipCnn)   args.push('--skip-cnn')
-  if (skipRoqs)  args.push('--skip-roqs')
+  if (skipCnn)       args.push('--skip-cnn')
+  if (skipRoqs)      args.push('--skip-roqs')
+  if (skipProcessed) args.push('--skip-processed')
 
   // CNN compute device preference (auto | cpu | gpu) — read by predict3D.py
   const device = ['auto', 'cpu', 'gpu'].includes(cnnDevice) ? cnnDevice : 'auto'
@@ -267,6 +271,152 @@ app.post('/api/check-paths', (req, res) => {
     return { path: p, exists }
   })
   res.json(results)
+})
+
+// ── GET /api/check-subjects?path=<abs> — list processed vs unprocessed subjects ──
+// Mirrors /api/check-paths: the folder browsed here has not been added to
+// groups.json yet (that's the point — this runs before any pipeline call), so
+// it intentionally accepts an arbitrary path and returns only names/existence,
+// never file content.
+app.get('/api/check-subjects', (req, res) => {
+  const groupPath = req.query.path
+  if (!groupPath || !fs.existsSync(groupPath) || !fs.statSync(groupPath).isDirectory()) {
+    return res.status(400).json({ error: 'Path does not exist or is not a folder.' })
+  }
+
+  const isProcessed = p => {
+    try { return fs.statSync(path.join(p, 'inCCsight')).isDirectory() } catch (_) { return false }
+  }
+
+  // If the given path is itself a subject folder, report just that one subject.
+  if (isProcessed(groupPath)) {
+    return res.json({
+      processed:   [{ id: path.basename(groupPath), path: groupPath }],
+      unprocessed: [],
+    })
+  }
+
+  let entries = []
+  try {
+    entries = fs.readdirSync(groupPath, { withFileTypes: true })
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+  } catch (e) {
+    return res.status(500).json({ error: 'Could not read folder: ' + e.message })
+  }
+
+  const processed   = []
+  const unprocessed = []
+  for (const entry of entries) {
+    const subjectPath = path.join(groupPath, entry.name)
+    ;(isProcessed(subjectPath) ? processed : unprocessed).push({ id: entry.name, path: subjectPath })
+  }
+
+  res.json({ processed, unprocessed })
+})
+
+// ── GET /api/subject-preview?path=<abs> — legacy per-subject preview ─────────
+// For subjects that only have their own inCCsight/ output folder (masks,
+// midsagittal images, per-subject roqs_based.csv) but no aggregate
+// methods/csvs/*.csv, so they can't go through transformInJson.py / mydata.json.
+// Reads only a fixed, hardcoded set of known output filenames — never a
+// caller-supplied filename — and inlines images as data URIs so the response
+// is self-contained even when the folder isn't a registered group root
+// (isPathAllowed would otherwise reject it via /api/file).
+const PARC_METHODS = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
+const PARC_REGIONS = ['P1', 'P2', 'P3', 'P4', 'P5']
+const PARC_SCALARS = ['FA', 'MD', 'RD', 'AD']
+
+// Semicolon CSV parser that preserves header casing (roqs_based.csv has
+// mixed-case columns like "meanFA", "Witelson_FA StdDev_P1").
+function parseSemicolonCsv(text) {
+  text = text.replace(/^﻿/, '')
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return []
+  function splitLine(line) {
+    const cells = []
+    let cur = '', inQ = false
+    for (const ch of line) {
+      if (ch === '"' && !inQ) { inQ = true; continue }
+      if (ch === '"' &&  inQ) { inQ = false; continue }
+      if (ch === ';' && !inQ) { cells.push(cur); cur = ''; continue }
+      cur += ch
+    }
+    cells.push(cur)
+    return cells
+  }
+  const headers = splitLine(lines[0])
+  return lines.slice(1).map(line => {
+    const cells = splitLine(line)
+    const row = {}
+    headers.forEach((h, i) => { row[h] = cells[i] ?? '' })
+    return row
+  })
+}
+
+app.get('/api/subject-preview', (req, res) => {
+  const subjectPath = req.query.path
+  if (!subjectPath || !fs.existsSync(subjectPath)) {
+    return res.status(400).json({ error: 'Path does not exist.' })
+  }
+
+  // Accept either the subject root or its inCCsight sub-folder directly.
+  const isInCCsight = path.basename(subjectPath) === 'inCCsight'
+  const base = isInCCsight ? subjectPath : path.join(subjectPath, 'inCCsight')
+  const id   = isInCCsight ? path.basename(path.dirname(subjectPath)) : path.basename(subjectPath)
+
+  if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) {
+    return res.status(404).json({ error: 'inCCsight folder not found for this subject.' })
+  }
+
+  const IMAGE_FILES = {
+    roqs:      'midsagittal_roqs.png',
+    watershed: 'midsagittal_watershed.png',
+    cnn:       'cnnBased_midsagittal.png',
+  }
+  const images = {}
+  for (const [key, filename] of Object.entries(IMAGE_FILES)) {
+    try {
+      const buf = fs.readFileSync(path.join(base, filename))
+      images[key] = `data:image/png;base64,${buf.toString('base64')}`
+    } catch (_) { /* not present for this subject/method — skip */ }
+  }
+
+  let scalar = null
+  let parcellation = null
+  const csvPath = path.join(base, 'roqs_based.csv')
+  if (fs.existsSync(csvPath)) {
+    try {
+      const rows = parseSemicolonCsv(fs.readFileSync(csvPath, 'utf-8'))
+      const row  = rows[0]
+      if (row) {
+        const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null }
+
+        scalar = {
+          FA: { mean: num(row.meanFA), std: num(row.stdFA) },
+          MD: { mean: num(row.meanMD), std: num(row.stdMD) },
+          RD: { mean: num(row.meanRD), std: num(row.stdRD) },
+          AD: { mean: num(row.meanAD), std: num(row.stdAD) },
+        }
+
+        parcellation = {}
+        for (const method of PARC_METHODS) {
+          parcellation[method] = {}
+          for (const region of PARC_REGIONS) {
+            const entry = {}
+            for (const s of PARC_SCALARS) {
+              entry[s]          = num(row[`${method}_${s}_${region}`])
+              entry[`${s}_std`] = num(row[`${method}_${s} StdDev_${region}`])
+            }
+            parcellation[method][region] = entry
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[WARN] roqs_based.csv parse error at ${csvPath}:`, e.message)
+    }
+  }
+
+  res.json({ id, images, scalar, parcellation })
 })
 
 // ── POST /api/browse-folder — open native OS folder-picker dialog ─────────────

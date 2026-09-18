@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FolderSelector from '../FolderSelector/FolderSelector'
-import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
+import { TbPlus, TbAlertTriangle, TbCircleCheck, TbCircleX, TbX } from 'react-icons/tb'
 import HelpPanel from '../Help/HelpPanel'
 import ContributePanel from '../Contribute/ContributePanel'
 import SettingsPanel from '../Settings/SettingsPanel'
@@ -46,10 +46,24 @@ function View({ type }) {
     ])
     // set of selected methods (multi-select) — initialised from saved preferences
     const [selectedMethods, setSelectedMethods] = useState(() => new Set(getSetting('defaultMethods')))
+    const [skipProcessed, setSkipProcessed] = useState(false)
     const [error, setError]     = useState('')
 
     // Stable, render-independent counter for unique group ids.
     const nextIdRef = useRef(2)
+
+    // "Open existing analysis" panel — check which subjects already have
+    // processed data (an inCCsight/ folder) without re-running the pipeline.
+    const [showExistingPanel, setShowExistingPanel] = useState(false)
+    const [existingPath, setExistingPath]           = useState('')
+    const [checkingSubjects, setCheckingSubjects]   = useState(false)
+    const [subjectsResult, setSubjectsResult]       = useState(null) // { processed: [], unprocessed: [] }
+    const [existingError, setExistingError]         = useState('')
+
+    // Subject preview (legacy per-subject data — images + roqs_based.csv)
+    const [previewSubject, setPreviewSubject] = useState(null) // { id, path }
+    const [previewData, setPreviewData]       = useState(null)
+    const [previewLoading, setPreviewLoading] = useState(false)
 
     // Ping the backend; on failure set an inline error and return false.
     async function ensureServer() {
@@ -230,7 +244,10 @@ function View({ type }) {
         const skipRoqs = !selectedMethods.has('roqs') && !selectedMethods.has('watershed')
         const skipCnn  = !selectedMethods.has('cnn')
 
-        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, cnnDevice: getSetting('cnnDevice') })
+        streamPipeline('/api/run-pipeline', {
+            paths, groupsMap, skipCnn, skipRoqs, skipProcessed,
+            cnnDevice: getSetting('cnnDevice'),
+        })
     }
 
     async function loadLast() {
@@ -243,6 +260,80 @@ function View({ type }) {
         setError('')
         if (!await ensureServer()) return
         streamPipeline('/api/run-demo', null)
+    }
+
+    // ── Open existing analysis (check only, no pipeline run) ──────────────
+
+    async function browseExistingFolder() {
+        try {
+            const res  = await fetch(`${API}/api/browse-folder`, { method: 'POST' })
+            const data = await res.json()
+            if (data.error) {
+                setExistingError(data.error)
+            } else if (data.path) {
+                setExistingPath(data.path)
+            }
+        } catch {
+            setExistingError('Could not open folder picker. Make sure the server is running.')
+        }
+    }
+
+    async function checkExistingSubjects() {
+        const p = existingPath.trim()
+        setExistingError('')
+        if (!p) {
+            setExistingError('Enter or browse to a folder path first.')
+            return
+        }
+        if (!await ensureServer()) return
+
+        setCheckingSubjects(true)
+        setSubjectsResult(null)
+        try {
+            const res  = await fetch(`${API}/api/check-subjects?path=${encodeURIComponent(p)}`)
+            const data = await res.json()
+            if (data.error) {
+                setExistingError(data.error)
+            } else {
+                setSubjectsResult(data)
+            }
+        } catch (err) {
+            setExistingError(`Could not check subjects: ${err.message}`)
+        } finally {
+            setCheckingSubjects(false)
+        }
+    }
+
+    async function openSubjectPreview(subject) {
+        setPreviewSubject(subject)
+        setPreviewData(null)
+        setPreviewLoading(true)
+        try {
+            const res  = await fetch(`${API}/api/subject-preview?path=${encodeURIComponent(subject.path)}`)
+            const data = await res.json()
+            if (data.error) {
+                setExistingError(data.error)
+                setPreviewSubject(null)
+            } else {
+                setPreviewData(data)
+            }
+        } catch (err) {
+            setExistingError(`Could not load subject preview: ${err.message}`)
+            setPreviewSubject(null)
+        } finally {
+            setPreviewLoading(false)
+        }
+    }
+
+    function closeSubjectPreview() {
+        setPreviewSubject(null)
+        setPreviewData(null)
+    }
+
+    // FA is a 0-1 ratio; MD/RD/AD are ~1e-3 diffusivities — format accordingly.
+    function fmtScalar(scalar, val) {
+        if (val === null || val === undefined) return '—'
+        return scalar === 'FA' ? val.toFixed(3) : val.toExponential(2)
     }
 
     // ── Render ─────────────────────────────────────────────────────────────
@@ -303,6 +394,25 @@ function View({ type }) {
                     </div>
                 </div>
 
+                {/* Pipeline options */}
+                <div className='method-selector'>
+                    <span className='method-label'>{t('enter.pipelineOptions')}</span>
+                    <div className='method-pills'>
+                        <label
+                            className={`method-pill${skipProcessed ? ' active' : ''}`}
+                            title={t('enter.skipProcessedDesc')}
+                        >
+                            <input
+                                type='checkbox'
+                                checked={skipProcessed}
+                                onChange={e => setSkipProcessed(e.target.checked)}
+                                style={{ marginRight: 6 }}
+                            />
+                            {t('enter.skipProcessed')}
+                        </label>
+                    </div>
+                </div>
+
                 {/* Inline error banner */}
                 {error && (
                     <div className='enter-error' role='alert'>
@@ -320,11 +430,172 @@ function View({ type }) {
                         <div className='btn-demo' onClick={runDemo}>
                             <span>{t('enter.demoData')}</span>
                         </div>
+                        <div className='btn-existing' onClick={() => setShowExistingPanel(v => !v)}>
+                            <span>{t('enter.openExisting')}</span>
+                        </div>
                     </div>
                     <button className='btn-start' onClick={startAnalyzes}>
                         {t('enter.runAnalysis')}
                     </button>
                 </div>
+
+                {/* Open existing analysis — check which subjects already have processed data */}
+                {showExistingPanel && (
+                    <div className='existing-analysis-panel'>
+                        <span className='panel-title'>{t('enter.openExisting')}</span>
+                        <span className='panel-desc'>{t('enter.openExistingDesc')}</span>
+
+                        <div className='existing-path-row'>
+                            <input
+                                type='text'
+                                className='existing-path-input'
+                                placeholder={t('enter.folderPathBrowse')}
+                                value={existingPath}
+                                onChange={e => setExistingPath(e.target.value)}
+                            />
+                            <button className='browse-btn-small' onClick={browseExistingFolder}>
+                                {t('enter.browse')}
+                            </button>
+                            <button
+                                className='check-btn'
+                                onClick={checkExistingSubjects}
+                                disabled={checkingSubjects}
+                            >
+                                {checkingSubjects ? t('enter.checking') : t('enter.check')}
+                            </button>
+                        </div>
+
+                        {existingError && (
+                            <div className='enter-error' role='alert'>
+                                <TbAlertTriangle className='enter-error-icon' />
+                                <span>{existingError}</span>
+                            </div>
+                        )}
+
+                        {subjectsResult && (
+                            <div className='subjects-check-results'>
+                                <div className='subjects-col processed'>
+                                    <span className='col-title'>
+                                        <TbCircleCheck /> {t('enter.processed')} ({subjectsResult.processed.length})
+                                    </span>
+                                    <ul>
+                                        {subjectsResult.processed.map(s => (
+                                            <li
+                                                key={s.path}
+                                                className='clickable'
+                                                title={`${s.path}\n(${t('enter.clickToPreview')})`}
+                                                onClick={() => openSubjectPreview(s)}
+                                            >
+                                                {s.id}
+                                            </li>
+                                        ))}
+                                        {subjectsResult.processed.length === 0 && (
+                                            <li className='empty'>{t('enter.noneFound')}</li>
+                                        )}
+                                    </ul>
+                                </div>
+                                <div className='subjects-col unprocessed'>
+                                    <span className='col-title'>
+                                        <TbCircleX /> {t('enter.notProcessed')} ({subjectsResult.unprocessed.length})
+                                    </span>
+                                    <ul>
+                                        {subjectsResult.unprocessed.map(s => (
+                                            <li key={s.path} title={s.path}>{s.id}</li>
+                                        ))}
+                                        {subjectsResult.unprocessed.length === 0 && (
+                                            <li className='empty'>{t('enter.noneFound')}</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+
+                        {previewSubject && (
+                            <div className='subject-preview'>
+                                <div className='subject-preview-header'>
+                                    <span className='preview-title'>Subject {previewSubject.id}</span>
+                                    <button className='preview-close' onClick={closeSubjectPreview} title='Close'>
+                                        <TbX />
+                                    </button>
+                                </div>
+
+                                {previewLoading && <span className='preview-loading'>Loading…</span>}
+
+                                {previewData && (
+                                    <>
+                                        <div className='preview-images'>
+                                            {previewData.images.roqs && (
+                                                <div className='preview-image-card'>
+                                                    <span>ROQS</span>
+                                                    <img src={previewData.images.roqs} alt='ROQS midsagittal' />
+                                                </div>
+                                            )}
+                                            {previewData.images.watershed && (
+                                                <div className='preview-image-card'>
+                                                    <span>Watershed</span>
+                                                    <img src={previewData.images.watershed} alt='Watershed midsagittal' />
+                                                </div>
+                                            )}
+                                            {previewData.images.cnn && (
+                                                <div className='preview-image-card'>
+                                                    <span>CNN</span>
+                                                    <img src={previewData.images.cnn} alt='CNN midsagittal' />
+                                                </div>
+                                            )}
+                                            {Object.keys(previewData.images).length === 0 && (
+                                                <span className='preview-warning'>No midsagittal images found.</span>
+                                            )}
+                                        </div>
+
+                                        {previewData.scalar ? (
+                                            <>
+                                                <span className='preview-subtitle'>ROQS whole-CC scalar (mean ± std)</span>
+                                                <table className='preview-table'>
+                                                    <thead>
+                                                        <tr><th></th><th>FA</th><th>MD</th><th>RD</th><th>AD</th></tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td>mean ± std</td>
+                                                            {['FA', 'MD', 'RD', 'AD'].map(s => (
+                                                                <td key={s}>
+                                                                    {fmtScalar(s, previewData.scalar[s].mean)} ± {fmtScalar(s, previewData.scalar[s].std)}
+                                                                </td>
+                                                            ))}
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+
+                                                <span className='preview-subtitle'>Witelson parcellation (5 sub-regions)</span>
+                                                <table className='preview-table'>
+                                                    <thead>
+                                                        <tr><th></th>{['P1', 'P2', 'P3', 'P4', 'P5'].map(r => <th key={r}>{r}</th>)}</tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {['FA', 'MD', 'RD', 'AD'].map(s => (
+                                                            <tr key={s}>
+                                                                <td>{s}</td>
+                                                                {['P1', 'P2', 'P3', 'P4', 'P5'].map(r => (
+                                                                    <td key={r}>
+                                                                        {fmtScalar(s, previewData.parcellation.Witelson[r][s])}
+                                                                    </td>
+                                                                ))}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </>
+                                        ) : (
+                                            <span className='preview-warning'>
+                                                No roqs_based.csv found for this subject — only images available.
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </>
         )
     }

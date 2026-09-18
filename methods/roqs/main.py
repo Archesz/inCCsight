@@ -32,6 +32,8 @@ def is_subject_folder(path):
 parser = argparse.ArgumentParser(description="ROQS 2D segmentation pipeline")
 parser.add_argument("-p", "--parent", nargs="*", dest="parents",
                     help="Path(s) to subject folder(s) or parent folder(s)")
+parser.add_argument("--skip-processed", action="store_true",
+                    help="Reuse existing masks for subjects that already have an inCCsight/ folder")
 args = parser.parse_args()
 
 folder_mri = args.parents or []
@@ -51,4 +53,4 @@ print(f"[ROQS] Found {total} subject(s) to process.", flush=True)
 for i, subj in enumerate(all_subjects, 1):
     print(f"PROGRESS:{i}:{total}:ROQS {os.path.basename(subj)}", flush=True)
 
-sg.get_segm(all_subjects)
+sg.get_segm(all_subjects, skip_processed=args.skip_processed)

@@ -360,7 +360,7 @@ def _collect_segm_stats(segmentation, FA, MD, RD, AD, scalar_maps, sub):
     return scalar_stats, midlines, thickness, parc_row, parc_dict
 
 
-def get_segm(data_paths):
+def get_segm(data_paths, skip_processed=False):
 
     import matplotlib
     matplotlib.use('Agg')
@@ -415,7 +415,17 @@ def get_segm(data_paths):
             scalar_maps = (FA, MD, RD, AD)
 
             # ── ROQS segmentation ────────────────────────────────────────────
-            segmentation = segm_roqs(wFA, eigvects_ms)
+            # When skip_processed is set and a mask already exists on disk, reuse
+            # it instead of recomputing — statistics/CSV rows are always rebuilt
+            # fresh below, so this only skips the (comparatively expensive)
+            # segmentation algorithm itself, never the subject's presence in the
+            # output CSVs.
+            _roqs_mask_path = os.path.join(folderpath, 'segm_roqs.nii.gz')
+            if skip_processed and os.path.isfile(_roqs_mask_path):
+                print(f"  → Reusing existing ROQS mask for {sub} (skip already-processed)", flush=True)
+                segmentation = nib.load(_roqs_mask_path).get_fdata().astype('int32')[fissure, :, :]
+            else:
+                segmentation = segm_roqs(wFA, eigvects_ms)
             scalar_statistics, roqs_midlines, thickness_200, parc_row, parcellation_dict = \
                 _collect_segm_stats(segmentation, FA, MD, RD, AD, scalar_maps, sub)
             parcellationsList["ROQS"][sub] = parcellation_dict
@@ -438,7 +448,12 @@ def get_segm(data_paths):
             _sh_r0 = _sh_r1 = _sh_c0 = _sh_c1 = None   # shared crop (set when WS succeeds)
             print(f"  → Executando Watershed para {sub}", flush=True)
             try:
-                segm_w, _, _ = libcc.segm_watershed(wFA)
+                _ws_mask_path = os.path.join(folderpath, 'segm_watershed.nii.gz')
+                if skip_processed and os.path.isfile(_ws_mask_path):
+                    print(f"  → Reusing existing Watershed mask for {sub} (skip already-processed)", flush=True)
+                    segm_w = nib.load(_ws_mask_path).get_fdata().astype('int32')[fissure, :, :]
+                else:
+                    segm_w, _, _ = libcc.segm_watershed(wFA)
 
                 if segm_w is False or not np.any(segm_w):
                     raise ValueError("Watershed retornou máscara vazia")
