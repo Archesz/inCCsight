@@ -1,6 +1,7 @@
 import React, { useState, useMemo, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Scatter.scss'
+import { plotTheme } from '../../settings/settings'
 
 // ── Group colour palette ──────────────────────────────────────────────────────
 const PALETTE = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3', '#FF6692', '#B6E880']
@@ -95,17 +96,18 @@ function Scatter({ data }) {
     }), [grouped, methodKey, scalarY, colors])
 
     // ── Layout (subplot-style axes) ───────────────────────────────────────────
-    const layout = useMemo(() => ({
+    const layout = useMemo(() => { const PT = plotTheme(); return ({
         height: 460,
-        plot_bgcolor:  '#E5ECF6',
-        paper_bgcolor: 'transparent',
+        plot_bgcolor:  PT.plot,
+        paper_bgcolor: PT.paper,
+        font: { color: PT.font },
         margin: { t: 20, l: 64, r: 24, b: 56 },
 
         // Center scatter — X: 0–74 %, Y: 0–70 %
         xaxis: {
             domain:      [0, 0.74],
             title:       { text: scalarX, font: { size: 12 } },
-            gridcolor:   '#fff',
+            gridcolor:   PT.grid,
             tickformat:  '.4f',
             tickfont:    { size: 10 },
             zeroline:    false,
@@ -113,7 +115,7 @@ function Scatter({ data }) {
         yaxis: {
             domain:      [0, 0.70],
             title:       { text: scalarY, font: { size: 12 } },
-            gridcolor:   '#fff',
+            gridcolor:   PT.grid,
             tickformat:  '.4f',
             tickfont:    { size: 10 },
             zeroline:    false,
@@ -122,7 +124,7 @@ function Scatter({ data }) {
         // Top histogram — shares xaxis, own yaxis (74–92 %)
         yaxis2: {
             domain:      [0.74, 0.92],
-            gridcolor:   '#fff',
+            gridcolor:   PT.grid,
             tickfont:    { size: 9 },
             zeroline:    false,
             title:       { text: 'Count', font: { size: 9 } },
@@ -131,7 +133,7 @@ function Scatter({ data }) {
         // Right histogram — shares yaxis, own xaxis (77–100 %)
         xaxis2: {
             domain:    [0.77, 1.0],
-            gridcolor: '#fff',
+            gridcolor: PT.grid,
             tickfont:  { size: 9 },
             zeroline:  false,
             title:     { text: 'Count', font: { size: 9 } },
@@ -146,7 +148,7 @@ function Scatter({ data }) {
             title: { text: 'Group  ', font: { size: 11 } },
             bgcolor: 'transparent',
         },
-    }), [scalarX, scalarY])
+    }) }, [scalarX, scalarY])
 
     const allTraces = useMemo(
         () => [...scatterTraces, ...histTraces, ...histYTraces],

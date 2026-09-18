@@ -1,0 +1,197 @@
+/* ── Contribute (GitHub) panel ────────────────────────────────────────────── */
+
+.contribute-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 680px;
+}
+
+.cp-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1F2C56;
+}
+.cp-sub {
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #5b6688;
+}
+.cp-repo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: #1F2C56;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 16px;
+    border-radius: 9px;
+    text-decoration: none;
+    transition: background 0.15s;
+    &:hover { background: #2b3ba8; }
+}
+
+/* Ways to contribute */
+.cp-ways {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    @media (max-width: 560px) { grid-template-columns: 1fr; }
+}
+.cp-way {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: #f8f9fe;
+    border: 1px solid #e8eaf6;
+    border-radius: 12px;
+
+    div { display: flex; flex-direction: column; gap: 3px; }
+}
+.cp-way-icon {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #4C6EF5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+}
+.cp-way-title { font-size: 14px; font-weight: 700; color: #2a3354; }
+.cp-way-text  { font-size: 12.5px; line-height: 1.45; color: #6b7393; }
+
+/* Cards */
+.cp-card {
+    border: 1px solid #e6e9f2;
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #fff;
+}
+.cp-card-title {
+    display: block;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #4C6EF5;
+    margin-bottom: 10px;
+}
+.cp-note {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: #6b7393;
+    margin: 10px 0 0;
+    code {
+        background: #eef2ff;
+        color: #2b3ba8;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+}
+
+/* Roadmap / to-dos */
+.cp-todos {
+    list-style: none;
+    margin: 0 0 10px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+
+    li {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        font-size: 13px;
+        line-height: 1.4;
+        color: #3d456a;
+        &.done { color: #8a93b2; text-decoration: line-through; }
+    }
+}
+.cp-check {
+    flex-shrink: 0;
+    font-weight: 800;
+    color: #4C6EF5;
+    width: 14px;
+    .done & { color: #46b98a; }
+}
+.cp-issues-link, .cp-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4C6EF5;
+    text-decoration: none;
+    &:hover { text-decoration: underline; }
+}
+
+/* Code block */
+.cp-code {
+    margin: 0;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #2a3354;
+    background: #f6f8ff;
+    border: 1px solid #e8eaf6;
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+/* Guides (accordion) */
+.cp-guide {
+    border: 1px solid #e6e9f2;
+    border-radius: 10px;
+    margin-top: 10px;
+    overflow: hidden;
+    &.open { border-color: #c3ccec; }
+}
+.cp-guide-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #fbfcff;
+    border: none;
+    cursor: pointer;
+    &:hover { background: #f2f5ff; }
+}
+.cp-guide-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #2a3354;
+    svg { color: #4C6EF5; }
+}
+.cp-guide-caret { color: #9aa3bf; transition: transform 0.18s; }
+.cp-guide.open .cp-guide-caret { transform: rotate(180deg); }
+.cp-steps {
+    margin: 0;
+    padding: 6px 18px 14px 34px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+
+    li {
+        font-size: 12.8px;
+        line-height: 1.55;
+        color: #4a5478;
+    }
+}

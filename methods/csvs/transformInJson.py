@@ -151,7 +151,6 @@ class Subject:
         groups_map=None,
         roqs_shape=None,
         removed=False,
-        tract_stats=None,
     ):
         self.name                  = self._normalize_name(str(name))
         self.watershed_scalar      = watershed_scalar
@@ -175,7 +174,6 @@ class Subject:
         self.group                 = _find_group(self.img_path, groups_map or {})
         self.roqs_shape            = roqs_shape or {}
         self.removed               = bool(removed)
-        self.tract_stats           = tract_stats or {}
 
     @staticmethod
     def _normalize_name(name: str) -> str:
@@ -198,7 +196,28 @@ class Subject:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _sanitize_dict(d: dict) -> dict:
+        """Replace NaN floats with None so json.dump doesn't choke."""
+        return {k: (None if isinstance(v, float) and math.isnan(v) else v)
+                for k, v in d.items()}
+
+    @staticmethod
+    def _sanitize_thickness(lst: list) -> list:
+        """Return empty list when all values are NaN/None (Watershed failed)."""
+        if not lst:
+            return lst
+        if all(v is None or (isinstance(v, float) and math.isnan(v)) for v in lst):
+            return []
+        return [None if (isinstance(v, float) and math.isnan(v)) else v for v in lst]
+
     def to_dict(self) -> dict:
+        # Watershed fields are nullable — sanitize NaN → null so downstream
+        # JSON serialisation and NaN-drop logic handle them correctly.
+        ws_scalar = self._sanitize_dict(dict(self.watershed_scalar))
+        ws_parc   = self._sanitize_dict(dict(self.watershed_parcellation))
+        ws_thick  = self._sanitize_thickness(self.watershed_thickness)
+
         return {
             "Id":                    self.name,
             "removed":               self.removed,
@@ -212,19 +231,18 @@ class Subject:
                 "CNN":        {"flag": self._safe_bool(self.cnn_qc_flag),
                                "prob": self._safe_float(self.cnn_qc_prob)},
             },
-            "Watershed_scalar":       dict(self.watershed_scalar),
+            "Watershed_scalar":       ws_scalar,
             "ROQS_scalar":            dict(self.roqs_scalar),
             "CNN_scalar":             dict(self.cnn_scalar),
             "Watershed_midlines":     dict(self.watershed_midlines),
             "ROQS_midlines":          dict(self.roqs_midlines),
-            "Watershed_thickness":    self.watershed_thickness,
+            "Watershed_thickness":    ws_thick,
             "ROQS_thickness":         self.roqs_thickness,
-            "Watershed_parcellation": dict(self.watershed_parcellation),
+            "Watershed_parcellation": ws_parc,
             "ROQS_parcellation":      dict(self.roqs_parcellation),
             "CNN_parcellation":       dict(self.cnn_parcellation),
             "CNN_midlines":           dict(self.cnn_midlines),
             "ROQS_shape":             dict(self.roqs_shape),
-            "tract_stats":            dict(self.tract_stats),
         }
 
 
@@ -440,35 +458,6 @@ def main():
 
     names = list(roqs_parcellation_df["Name"])
 
-    # ── Tractography stats (optional — produced by methods/tractography/main.py) ─
-    _tract_stats_by_name: dict = {}
-    for name in names:
-        img_p = img_path_by_name.get(str(name))
-        if not img_p:
-            continue
-        # img_path points to a file inside the inCCsight/ subfolder,
-        # so the actual subject folder is one level up from dirname(img_path).
-        subj_folder = os.path.dirname(os.path.dirname(img_p))
-        tract_csv = os.path.join(subj_folder, 'tract_stats.csv')
-        if not os.path.isfile(tract_csv):
-            continue
-        try:
-            df = pd.read_csv(tract_csv)
-            if df.empty:
-                continue
-            row = df.iloc[0].to_dict()
-            norm = str(name)
-            if norm.startswith("Subject_"):
-                norm = norm[len("Subject_"):]
-            norm = norm.zfill(7)
-            _tract_stats_by_name[norm] = {
-                k: _safe_num(v) for k, v in row.items()
-            }
-        except Exception as exc:
-            print(f"[WARNING] tract_stats.csv parse error ({subj_folder}): {exc}", flush=True)
-    if _tract_stats_by_name:
-        print(f"[OK] Tractography stats: {len(_tract_stats_by_name)} subject(s)", flush=True)
-
     # ── Build subjects ────────────────────────────────────────────────────────
     # ROQS_parcellation_statistics.csv's "Name" column is the master subject
     # list (ROQS is the required baseline method); every other CSV is looked
@@ -524,7 +513,6 @@ def main():
             groups_map        = groups_map,
             roqs_shape        = roqs_shape_by_name.get(key, {}),
             removed           = norm_name in _removed_ids,
-            tract_stats       = _tract_stats_by_name.get(norm_name, {}),
         )
         subjects_list.append(sub.to_dict())
 

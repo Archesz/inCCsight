@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Plot from 'react-plotly.js'
 import './TableParcellation.scss'
 import InfoTool from '../../components/InfoTool/InfoTool'
+import { getSetting } from '../../settings/settings'
 
 const SEG_METHOD_OPTIONS = [
     { label: "ROQS",            key: "ROQS_parcellation"      },
@@ -21,13 +22,17 @@ const PARC_METHODS   = ["Witelson", "Hofer", "Chao", "Cover", "Freesurfer"]
 const SCALARS        = ["FA", "RD", "AD", "MD"]
 const PARTS          = ["P1", "P2", "P3", "P4", "P5"]
 
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel  = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
+
 function getMeanValues(subjects, method, parc_method, scalar, part) {
     const name   = `${parc_method}_${scalar}_${part}`
     const values = subjects
         .filter(s => s[method] && s[method][name] != null)
         .map(s => Number(s[method][name]))
-    if (values.length === 0) return (0).toFixed(6)
-    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(6)
+    if (values.length === 0) return '—'
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(getSetting('decimals'))
 }
 
 function getColumnColors(colValues) {
@@ -41,9 +46,9 @@ function colorsForRows(rows, colCount) {
 }
 
 function exportCSV(headers, cols, filename) {
-    const rows = [headers.join(',')]
+    const rows = [headers.join(getSetting('csvDelimiter'))]
     for (let r = 0; r < cols[0].length; r++) {
-        rows.push(cols.map(col => col[r]).join(','))
+        rows.push(cols.map(col => col[r]).join(getSetting('csvDelimiter')))
     }
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -64,7 +69,7 @@ function ExpandableParcTable({ allSubjects, color }) {
         const m = s[segMethod] || {}
         return PARTS.map(part => {
             const key = `${parcMethod}_${scalar}_${part}`
-            return m[key] != null ? Number(m[key]).toFixed(6) : "—"
+            return m[key] != null ? Number(m[key]).toFixed(getSetting('decimals')) : "—"
         })
     })
 
@@ -73,7 +78,7 @@ function ExpandableParcTable({ allSubjects, color }) {
     function exportExpanded() {
         const headers = ["Subject", ...PARTS]
         const data = allSubjects.map((s, i) => [s["Id"], ...rows[i]])
-        const csv  = [headers, ...data].map(r => r.join(',')).join('\n')
+        const csv  = [headers, ...data].map(r => r.join(getSetting('csvDelimiter'))).join('\n')
         const blob = new Blob([csv], { type: 'text/csv' })
         const url  = URL.createObjectURL(blob)
         const a    = document.createElement('a'); a.href = url
@@ -86,7 +91,7 @@ function ExpandableParcTable({ allSubjects, color }) {
             <div className='expandable-header' onClick={() => setOpen(v => !v)}>
                 <span>Data by Subject</span>
                 <span className='expandable-toggle'>
-                    {open ? '▲ Recolher' : '▼ Ver todos os sujeitos'}
+                    {open ? '▲ Collapse' : '▼ Show all subjects'}
                 </span>
             </div>
 
@@ -115,7 +120,7 @@ function ExpandableParcTable({ allSubjects, color }) {
                             <label className={color}>Scalar: </label>
                             <select value={scalar} onChange={e => setScalar(e.target.value)}>
                                 {SCALARS.map(s => (
-                                    <option key={s} value={s}>{s}</option>
+                                    <option key={s} value={s}>{scalarLabel(s)}</option>
                                 ))}
                             </select>
                         </div>
@@ -219,11 +224,6 @@ function TableParcellation(props) {
                 </button>
             </div>
 
-            <Plot data={plotData} layout={layout}
-                config={{ responsive: true }}
-                style={{ width: '100%' }}
-                useResizeHandler />
-
             <div className='options-row'>
                 <div className='select-group'>
                     <label className={props.color}>Parc. Method: </label>
@@ -238,7 +238,7 @@ function TableParcellation(props) {
                     <label className={props.color}>Scalar: </label>
                     <select onChange={e => setScalar(e.target.value)}>
                         {["FA", "RD", "AD", "MD"].map(s => (
-                            <option key={s} value={s}>{s}</option>
+                            <option key={s} value={s}>{scalarLabel(s)}</option>
                         ))}
                     </select>
                 </div>
@@ -255,6 +255,11 @@ function TableParcellation(props) {
                     </div>
                 )}
             </div>
+
+            <Plot data={plotData} layout={layout}
+                config={{ responsive: true }}
+                style={{ width: '100%' }}
+                useResizeHandler />
 
             <ExpandableParcTable allSubjects={allSubjects} color={props.color} />
         </div>

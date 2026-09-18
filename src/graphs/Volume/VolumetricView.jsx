@@ -109,7 +109,7 @@ function taubinSmooth(posArrIn, iterations) {
         for (let v = 0; v < 3; v++) {
             const id = triIdx[t*3+v]
             const b  = (t*3+v)*3
-            outPos [b]=pos [id*3]; outPos [b+1]=pos [id*3+1]; outPos [b+2]=pos [id*3+2]
+            outPos[b]=pos[id*3]; outPos[b+1]=pos[id*3+1]; outPos[b+2]=pos[id*3+2]
             outNorm[b]=normAcc[id*3]; outNorm[b+1]=normAcc[id*3+1]; outNorm[b+2]=normAcc[id*3+2]
         }
     }
@@ -248,65 +248,6 @@ function animateReset(s) {
     tick()
 }
 
-// ── Tract geometry builder ────────────────────────────────────────────────────
-// colorMode: 'direction' | 'fa' | 'region'
-
-// Witelson 5-region colors — kept in sync with TractographyDashboard.jsx
-const WITELSON_REGION_META = [
-    { label: 'W1 Anterior',    rgb: [0.39, 0.43, 0.98], hex: '#636EFA' },
-    { label: 'W2 Mid-ant.',    rgb: [0.00, 0.80, 0.59], hex: '#00CC96' },
-    { label: 'W3 Central',     rgb: [1.00, 0.63, 0.35], hex: '#FFA15A' },
-    { label: 'W4 Mid-post.',   rgb: [0.67, 0.39, 0.98], hex: '#AB63FA' },
-    { label: 'W5 Posterior',   rgb: [0.94, 0.33, 0.23], hex: '#EF553B' },
-]
-const TRACT_REGION_COLORS = WITELSON_REGION_META.map(m => m.rgb)
-
-function buildTractLines(data, colorMode) {
-    const { nx, ny, nz, dx, dy, dz, streamlines, fa_along, regions } = data
-    const cx = nx * dx / 2, cy = ny * dy / 2, cz = nz * dz / 2
-
-    const positions = [], colors = []
-
-    streamlines.forEach((sl, si) => {
-        const faVals = fa_along[si]
-        const reg    = (regions[si] || 1) - 1  // 0-indexed
-        for (let p = 0; p < sl.length - 1; p++) {
-            const [i0, j0, k0] = sl[p]
-            const [i1, j1, k1] = sl[p + 1]
-            const wx0 = i0*dx - cx, wy0 = j0*dy - cy, wz0 = k0*dz - cz
-            const wx1 = i1*dx - cx, wy1 = j1*dy - cy, wz1 = k1*dz - cz
-            positions.push(wx0, wy0, wz0, wx1, wy1, wz1)
-
-            let r, g, b
-            if (colorMode === 'direction') {
-                const ddx = Math.abs(wx1-wx0), ddy = Math.abs(wy1-wy0), ddz = Math.abs(wz1-wz0)
-                const len = Math.sqrt(ddx*ddx + ddy*ddy + ddz*ddz) || 1
-                r = ddx/len; g = ddy/len; b = ddz/len
-            } else if (colorMode === 'fa') {
-                const t = Math.max(0, Math.min(1, ((faVals[p] || 0) - 0.2) / 0.8))
-                r = t; g = 1 - Math.abs(2*t - 1); b = 1 - t
-            } else {
-                ;[r, g, b] = TRACT_REGION_COLORS[reg % TRACT_REGION_COLORS.length]
-            }
-            colors.push(r, g, b, r, g, b)
-        }
-    })
-
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
-    geo.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors),   3))
-    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, opacity: 0.85, transparent: true }))
-}
-
-function getTractsPath(fp) {
-    if (!fp) return null
-    // fp is like .../subject/inCCsight/cnnBased.nii.gz
-    // tracts.json sits at .../subject/tracts.json (one level above inCCsight/)
-    const parts = fp.replace(/\\/g, '/').split('/')
-    parts.splice(-2, 2, 'tracts.json')   // remove last 2 segments, add tracts.json
-    return parts.join('/')
-}
-
 // ── DTI eigenvalue / eigenvector NIfTI loading (for vertex coloring) ─────────
 function dtiSubjectPath(fp, niftiName) {
     // .../subject/inCCsight/cnnBased.nii.gz → .../subject/<niftiName>.nii.gz
@@ -373,13 +314,8 @@ function VolumetricView({ filePath }) {
     const [smoothIter,   setSmoothIter]   = useState(0)
     const [customColor,  setCustomColor]  = useState('')
     const customColorRef = useRef('')
-    const [tractsStatus, setTractsStatus] = useState('none')  // 'none'|'loading'|'ready'|'error'
-    const [showTracts,   setShowTracts]   = useState(false)
-    const [tractColor,   setTractColor]   = useState('region')  // default: Witelson region coloring
-    const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'color-fa' | 'fa'
-    const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'|'full'
-    const tractsDataRef  = useRef(null)
-    const tractLinesRef  = useRef(null)
+    const [colorMode,    setColorMode]    = useState('preset') // 'preset' | 'fa'
+    const [dtiStatus,    setDtiStatus]    = useState('idle')   // 'idle'|'loading'|'no-data'|'fa-only'
 
     const destroyScene = useCallback(() => {
         if (rafRef.current)  { cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -419,8 +355,6 @@ function VolumetricView({ filePath }) {
     useEffect(() => {
         let cancelled = false
         setStatus('loading'); setErrMsg('')
-        setTractsStatus('none')
-        tractsDataRef.current = null
         destroyScene(); killWorker()
         meshRef.current = null
 
@@ -441,12 +375,11 @@ function VolumetricView({ filePath }) {
                     if (cancelled) { worker.terminate(); return }
                     const data = e.data
                     if (data.error) { setErrMsg(data.error); setStatus('error'); worker.terminate(); workerRef.current = null; return }
-                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation } = data
-                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorFA, colorHeat, colorParcellation }
+                    const { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorHeat } = data
+                    meshRef.current = { posArr, normArr, triCount, maxDim, bcx, bcy, bcz, colorHeat }
                     setTriCount(triCount)
-                    if      (colorFA)   setDtiStatus('full')
-                    else if (colorHeat) setDtiStatus('fa-only')
-                    else                setDtiStatus('no-data')
+                    if (colorHeat) setDtiStatus('fa-only')
+                    else           setDtiStatus('no-data')
                     setStatus('ready')
                     worker.terminate(); workerRef.current = null
                 }
@@ -464,26 +397,6 @@ function VolumetricView({ filePath }) {
                     if (dtiBufs.V1) transfer.push(dtiBufs.V1)
                 }
                 worker.postMessage(payload, transfer)
-
-                // Check and load tracts.json alongside the NIfTI file
-                const tractsPath = getTractsPath(filePath)
-                if (tractsPath) {
-                    setTractsStatus('loading')
-                    fetch(`http://localhost:3001/api/exists?path=${encodeURIComponent(tractsPath)}`)
-                        .then(r => r.json())
-                        .then(({ exists }) => {
-                            if (!exists) { setTractsStatus('none'); return }
-                            return fetch(`http://localhost:3001/api/tracts?path=${encodeURIComponent(tractsPath)}`)
-                                .then(r => { if (!r.ok) throw new Error('tracts.json fetch failed'); return r.json() })
-                                .then(data => {
-                                    if (!cancelled) {
-                                        tractsDataRef.current = data
-                                        setTractsStatus('ready')
-                                    }
-                                })
-                        })
-                        .catch(() => { if (!cancelled) setTractsStatus('none') })
-                }
             } catch (e) {
                 if (!cancelled) { setErrMsg(e.message); setStatus('error') }
             }
@@ -538,20 +451,10 @@ function VolumetricView({ filePath }) {
     useEffect(() => {
         if (status !== 'ready' || !stateRef.current || !meshRef.current) return
         const { mesh, mat } = stateRef.current
-        const { colorFA, colorHeat, colorParcellation } = meshRef.current
+        const { colorHeat } = meshRef.current
 
-        if (colorMode === 'color-fa' && colorFA) {
-            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorFA, 3))
-            mat.vertexColors = true
-            mat.color.set(0xffffff)
-            mat.emissive.set(0x000000)
-        } else if (colorMode === 'fa' && colorHeat) {
+        if (colorMode === 'fa' && colorHeat) {
             mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorHeat, 3))
-            mat.vertexColors = true
-            mat.color.set(0xffffff)
-            mat.emissive.set(0x000000)
-        } else if (colorMode === 'parcellation' && colorParcellation) {
-            mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colorParcellation, 3))
             mat.vertexColors = true
             mat.color.set(0xffffff)
             mat.emissive.set(0x000000)
@@ -565,27 +468,6 @@ function VolumetricView({ filePath }) {
         mat.needsUpdate = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [colorMode, status, matName, smoothIter])
-
-    // ── Add / update tract lines whenever scene or tract settings change ─────
-    useEffect(() => {
-        if (!stateRef.current) return
-        const { scene } = stateRef.current
-
-        // Remove previous lines
-        if (tractLinesRef.current) {
-            scene.remove(tractLinesRef.current)
-            tractLinesRef.current.geometry.dispose()
-            tractLinesRef.current.material.dispose()
-            tractLinesRef.current = null
-        }
-
-        if (showTracts && tractsStatus === 'ready' && tractsDataRef.current) {
-            const lines = buildTractLines(tractsDataRef.current, tractColor)
-            scene.add(lines)
-            tractLinesRef.current = lines
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showTracts, tractColor, tractsStatus, status])
 
     useEffect(() => {
         const canvas = canvasRef.current
@@ -660,25 +542,13 @@ function VolumetricView({ filePath }) {
                                 />
                                 {!customColor && <span>+</span>}
                             </label>
-                            {(dtiStatus === 'full' || dtiStatus === 'fa-only') && (
+                            {dtiStatus === 'fa-only' && (
                                 <button
                                     className={`ctrl-pill${colorMode === 'fa' ? ' active' : ''}`}
                                     onClick={() => setColorMode('fa')}
                                     title='Color by FA magnitude (cold → warm)'
                                 >FA heat</button>
                             )}
-                            {dtiStatus === 'full' && (
-                                <button
-                                    className={`ctrl-pill${colorMode === 'color-fa' ? ' active' : ''}`}
-                                    onClick={() => setColorMode('color-fa')}
-                                    title='Color-FA: |V1|·FA encodes principal direction (R=L/R · G=A/P · B=S/I)'
-                                >Color-FA</button>
-                            )}
-                            <button
-                                className={`ctrl-pill${colorMode === 'parcellation' ? ' active' : ''}`}
-                                onClick={() => setColorMode('parcellation')}
-                                title='Color surface by Witelson 5-region AP parcellation (same scheme as tractography)'
-                            >Witelson</button>
                         </div>
                         {colorMode === 'fa' && (
                             <div className='fa-heat-legend'>
@@ -688,16 +558,6 @@ function VolumetricView({ filePath }) {
                                     <span>FA</span>
                                     <span>1</span>
                                 </div>
-                            </div>
-                        )}
-                        {colorMode === 'parcellation' && (
-                            <div className='tract-legend'>
-                                {WITELSON_REGION_META.map((w, i) => (
-                                    <span key={i} className='tract-legend-item'>
-                                        <span className='tract-legend-dot' style={{ background: w.hex }} />
-                                        {w.label}
-                                    </span>
-                                ))}
                             </div>
                         )}
                     </div>
@@ -743,60 +603,6 @@ function VolumetricView({ filePath }) {
                             Orientation A/P/L/R/S/I
                         </label>
                     </div>
-
-                    {tractsStatus !== 'none' && (
-                        <div className='ctrl-group'>
-                            <label>Tractography
-                                {tractsStatus === 'loading' && <span style={{ fontWeight: 400, color: '#aaa', marginLeft: 6 }}>loading…</span>}
-                                {tractsStatus === 'ready'   && tractsDataRef.current && (
-                                    <span style={{ fontWeight: 400, color: '#aaa', marginLeft: 6 }}>
-                                        {tractsDataRef.current.streamlines.length} streamlines
-                                    </span>
-                                )}
-                            </label>
-                            {tractsStatus === 'ready' && (
-                                <>
-                                    <div className='ctrl-pills'>
-                                        <label className='ctrl-check'>
-                                            <input type='checkbox' checked={showTracts}
-                                                onChange={e => setShowTracts(e.target.checked)} />
-                                            Show tracts
-                                        </label>
-                                    </div>
-                                    {showTracts && (
-                                        <>
-                                            <div className='ctrl-pills' style={{ marginTop: 4 }}>
-                                                {[
-                                                    { id: 'region',    label: 'Region (Witelson)' },
-                                                    { id: 'direction', label: 'Direction'         },
-                                                    { id: 'fa',        label: 'FA'                },
-                                                ].map(({ id, label }) => (
-                                                    <button key={id}
-                                                        className={`ctrl-pill${tractColor === id ? ' active' : ''}`}
-                                                        onClick={() => setTractColor(id)}
-                                                        title={`Color by ${label}`}
-                                                    >{label}</button>
-                                                ))}
-                                            </div>
-                                            {tractColor === 'region' && (
-                                                <div className='tract-legend'>
-                                                    {WITELSON_REGION_META.map((w, i) => (
-                                                        <span key={i} className='tract-legend-item'>
-                                                            <span
-                                                                className='tract-legend-dot'
-                                                                style={{ background: w.hex }}
-                                                            />
-                                                            {w.label}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    )}
 
                     <div className='ctrl-group ctrl-group--right'>
                         <div className='ctrl-pills'>

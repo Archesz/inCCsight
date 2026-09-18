@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate }  from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import logo    from '../assets/images/inccsight.png'
 
 import View                  from '../components/View/View'
@@ -7,14 +7,18 @@ import GroupComparison       from '../components/GroupComparison/GroupComparison
 import Glossary              from '../components/Glossary/Glossary'
 import QualityControl        from '../components/QualityControl/QualityControl'
 import DemographicsDashboard  from '../components/Demographics/DemographicsDashboard'
-import TractographyDashboard from '../components/Tractography/TractographyDashboard'
 
 import { BsGear } from 'react-icons/bs'
 import { TbAlertTriangle } from 'react-icons/tb'
 
 import '../styles/home.scss'
+import { getGroupColors } from '../settings/palettes'
+import { qcFail, apiBase } from '../settings/settings'
+import { t } from '../settings/i18n'
 
-const GROUP_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+const API = apiBase()
+
+const GROUP_COLORS = getGroupColors()
 
 // ── Demographics fallback (shown when demograph.csv is absent) ─────────────────
 function DemographNoData({ subjects, allGroups, onReload }) {
@@ -57,7 +61,8 @@ function DemographNoData({ subjects, allGroups, onReload }) {
 }
 
 function Home() {
-    const navigate = useNavigate()
+    const navigate  = useNavigate()
+    const location  = useLocation()
 
     const [allSubjects,  setAllSubjects]  = useState([])
     const [data,         setData]         = useState([])
@@ -65,7 +70,7 @@ function Home() {
     const [groupColor,   setGroupColor]   = useState({})
     const [search,       setSearch]       = useState('')
     const [groupFilter,  setGroupFilter]  = useState('')
-    const [activeTab,    setActiveTab]    = useState('2D')
+    const [activeTab,    setActiveTab]    = useState(location.state?.initialTab || '2D')
     const [selectedId,   setSelectedId]   = useState(null)
     const [qcFilter,     setQcFilter]     = useState(false)
     const [loading,      setLoading]      = useState(true)
@@ -82,14 +87,14 @@ function Home() {
     }
 
     function fetchDemograph() {
-        return fetch('http://localhost:3001/api/demograph')
+        return fetch(`${API}/api/demograph`)
             .then(r => r.ok ? r.json() : null)
             .then(json => { if (json?.rows?.length) setDemographData(json) })
             .catch(() => {})
     }
 
     function reloadData() {
-        fetch('http://localhost:3001/api/mydata')
+        fetch(`${API}/api/mydata`)
             .then(r => r.json())
             .then(json => {
                 const subjects = Array.isArray(json) ? json : (json.subjects || [])
@@ -100,7 +105,7 @@ function Home() {
     }
 
     useEffect(() => {
-        fetch('http://localhost:3001/api/mydata')
+        fetch(`${API}/api/mydata`)
             .then(r => {
                 if (!r.ok) throw new Error('Run an analysis first to generate data.')
                 return r.json()
@@ -125,7 +130,7 @@ function Home() {
             setSelectedId(null)
             const filtered = activeSubjects
                 .filter(s => !groupFilter || s.group === groupFilter)
-                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
+                .filter(s => !qcFilter    || qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN))
             setData(filtered)
         } else {
             setSelectedId(id)
@@ -140,13 +145,11 @@ function Home() {
     // ── Subjects visible in sidebar ────────────────────────────────────────
     const visibleSubjects = activeSubjects
         .filter(s => !groupFilter || s.group === groupFilter)
-        .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
+        .filter(s => !qcFilter    || qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN))
         .filter(s => s['Id'].toLowerCase().includes(search.toLowerCase()))
 
     const failCount = activeSubjects.filter(s =>
-        s.qc?.ROQS?.flag === true ||
-        s.qc?.Watershed?.flag === true ||
-        s.qc?.CNN?.flag === true
+        qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN)
     ).length
 
     // ── Update data when filter changes ────────────────────────────────────
@@ -154,7 +157,7 @@ function Home() {
         if (!selectedId) {
             const filtered = activeSubjects
                 .filter(s => !groupFilter || s.group === groupFilter)
-                .filter(s => !qcFilter    || s.qc?.ROQS?.flag === true || s.qc?.Watershed?.flag === true || s.qc?.CNN?.flag === true)
+                .filter(s => !qcFilter    || qcFail(s.qc?.ROQS) || qcFail(s.qc?.Watershed) || qcFail(s.qc?.CNN))
             setData(filtered)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,16 +191,13 @@ function Home() {
 
                 <div className='topbar-tabs'>
                     {[
-                        { id: '2D',      label: '2D Segmentation'  },
-                        { id: '3D',      label: '3D Volumetric'    },
+                        { id: 'qc',      label: t('tab.qc')  },
+                        { id: '2D',      label: t('tab.2d')  },
+                        { id: '3D',      label: t('tab.3d')    },
                         ...(allGroups.length >= 2
-                            ? [{ id: 'compare', label: 'Compare Groups', badge: allGroups.length }]
+                            ? [{ id: 'compare', label: t('tab.compare'), badge: allGroups.length }]
                             : []),
-                        { id: 'demograph', label: 'Demographics' },
-                        ...(activeSubjects.some(s => s.tract_stats?.total_streamlines > 0)
-                            ? [{ id: 'tractography', label: 'Tractography' }]
-                            : []),
-                        { id: 'qc', label: 'Quality Control' },
+                        { id: 'demograph', label: t('tab.demograph') },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -291,7 +291,9 @@ function Home() {
                         {visibleSubjects.map((s, i) => {
                             const gIdx    = groupColor[s.group] ?? -1
                             const color   = gIdx >= 0 ? GROUP_COLORS[gIdx % GROUP_COLORS.length] : '#E3E7F0'
-                            const qcFlag  = s.qc?.ROQS?.flag
+                            const q       = s.qc?.ROQS
+                            const hasQc   = q && (q.prob != null || q.flag != null)
+                            const qcIsBad = hasQc && qcFail(q)
                             return (
                                 <div
                                     key={s['Id']}
@@ -300,8 +302,8 @@ function Home() {
                                 >
                                     <span className='sub-dot' style={{ background: color }} />
                                     <span className='sub-name'>{s['Id']}</span>
-                                    {qcFlag === true  && <span className='sub-qc fail'>FAIL</span>}
-                                    {qcFlag === false && <span className='sub-qc pass'>PASS</span>}
+                                    {hasQc && qcIsBad  && <span className='sub-qc fail'>FAIL</span>}
+                                    {hasQc && !qcIsBad && <span className='sub-qc pass'>PASS</span>}
                                 </div>
                             )
                         })}
@@ -350,8 +352,6 @@ function Home() {
                                 allGroups={allGroups}
                                 onReload={fetchDemograph}
                               />
-                        : activeTab === 'tractography'
-                        ? <TractographyDashboard subjects={activeSubjects} />
                         : <View
                             view={activeTab}
                             data={data}

@@ -1,12 +1,19 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FolderSelector from '../FolderSelector/FolderSelector'
-import { TbPlus } from 'react-icons/tb'
-import Question from '../Question/Question'
+import { TbPlus, TbAlertTriangle } from 'react-icons/tb'
+import HelpPanel from '../Help/HelpPanel'
+import ContributePanel from '../Contribute/ContributePanel'
+import SettingsPanel from '../Settings/SettingsPanel'
+import { getSetting, apiBase } from '../../settings/settings'
+import { t } from '../../settings/i18n'
 
-// Call the API directly on the Express server port,
-// bypassing the CRA proxy which may buffer SSE.
-const API = 'http://localhost:3001'
+// API base URL. In production the React build is served by the same Express
+// server, so an empty string (relative URLs) hits the right origin. In dev the
+// CRA dev-server proxy BUFFERS the SSE stream, so the live pipeline console and
+// progress bar never update (they sit on "Starting…"). Talk to Express (:3001)
+// directly in dev to bypass the proxy; REACT_APP_API_URL still overrides.
+const API = apiBase()
 
 // AbortSignal.timeout() is not available in Safari < 16.
 // This helper creates a timeout signal compatible with all browsers.
@@ -26,15 +33,10 @@ const METHODS = [
     { id: 'cnn',       label: 'CNN (3D)',        desc: 'Volumetric 3D segmentation (requires PyTorch)' },
 ]
 
-const questions = [
-    { question: 'How do I add data?',            response: 'Paste the absolute path to each group folder (e.g. C:\\data\\controls). Each sub-folder should be a subject containing DTI files.' },
-    { question: 'How do I add more groups?',     response: 'Click "+ Add group", give the group a name, and provide the corresponding folder path.' },
-    { question: 'How do I compare groups?',      response: 'After analysis, the dashboard shows per-group tabs and a "Compare Groups" tab with side-by-side boxplots.' },
-    { question: 'What are ROQS and CNN?',        response: 'ROQS produces 2D corpus callosum segmentation. CNN produces volumetric 3D segmentation. Selecting both runs the full pipeline.' },
-    { question: 'What files are required?',      response: 'DTI data in NIfTI format (.nii / .nii.gz) with eigenvector/eigenvalue files: dti_L1–3, dti_V1–3.' },
-]
-
-let _nextId = 2
+// Message shown when the Express backend can't be reached.
+const SERVER_UNREACHABLE =
+    'Cannot reach the analysis server. Make sure inCCsight is running ' +
+    '(run start.bat on Windows, ./start.sh on Linux/macOS, or `npm run dev`).'
 
 function View({ type }) {
     const navigate = useNavigate()
@@ -42,10 +44,24 @@ function View({ type }) {
     const [folderGroups, setFolderGroups] = useState([
         { id: 1, path: '', groupName: 'Group 1' }
     ])
-    // set of selected methods (multi-select)
-    const [selectedMethods, setSelectedMethods] = useState(new Set(['roqs', 'watershed', 'cnn']))
-    const [skipTract, setSkipTract] = useState(false)
-    const [filter, setFilter] = useState('')
+    // set of selected methods (multi-select) — initialised from saved preferences
+    const [selectedMethods, setSelectedMethods] = useState(() => new Set(getSetting('defaultMethods')))
+    const [error, setError]     = useState('')
+
+    // Stable, render-independent counter for unique group ids.
+    const nextIdRef = useRef(2)
+
+    // Ping the backend; on failure set an inline error and return false.
+    async function ensureServer() {
+        try {
+            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
+            if (!ping.ok) throw new Error()
+            return true
+        } catch {
+            setError(SERVER_UNREACHABLE)
+            return false
+        }
+    }
 
     // ── DOM helpers ────────────────────────────────────────────────────────
 
@@ -136,7 +152,7 @@ function View({ type }) {
                         if (msg.done && !navigated) {
                             navigated = true
                             if (msg.code === 0) {
-                                navigate('/Home')
+                                navigate('/Home', { state: { initialTab: 'qc' } })
                             } else {
                                 appendLog('\n✖ Pipeline finished with errors. Check the log above.\n')
                                 const screen = document.querySelector('#loading-screen')
@@ -154,7 +170,7 @@ function View({ type }) {
             }
         } catch (err) {
             hideLoading()
-            alert(`Could not connect to server:\n${err.message}`)
+            setError(`Could not connect to the server: ${err.message}`)
         }
     }
 
@@ -165,7 +181,7 @@ function View({ type }) {
     }
 
     function addGroup() {
-        const id = _nextId++
+        const id = nextIdRef.current++
         setFolderGroups(prev => [...prev, { id, path: '', groupName: `Group ${prev.length + 1}` }])
     }
 
@@ -176,23 +192,15 @@ function View({ type }) {
     // ── Pipeline actions ───────────────────────────────────────────────────
 
     async function startAnalyzes() {
+        setError('')
         const valid = folderGroups.filter(g => g.path.trim())
         if (valid.length === 0) {
-            alert('Enter at least one folder path before running the analysis.')
+            setError('Enter at least one folder path before running the analysis.')
             return
         }
 
         // 1. Check that the Express server is running
-        try {
-            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
-            if (!ping.ok) throw new Error()
-        } catch {
-            alert(
-                'Server not found on port 3001.\n\n' +
-                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
-            )
-            return
-        }
+        if (!await ensureServer()) return
 
         // 2. Verify that the paths exist on disk
         const paths = valid.map(g => g.path.trim())
@@ -205,9 +213,9 @@ function View({ type }) {
             const checks  = await checkRes.json()
             const missing = checks.filter(c => !c.exists).map(c => c.path)
             if (missing.length > 0) {
-                alert(
-                    `The following folders were not found on disk:\n\n${missing.join('\n')}\n\n` +
-                    'Check that the path is correct and the folder exists.'
+                setError(
+                    `These folders were not found on disk: ${missing.join(', ')}. ` +
+                    'Check that each path is correct and the folder exists.'
                 )
                 return
             }
@@ -222,34 +230,18 @@ function View({ type }) {
         const skipRoqs = !selectedMethods.has('roqs') && !selectedMethods.has('watershed')
         const skipCnn  = !selectedMethods.has('cnn')
 
-        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, skipTract })
+        streamPipeline('/api/run-pipeline', { paths, groupsMap, skipCnn, skipRoqs, cnnDevice: getSetting('cnnDevice') })
     }
 
     async function loadLast() {
-        try {
-            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
-            if (!ping.ok) throw new Error()
-        } catch {
-            alert(
-                'Server not found on port 3001.\n\n' +
-                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
-            )
-            return
-        }
+        setError('')
+        if (!await ensureServer()) return
         streamPipeline('/api/load-last', null)
     }
 
     async function runDemo() {
-        try {
-            const ping = await fetch(`${API}/api/ping`, { signal: abortAfter(3000) })
-            if (!ping.ok) throw new Error()
-        } catch {
-            alert(
-                'Server not found on port 3001.\n\n' +
-                'Make sure it is running with:\n  npm run dev\nor:\n  npm run server'
-            )
-            return
-        }
+        setError('')
+        if (!await ensureServer()) return
         streamPipeline('/api/run-demo', null)
     }
 
@@ -258,7 +250,7 @@ function View({ type }) {
     if (type === 'Input') {
         return (
             <>
-                <span className='enter-name'>Select the folders to analyse — one per group.</span>
+                <span className='enter-name'>{t('enter.selectFolders')}</span>
 
                 {/* Group list */}
                 <div className='folders-inputs'>
@@ -276,13 +268,13 @@ function View({ type }) {
 
                     <button className='add-btn' onClick={addGroup}>
                         <TbPlus className='add-icon' />
-                        <span>Add group</span>
+                        <span>{t('enter.addGroup')}</span>
                     </button>
                 </div>
 
                 {/* Method selector — multi-select */}
                 <div className='method-selector'>
-                    <span className='method-label'>Segmentation methods</span>
+                    <span className='method-label'>{t('enter.segMethods')}</span>
                     <div className='method-pills'>
                         {METHODS.map(m => {
                             const checked = selectedMethods.has(m.id)
@@ -311,37 +303,26 @@ function View({ type }) {
                     </div>
                 </div>
 
-                {/* Pipeline options */}
-                <div className='method-selector'>
-                    <span className='method-label'>Pipeline options</span>
-                    <div className='method-pills'>
-                        <label
-                            className={`method-pill${skipTract ? ' active' : ''}`}
-                            title='Skip deterministic tractography (faster — no tracts.json output)'
-                        >
-                            <input
-                                type='checkbox'
-                                checked={skipTract}
-                                onChange={e => setSkipTract(e.target.checked)}
-                                style={{ marginRight: 6 }}
-                            />
-                            Skip Tractography
-                        </label>
+                {/* Inline error banner */}
+                {error && (
+                    <div className='enter-error' role='alert'>
+                        <TbAlertTriangle className='enter-error-icon' />
+                        <span>{error}</span>
                     </div>
-                </div>
+                )}
 
                 {/* Action buttons */}
                 <div className='row-btns'>
                     <div className='secondary-btns'>
                         <div className='btn-history' onClick={loadLast}>
-                            <span>Last analysis</span>
+                            <span>{t('enter.lastAnalysis')}</span>
                         </div>
                         <div className='btn-demo' onClick={runDemo}>
-                            <span>Demo data</span>
+                            <span>{t('enter.demoData')}</span>
                         </div>
                     </div>
                     <button className='btn-start' onClick={startAnalyzes}>
-                        Run analysis
+                        {t('enter.runAnalysis')}
                     </button>
                 </div>
             </>
@@ -349,28 +330,15 @@ function View({ type }) {
     }
 
     if (type === 'Help') {
-        const filtered = questions.filter(q =>
-            q.question.toLowerCase().includes(filter.toLowerCase()) ||
-            q.response.toLowerCase().includes(filter.toLowerCase())
-        )
-        return (
-            <div className='enter-question'>
-                <div className='search-field'>
-                    <span className='enter-name'>Frequently asked questions about the tool.</span>
-                    <input
-                        className='search-input'
-                        placeholder='Search questions...'
-                        value={filter}
-                        onChange={e => setFilter(e.target.value)}
-                    />
-                </div>
-                <div className='questions-container'>
-                    {filtered.map((q, i) => (
-                        <Question key={i} question={q.question} response={q.response} />
-                    ))}
-                </div>
-            </div>
-        )
+        return <HelpPanel />
+    }
+
+    if (type === 'Github') {
+        return <ContributePanel />
+    }
+
+    if (type === 'Settings') {
+        return <SettingsPanel />
     }
 
     return <div className='news-container'><span>Coming soon</span></div>

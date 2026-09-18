@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import './QualityControl.scss'
+import { qcFail, buildCsv, apiBase, getSetting, saveSettings } from '../../settings/settings'
 
-const API      = 'http://localhost:3001'
+const API      = apiBase()
 const SCALARS  = ['FA', 'MD', 'RD', 'AD']
 const METHODS  = ['ROQS', 'Watershed', 'CNN']
 
@@ -22,12 +23,6 @@ function imgPathForMethod(subject, method) {
 }
 
 // CSV cell escaping (RFC 4180)
-function csvCell(v) {
-    if (v == null) return ''
-    const s = String(v)
-    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
-
 // Build a CSV with metadata for removed subjects (QC flags + scalars)
 function downloadRemovedCsv(subjects) {
     if (!subjects.length) return
@@ -59,9 +54,9 @@ function downloadRemovedCsv(subjects) {
         s.CNN_scalar?.MD       ?? '',
         s.CNN_scalar?.RD       ?? '',
         s.CNN_scalar?.AD       ?? '',
-    ].map(csvCell).join(','))
+    ])
 
-    const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+    const csv = buildCsv(rows, { header: cols })
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
@@ -84,27 +79,27 @@ function downloadOverviewCsv(subjects) {
         'failed_methods', 'status',
     ]
     const rows = subjects.map(s => {
-        const failed = METHODS.filter(m => s.qc?.[m]?.flag === true)
+        const failed = METHODS.filter(m => qcFail(s.qc?.[m]))
         return [
             s.Id,
             s.group ?? '',
-            s.qc?.ROQS?.flag      != null ? (s.qc.ROQS.flag      ? 'FAIL' : 'PASS') : '',
+            (s.qc?.ROQS?.flag != null || s.qc?.ROQS?.prob != null) ? (qcFail(s.qc.ROQS) ? 'FAIL' : 'PASS') : '',
             s.qc?.ROQS?.prob      != null ? s.qc.ROQS.prob.toFixed(4)               : '',
-            s.qc?.Watershed?.flag != null ? (s.qc.Watershed.flag ? 'FAIL' : 'PASS') : '',
+            (s.qc?.Watershed?.flag != null || s.qc?.Watershed?.prob != null) ? (qcFail(s.qc.Watershed) ? 'FAIL' : 'PASS') : '',
             s.qc?.Watershed?.prob != null ? s.qc.Watershed.prob.toFixed(4)           : '',
-            s.qc?.CNN?.flag       != null ? (s.qc.CNN.flag       ? 'FAIL' : 'PASS') : '',
+            (s.qc?.CNN?.flag != null || s.qc?.CNN?.prob != null) ? (qcFail(s.qc.CNN) ? 'FAIL' : 'PASS') : '',
             s.qc?.CNN?.prob       != null ? s.qc.CNN.prob.toFixed(4)                 : '',
             failed.join(';') || 'none',
             s.removed ? 'removed' : failed.length ? 'flagged' : 'ok',
-        ].map(csvCell).join(',')
+        ]
     })
 
-    const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+    const csv = buildCsv(rows, { header: cols })
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
     a.href     = url
-    a.download = `qc_method_overview_${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `qc_method_overview_thr${getSetting('qcThreshold')}_${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -200,11 +195,11 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
     const [filter, setFilter] = useState('all')  // 'all' | 'failed'
 
     const allShown    = useMemo(() => [...activeSubjects, ...removedSubjects], [activeSubjects, removedSubjects])
-    const failedCount = useMemo(() => allShown.filter(s => METHODS.some(m => s.qc?.[m]?.flag === true)).length, [allShown])
+    const failedCount = useMemo(() => allShown.filter(s => METHODS.some(m => qcFail(s.qc?.[m]))).length, [allShown])
 
     const displayed = useMemo(() =>
         filter === 'failed'
-            ? allShown.filter(s => METHODS.some(m => s.qc?.[m]?.flag === true))
+            ? allShown.filter(s => METHODS.some(m => qcFail(s.qc?.[m])))
             : allShown,
         [allShown, filter]
     )
@@ -259,7 +254,7 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
                         </thead>
                         <tbody>
                             {displayed.map(s => {
-                                const failed = METHODS.filter(m => s.qc?.[m]?.flag === true)
+                                const failed = METHODS.filter(m => qcFail(s.qc?.[m]))
                                 const anyFail = failed.length > 0
                                 return (
                                     <tr
@@ -272,14 +267,15 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
                                         <td className='qco-id'>{s.Id ?? s['Id']}</td>
                                         <td>{s.group ?? '—'}</td>
                                         {METHODS.map(m => {
-                                            const flag = s.qc?.[m]?.flag
-                                            const prob = s.qc?.[m]?.prob
-                                            if (flag == null) {
+                                            const q    = s.qc?.[m]
+                                            const prob = q?.prob
+                                            if (!q || (q.flag == null && q.prob == null)) {
                                                 return <td key={m} className='qco-nd'>—</td>
                                             }
+                                            const bad = qcFail(q)
                                             return (
-                                                <td key={m} className={`qco-cell qco-cell--${flag ? 'fail' : 'pass'}`}>
-                                                    {flag ? '✕ FAIL' : '✓ PASS'}
+                                                <td key={m} className={`qco-cell qco-cell--${bad ? 'fail' : 'pass'}`}>
+                                                    {bad ? '✕ FAIL' : '✓ PASS'}
                                                     {prob != null &&
                                                         <span className='qco-prob'> {(prob * 100).toFixed(0)}%</span>
                                                     }
@@ -312,10 +308,13 @@ function MethodOverview({ activeSubjects, removedSubjects }) {
 export default function QualityControl({ allSubjects, onReload }) {
     const [viewMode,   setViewMode]   = useState('cards')   // 'cards' | 'overview'
     const [method,     setMethod]     = useState('ROQS')
-    const [threshold,  setThreshold]  = useState(0.5)
+    // Unified with Settings → Scientific parameters (qcThreshold), so Cards,
+    // Method Overview, the sidebar badges and the subject banner all agree.
+    const [threshold,  setThreshold]  = useState(() => getSetting('qcThreshold'))
     const [scalar,     setScalar]     = useState('FA')
     const [zThresh,    setZThresh]    = useState(2.0)
     const [perGroup,   setPerGroup]   = useState(false)
+    const [cols,       setCols]       = useState(0)         // 0 = auto-fill
     const [selected,   setSelected]   = useState(new Set())
     const [loading,    setLoading]    = useState(false)
 
@@ -376,6 +375,10 @@ export default function QualityControl({ allSubjects, onReload }) {
     const handleRestoreAll   = () => _post('/api/restore-subjects', removedSubjects.map(s => s['Id']))
     const handleRestoreOne   = id => _post('/api/restore-subjects', [id])
 
+    const gridStyle = cols > 0
+        ? { gridTemplateColumns: `repeat(${cols}, 1fr)` }
+        : {}
+
     // ── render ────────────────────────────────────────────────────────────────
 
     return (
@@ -416,11 +419,11 @@ export default function QualityControl({ allSubjects, onReload }) {
                     </div>
 
                     <div className='qcc-group'>
-                        <span className='qcc-label'>Shape threshold: <strong>{threshold.toFixed(2)}</strong></span>
+                        <span className='qcc-label' title='Shared with Settings → Scientific parameters'>QC threshold: <strong>{threshold.toFixed(2)}</strong></span>
                         <input
                             type='range' min='0' max='1' step='0.01'
                             value={threshold}
-                            onChange={e => setThreshold(+e.target.value)}
+                            onChange={e => { const v = +e.target.value; setThreshold(v); saveSettings({ qcThreshold: v }) }}
                             className='qcc-slider'
                         />
                     </div>
@@ -456,6 +459,28 @@ export default function QualityControl({ allSubjects, onReload }) {
                             Z-score per group
                         </label>
                     </div>
+
+                    <div className='qcc-group'>
+                        <span className='qcc-label'>
+                            Columns: <strong>{cols === 0 ? 'Auto' : cols}</strong>
+                        </span>
+                        <div className='qcc-cols-control'>
+                            <input
+                                type='range' min='1' max='8' step='1'
+                                value={cols === 0 ? 4 : cols}
+                                disabled={cols === 0}
+                                onChange={e => setCols(+e.target.value)}
+                                className='qcc-slider'
+                            />
+                            <button
+                                className={`qcc-auto-btn${cols === 0 ? ' active' : ''}`}
+                                onClick={() => setCols(v => v === 0 ? 4 : 0)}
+                                title='Auto-fill based on card width'
+                            >
+                                Auto
+                            </button>
+                        </div>
+                    </div>
                 </>}
 
             </div>
@@ -482,7 +507,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                 </>}
                 {viewMode === 'overview' && <>
                     {METHODS.map(m => {
-                        const n = allSubjects.filter(s => s.qc?.[m]?.flag === true).length
+                        const n = allSubjects.filter(s => qcFail(s.qc?.[m])).length
                         return (
                             <div key={m} className='qcs qcs--flag'>
                                 <span className='qcs-val'>{n}</span>
@@ -492,7 +517,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                     })}
                     <div className='qcs qcs--flag'>
                         <span className='qcs-val'>
-                            {allSubjects.filter(s => METHODS.some(m => s.qc?.[m]?.flag === true)).length}
+                            {allSubjects.filter(s => METHODS.some(m => qcFail(s.qc?.[m]))).length}
                         </span>
                         <span className='qcs-lbl'>Any Failure</span>
                     </div>
@@ -558,7 +583,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                                 Flagged — {flaggedActive.length} subject{flaggedActive.length !== 1 ? 's' : ''}
                                 <span className='qcg-hint'>click to select / deselect</span>
                             </div>
-                            <div className='qcg'>
+                            <div className='qcg' style={gridStyle}>
                                 {flaggedActive.map(s => (
                                     <SubjectCard
                                         key={s['Id']}
@@ -581,7 +606,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                             <div className='qcg-section-hd qcg-section-hd--pass'>
                                 Pass — {passActive.length} subject{passActive.length !== 1 ? 's' : ''}
                             </div>
-                            <div className='qcg'>
+                            <div className='qcg' style={gridStyle}>
                                 {passActive.map(s => (
                                     <SubjectCard
                                         key={s['Id']}
@@ -611,7 +636,7 @@ export default function QualityControl({ allSubjects, onReload }) {
                                     ⬇ Download CSV
                                 </button>
                             </div>
-                            <div className='qcg'>
+                            <div className='qcg' style={gridStyle}>
                                 {removedSubjects.map(s => (
                                     <div key={s['Id']} className='qcc qcc--removed'>
                                         <div className='qcc-img'>

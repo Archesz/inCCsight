@@ -7,14 +7,20 @@ import BoxplotParcellation from '../../graphs/Boxplot/BoxplotParcellation'
 import Scatter             from '../../graphs/Scatter/Scatter'
 import Midline             from '../../graphs/Line/Midline'
 import VolumetricView      from '../../graphs/Volume/VolumetricView'
-import Radar, { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
-import BubblePlot         from '../../graphs/BubblePlot/BubblePlot'
+import { RadarBySegmentation, RadarByParcellation } from '../../graphs/Radar/Radar'
+import InfoTool           from '../../components/InfoTool/InfoTool'
+import { getSetting, qcFail, apiBase } from '../../settings/settings'
+import { t } from '../../settings/i18n'
 
 import '../../styles/home.scss'
 
-const API = 'http://localhost:3001'
+const API = apiBase()
 
 const SCALARS   = ['FA', 'MD', 'RD', 'AD']
+
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel  = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
 const SEG_KEYS  = [
     { key: 'ROQS_scalar',      label: 'ROQS'      },
     { key: 'Watershed_scalar', label: 'Watershed'  },
@@ -34,9 +40,10 @@ function meanOf(data, methodKey, scalar) {
     return vals.reduce((a, b) => a + Number(b), 0) / vals.length
 }
 
-function fmt(v, decimals = 6) {
+function fmt(v, decimals) {
     if (v == null) return '—'
-    return Number(v).toFixed(decimals)
+    const d = decimals == null ? getSetting('decimals') : decimals
+    return Number(v).toFixed(d)
 }
 
 // ── Image path per method ─────────────────────────────────────────────────────
@@ -69,8 +76,8 @@ function calcAsymmetryIndex(parcellation, method) {
 function SubjectBanner({ subject, onDeselect }) {
     const [imgMethod,   setImgMethod]   = useState('ROQS')
     const [imgErrors,   setImgErrors]   = useState({})
-    const [parcMethod,  setParcMethod]  = useState('Witelson')
-    const [parcScalar,  setParcScalar]  = useState('FA')
+    const [parcMethod,  setParcMethod]  = useState(() => getSetting('defaultParcellation'))
+    const [parcScalar,  setParcScalar]  = useState(() => getSetting('defaultScalar'))
 
     const qc      = subject.qc || {}
     const hasCNN  = Object.keys(subject.CNN_scalar  || {}).length > 0
@@ -137,9 +144,10 @@ function SubjectBanner({ subject, onDeselect }) {
                             { method: 'Watershed', q: qc.Watershed },
                             { method: 'CNN',       q: qc.CNN        },
                         ].map(({ method, q }) => {
-                            if (!q || q.flag == null) return null
-                            const cls   = q.flag === true ? 'fail' : 'pass'
-                            const label = q.flag === true ? 'FAIL' : 'PASS'
+                            if (!q || (q.flag == null && q.prob == null)) return null
+                            const bad   = qcFail(q)
+                            const cls   = bad ? 'fail' : 'pass'
+                            const label = bad ? 'FAIL' : 'PASS'
                             return (
                                 <div key={method} className='sb-qc-item'>
                                     <span className='sqc-method'>{method}</span>
@@ -175,9 +183,9 @@ function SubjectBanner({ subject, onDeselect }) {
                                 {SCALARS.map(sc => (
                                     <tr key={sc}>
                                         <td className='sbt-label'>{sc}</td>
-                                        <td>{fmt(subject.ROQS_scalar?.[sc], 4)}</td>
-                                        <td>{fmt(subject.Watershed_scalar?.[sc], 4)}</td>
-                                        {hasCNN && <td>{fmt(subject.CNN_scalar?.[sc], 4)}</td>}
+                                        <td>{fmt(subject.ROQS_scalar?.[sc])}</td>
+                                        <td>{fmt(subject.Watershed_scalar?.[sc])}</td>
+                                        {hasCNN && <td>{fmt(subject.CNN_scalar?.[sc])}</td>}
                                     </tr>
                                 ))}
                             </tbody>
@@ -204,7 +212,7 @@ function SubjectBanner({ subject, onDeselect }) {
                                     title='Scalar'
                                 >
                                     {SCALARS.map(s => (
-                                        <option key={s} value={s}>{s}</option>
+                                        <option key={s} value={s}>{scalarLabel(s)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -222,9 +230,9 @@ function SubjectBanner({ subject, onDeselect }) {
                                 {PARC_PARTS.map(part => (
                                     <tr key={part}>
                                         <td className='sbt-label'>{part}</td>
-                                        <td>{fmt(subject.ROQS_parcellation?.[parcKey(part)], 4)}</td>
-                                        <td>{fmt(subject.Watershed_parcellation?.[parcKey(part)], 4)}</td>
-                                        {hasCNNP && <td>{fmt(subject.CNN_parcellation?.[parcKey(part)], 4)}</td>}
+                                        <td>{fmt(subject.ROQS_parcellation?.[parcKey(part)])}</td>
+                                        <td>{fmt(subject.Watershed_parcellation?.[parcKey(part)])}</td>
+                                        {hasCNNP && <td>{fmt(subject.CNN_parcellation?.[parcKey(part)])}</td>}
                                     </tr>
                                 ))}
                             </tbody>
@@ -328,7 +336,7 @@ function useCNNSubjects(data) {
 }
 
 // ── Card wrapper with title ───────────────────────────────────────────────────
-function Card({ title, controls, children, collapsible = false, defaultOpen = true }) {
+function Card({ title, info, controls, children, collapsible = false, defaultOpen = true }) {
     const [open, setOpen] = useState(defaultOpen)
     return (
         <div className='dash-card'>
@@ -341,6 +349,7 @@ function Card({ title, controls, children, collapsible = false, defaultOpen = tr
                         <span className='dc-collapse-arrow'>{open ? '▾' : '▸'}</span>
                     )}
                     {title}
+                    {info && <InfoTool text={info} />}
                 </span>
                 {controls && <div className='dc-controls'>{controls}</div>}
             </div>
@@ -351,7 +360,7 @@ function Card({ title, controls, children, collapsible = false, defaultOpen = tr
 
 // ── Main view component ───────────────────────────────────────────────────────
 function View({ view, data, selectedId, onDeselect }) {
-    const [kpiMethod,       setKpiMethod]       = useState('ROQS_scalar')
+    const [kpiMethod,       setKpiMethod]       = useState(() => getSetting('defaultSegMethod'))
     const [selectedCNNIdx,  setSelectedCNNIdx]  = useState(0)
     const cnnSubjects = useCNNSubjects(data)
 
@@ -395,54 +404,81 @@ function View({ view, data, selectedId, onDeselect }) {
                 )}
 
                 {/* KPI Overview */}
-                <Card title='Overview — Mean per Scalar' controls={methodControls}>
+                <Card
+                    title={t('view.overview')}
+                    info='Average of each DTI scalar (FA, MD, RD, AD) across the selected subjects, for the chosen segmentation method. Use the method pills on the right to switch between ROQS, Watershed and CNN.'
+                    controls={methodControls}
+                >
                     <KPIRow data={data} method={kpiMethod} />
                 </Card>
 
                 {/* Data tables — side by side */}
                 <div className='two-col'>
-                    <Card title='Segmentation Table'>
+                    <Card
+                        title={t('view.segTable')}
+                        info='Mean DTI scalar values per segmentation method for the whole corpus callosum. FA is dimensionless; MD, RD and AD are in mm²/s.'
+                    >
                         <TableSegmentation data={data} type='2D' />
                     </Card>
-                    <Card title='Parcellation Table'>
+                    <Card
+                        title={t('view.parcTable')}
+                        info='Mean scalar value for each callosal sub-region (P1–P5) under the selected parcellation scheme and scalar.'
+                    >
                         <TableParcellation data={data} type='2D' />
                     </Card>
                 </div>
 
                 {/* Row 3 — Midline | Bubble Plot */}
                 <div className='two-col'>
-                    <Card title='Midline Profile Along the Corpus Callosum'>
+                    <Card
+                        title={t('view.midline')}
+                        info='Scalar value sampled along the 200 points of the CC midline, from posterior (splenium) to anterior (genu). Click the colours in the legend to hide or show each series.'
+                    >
                         <Midline data={data} />
                     </Card>
-                    <Card title='Bubble Plots — CC Body Profile'>
-                        <BubblePlot data={data} />
+
+                    {/* Row 3b — Scalar Correlation */}
+                    <Card
+                        title={t('view.correlation')}
+                        info='Scatter plot of two scalars against each other with a linear regression line, plus their marginal histograms. Useful to inspect relationships such as FA vs. MD. Click the colours in the legend to hide or show each series.'
+                    >
+                        <Scatter data={data} />
                     </Card>
+
                 </div>
 
                 {/* Row 4 — Segmentation Boxplot (full width) */}
-                <Card title='Distributions — Scalars by Segmentation Method'>
+                <Card
+                    title={t('view.distSeg')}
+                    info='Distribution (box plots) of each scalar across subjects, compared between segmentation methods. The box shows the quartiles and the line the median. Click the colours in the legend to hide or show each method.'
+                >
                     <BoxplotSegmentation data={data} />
                 </Card>
 
                 {/* Row 5 — Parcellation Boxplot (full width) */}
-                <Card title='Distributions — Parcellation by Part'>
+                <Card
+                    title={t('view.distParc')}
+                    info='Distribution of the selected scalar per callosal region (P1–P5), one box per segmentation method. Use the selectors below to change parcellation scheme and scalar. Click the colours in the legend to hide or show each method.'
+                >
                     <BoxplotParcellation data={data} />
                 </Card>
 
                 {/* Row 6 — Radar charts side by side */}
                 <div className='two-col'>
-                    <Card title='Segmentations by Parcellation'>
+                    <Card
+                        title={t('view.radarSeg')}
+                        info='Radar comparing the segmentation methods across the five callosal regions for a fixed parcellation scheme. Click the colours in the legend to hide or show each method.'
+                    >
                         <RadarBySegmentation data={data} />
                     </Card>
-                    <Card title='Parcellations by Segmentation'>
+                    <Card
+                        title={t('view.radarParc')}
+                        info='Radar comparing the parcellation schemes across the five callosal regions for a fixed segmentation method. Click the colours in the legend to hide or show each scheme.'
+                    >
                         <RadarByParcellation data={data} />
                     </Card>
                 </div>
 
-                {/* Row 7 — Scatter + histograms */}
-                <Card title='Scalar Correlation'>
-                    <Scatter data={data} />
-                </Card>
 
             </div>
         )
@@ -456,16 +492,25 @@ function View({ view, data, selectedId, onDeselect }) {
             <div className='view-wrap'>
 
                 {/* CNN tables */}
-                <Card title='Segmentation Table — CNN-Based'>
+                <Card
+                    title={t('view.segTableCNN')}
+                    info='Mean DTI scalar values computed from the volumetric CNN segmentation. FA is dimensionless; MD, RD and AD are in mm²/s.'
+                >
                     <TableSegmentation data={data} type='3D' />
                 </Card>
 
-                <Card title='Parcellation Table — CNN-Based'>
+                <Card
+                    title={t('view.parcTableCNN')}
+                    info='Mean scalar value per callosal region (P1–P5) from the CNN segmentation, for the selected parcellation scheme and scalar.'
+                >
                     <TableParcellation data={data} type='3D' />
                 </Card>
 
                 {/* Volumetric viewer */}
-                <Card title='3D Volumetric Viewer'>
+                <Card
+                    title={t('view.viewer3d')}
+                    info='Interactive 3D rendering of the CNN corpus callosum mask. Drag to rotate, scroll to zoom. Pick a subject from the list and use the controls to change material, opacity and wireframe.'
+                >
                     <div className='area-volumetric'>
                         <div className='cnn-subject-list'>
                             <span className='cnn-list-title'>CNN Subjects</span>

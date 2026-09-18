@@ -179,6 +179,9 @@
     border-radius: 8px;
     overflow: hidden;
     transition: border-color 0.15s;
+    flex-shrink: 0;   // keep natural height so .gls-content overflows and scrolls
+                      // (without this, column-flex children squish and the
+                      //  scrollbar never appears)
 
     &:hover { border-color: rgba(130,160,255,0.3) }
 

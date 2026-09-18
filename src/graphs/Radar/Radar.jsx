@@ -1,6 +1,7 @@
 import React, { useState, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './Radar.scss'
+import { plotTheme } from '../../settings/settings'
 
 const COLORS = {
     ROQS:      '#636EFA',
@@ -19,6 +20,13 @@ const PARC_COLORS = {
 const PARTS      = ['P1', 'P2', 'P3', 'P4', 'P5']
 const PARC_METHS = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
 const SCALARS    = ['FA', 'RD', 'AD', 'MD']
+
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS   = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const SCALAR_OPTIONS = SCALARS.map(s => ({
+    value: s,
+    label: SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s,
+}))
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -110,15 +118,35 @@ function RadarBySegmentation({ data }) {
     }))
 
     const layout = {
-        title:  { text: 'Segmentations by Parcellation', font: { size: 14 } },
         legend: { orientation: 'h' },
-        polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
-        margin: { t: 40, l: 20, r: 20, b: 8 },
+        polar:  { bgcolor: plotTheme().plot, radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
+        paper_bgcolor: plotTheme().paper,
+        font: { color: plotTheme().font },
+        margin: { t: 20, l: 20, r: 20, b: 8 },
         height: 300,
     }
 
     return (
         <div className='radar-block'>
+            <ControlRow>
+                <SelectField
+                    label='Parcellation'
+                    value={parcMethod}
+                    onChange={setParcMethod}
+                    options={PARC_METHS}
+                />
+                <SelectField
+                    label='Scalar'
+                    value={scalar}
+                    onChange={setScalar}
+                    options={SCALAR_OPTIONS}
+                />
+                <CheckField
+                    label='Normalise (0–1)'
+                    checked={normalized}
+                    onChange={setNormalized}
+                />
+            </ControlRow>
             <Plot
                 data={plotData}
                 layout={layout}
@@ -131,25 +159,6 @@ function RadarBySegmentation({ data }) {
                 style={{ width: '100%' }}
                 useResizeHandler
             />
-            <ControlRow>
-                <SelectField
-                    label='Parcellation'
-                    value={parcMethod}
-                    onChange={setParcMethod}
-                    options={PARC_METHS}
-                />
-                <SelectField
-                    label='Scalar'
-                    value={scalar}
-                    onChange={setScalar}
-                    options={SCALARS}
-                />
-                <CheckField
-                    label='Normalise (0–1)'
-                    checked={normalized}
-                    onChange={setNormalized}
-                />
-            </ControlRow>
         </div>
     )
 }
@@ -187,15 +196,35 @@ function RadarByParcellation({ data }) {
     }))
 
     const layout = {
-        title:  { text: 'Parcellations by Segmentation', font: { size: 14 } },
         legend: { orientation: 'h' },
-        polar:  { radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
-        margin: { t: 40, l: 20, r: 20, b: 8 },
+        polar:  { bgcolor: plotTheme().plot, radialaxis: { visible: true, title: normalized ? 'Norm.' : scalar } },
+        paper_bgcolor: plotTheme().paper,
+        font: { color: plotTheme().font },
+        margin: { t: 20, l: 20, r: 20, b: 8 },
         height: 300,
     }
 
     return (
         <div className='radar-block'>
+            <ControlRow>
+                <SelectField
+                    label='Segmentation'
+                    value={validKey}
+                    onChange={v => setSegmKey(v)}
+                    options={segmOptions}
+                />
+                <SelectField
+                    label='Scalar'
+                    value={scalar}
+                    onChange={setScalar}
+                    options={SCALAR_OPTIONS}
+                />
+                <CheckField
+                    label='Normalise (0–1)'
+                    checked={normalized}
+                    onChange={setNormalized}
+                />
+            </ControlRow>
             <Plot
                 data={plotData}
                 layout={layout}
@@ -208,25 +237,6 @@ function RadarByParcellation({ data }) {
                 style={{ width: '100%' }}
                 useResizeHandler
             />
-            <ControlRow>
-                <SelectField
-                    label='Segmentation'
-                    value={validKey}
-                    onChange={v => setSegmKey(v)}
-                    options={segmOptions}
-                />
-                <SelectField
-                    label='Scalar'
-                    value={scalar}
-                    onChange={setScalar}
-                    options={SCALARS}
-                />
-                <CheckField
-                    label='Normalise (0–1)'
-                    checked={normalized}
-                    onChange={setNormalized}
-                />
-            </ControlRow>
         </div>
     )
 }

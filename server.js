@@ -6,10 +6,40 @@ const fs      = require('fs')
 const { spawn } = require('child_process')
 
 const app  = express()
-const PORT = 3001
+const PORT = Number(process.env.PORT) || 3001
+// Bind to loopback by default so the API is not exposed to other machines on
+// the network. Containerized/remote deployments can opt in with HOST=0.0.0.0.
+const HOST = process.env.HOST || '127.0.0.1'
 
-app.use(cors())
+// CORS — restrict to the local dev/prod origins. CORS is browser-enforced, so
+// this stops arbitrary websites the user visits from reading responses off the
+// local API. Override with ALLOWED_ORIGINS (comma-separated) when needed.
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+    : [
+        'http://localhost:3000',  'http://127.0.0.1:3000',
+        `http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`,
+      ]
+app.use(cors({ origin: ALLOWED_ORIGINS }))
 app.use(express.json())
+
+// Host-header allowlist — blocks DNS-rebinding attacks, which slip past CORS by
+// making a malicious request look same-origin to the browser. Only requests
+// addressed to a loopback host are served. Extend via ALLOWED_HOSTS (comma-
+// separated) for remote/containerized deployments, e.g. ALLOWED_HOSTS=my.host.
+const ALLOWED_HOSTS = new Set([
+    'localhost', '127.0.0.1', '[::1]', '::1',
+    ...(process.env.ALLOWED_HOSTS
+        ? process.env.ALLOWED_HOSTS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+        : []),
+])
+app.use((req, res, next) => {
+    const host = (req.headers.host || '').replace(/:\d+$/, '').toLowerCase()
+    if (!ALLOWED_HOSTS.has(host)) {
+        return res.status(403).json({ error: 'Forbidden: host not allowed.' })
+    }
+    next()
+})
 
 const projectRoot = __dirname
 const methodsDir  = path.join(projectRoot, 'methods')
@@ -45,33 +75,124 @@ const ALLOWED_FILE_EXTS = new Set([
     '.nii', '.gz', '.png', '.jpg', '.jpeg',
 ])
 
+// ── Path confinement — prevent arbitrary local-file read ─────────────────────
+// A request may only reach files that resolve (after following symlinks and
+// "..") under a known-safe root: the bundled data dir or a folder the user has
+// explicitly added for analysis (recorded in groups.json). This neutralizes
+// path traversal even if every other guard is bypassed.
+function allowedRoots() {
+    const roots = [path.join(projectRoot, 'data')]
+    try {
+        const groupsMap = JSON.parse(
+            fs.readFileSync(path.join(methodsDir, 'csvs', 'groups.json'), 'utf8'))
+        for (const folder of Object.keys(groupsMap)) roots.push(folder)
+    } catch (_) { /* no groups yet — only the data dir is allowed */ }
+    return roots
+}
+
+function realOrNull(p) {
+    try { return fs.realpathSync(path.resolve(p)) } catch (_) { return null }
+}
+
+function isPathAllowed(filePath) {
+    if (!filePath) return false
+    const real = realOrNull(filePath)
+    if (!real) return false               // path does not exist / cannot resolve
+    const norm = s => (process.platform === 'win32' ? s.toLowerCase() : s)
+    const target = norm(real)
+    return allowedRoots().some(root => {
+        const realRoot = realOrNull(root)
+        if (!realRoot) return false
+        const base = norm(realRoot)
+        return target === base || target.startsWith(base.endsWith(path.sep) ? base : base + path.sep)
+    })
+}
+
+// ── Python dependency preflight ──────────────────────────────────────────────
+// Import the packages the pipeline needs. If they're missing, the user ran the
+// tool without setting up the Python environment — surface a clear, actionable
+// message instead of a cryptic ModuleNotFoundError mid-pipeline.
+const _PREFLIGHT_IMPORTS = 'import nibabel, numpy, pandas, scipy, skimage, dipy, PIL'
+
+function envErrorMessage(detail) {
+  const usingVenv = python !== 'python' && python !== 'python3'
+  return (
+    '\n[ERROR] Python environment is not ready — the analysis cannot run.\n\n' +
+    'The pipeline needs Python packages that are not installed' +
+    (usingVenv ? ' in methods/venv' : ' (no methods/venv was found, so the system Python is being used)') +
+    '.\n' +
+    (detail ? `  ↳ ${detail}\n` : '') +
+    '\nFix it once by running the setup script from the project folder:\n' +
+    '    Windows:        setup.bat\n' +
+    '    Linux / macOS:  ./setup.sh\n' +
+    'Then start the tool again (start.bat / ./start.sh). Setup creates\n' +
+    'methods/venv and installs nibabel, torch, pandas and everything else.\n'
+  )
+}
+
+// Returns a Promise<string|null>: an error message if the env is broken, else null.
+function pythonPreflight(send) {
+  return new Promise(resolve => {
+    send({ text: 'Checking Python environment…\n' })
+    let proc
+    try {
+      proc = spawn(python, ['-c', _PREFLIGHT_IMPORTS])
+    } catch (e) {
+      return resolve(envErrorMessage(e.message))
+    }
+    let err = ''
+    proc.stderr.on('data', d => { err += d.toString() })
+    proc.on('error', e => resolve(envErrorMessage(e.message)))
+    proc.on('close', code => {
+      if (code === 0) { send({ text: '✔ Python environment OK\n' }); resolve(null) }
+      else {
+        const firstLine = err.trim().split('\n').filter(Boolean).pop() || 'a required package is missing'
+        resolve(envErrorMessage(firstLine))
+      }
+    })
+  })
+}
+
 // ── SSE utility: stream a Python subprocess to the client ────────────────────
-function spawnSSE(res, args, cwd) {
+// If `preflight` is provided it runs first (after headers flush); when it
+// returns an error string the subprocess is never spawned.
+function spawnSSE(res, args, cwd, extraEnv = {}, preflight = null) {
   res.setHeader('Content-Type',      'text/event-stream')
   res.setHeader('Cache-Control',     'no-cache')
   res.setHeader('Connection',        'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')   // disable buffering in proxies (nginx/CRA)
   res.flushHeaders()
 
-  // PYTHONUNBUFFERED=1 + -u flag ensure real-time output through pipes
-  // PYTHONIOENCODING=utf-8 prevents UnicodeEncodeError on Windows (pipe defaults to cp1252)
-  const env  = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
-  const proc = spawn(python, ['-u', ...args], { cwd, env })
-
   const send = data => res.write(`data: ${JSON.stringify(data)}\n\n`)
 
-  proc.stdout.on('data', d => send({ text: d.toString() }))
-  proc.stderr.on('data', d => send({ text: d.toString() }))
-  proc.on('close', code => { send({ done: true, code }); res.end() })
-  proc.on('error', err  => { send({ text: `[ERROR] ${err.message}\n`, done: true, code: 1 }); res.end() })
+  const run = () => {
+    // PYTHONUNBUFFERED=1 + -u flag ensure real-time output through pipes
+    // PYTHONIOENCODING=utf-8 prevents UnicodeEncodeError on Windows (pipe defaults to cp1252)
+    const env  = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', ...extraEnv }
+    const proc = spawn(python, ['-u', ...args], { cwd, env })
 
-  // Kill process if client disconnects
-  res.on('close', () => proc.kill())
+    proc.stdout.on('data', d => send({ text: d.toString() }))
+    proc.stderr.on('data', d => send({ text: d.toString() }))
+    proc.on('close', code => { send({ done: true, code }); res.end() })
+    proc.on('error', err  => { send({ text: `[ERROR] ${err.message}\n`, done: true, code: 1 }); res.end() })
+
+    // Kill process if client disconnects
+    res.on('close', () => proc.kill())
+  }
+
+  if (preflight) {
+    Promise.resolve(preflight(send)).then(errMsg => {
+      if (errMsg) { send({ text: errMsg }); send({ done: true, code: 1 }); res.end() }
+      else run()
+    })
+  } else {
+    run()
+  }
 }
 
 // ── POST /api/run-pipeline ────────────────────────────────────────────────────
 app.post('/api/run-pipeline', (req, res) => {
-  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false, skipTract = false } = req.body
+  const { paths = [], groupsMap = {}, skipCnn = false, skipRoqs = false, cnnDevice = 'auto' } = req.body
 
   const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
   try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
@@ -80,15 +201,16 @@ app.post('/api/run-pipeline', (req, res) => {
   const args = ['run.py', '-p', ...paths]
   if (skipCnn)   args.push('--skip-cnn')
   if (skipRoqs)  args.push('--skip-roqs')
-  if (skipTract) args.push('--skip-tract')
 
-  spawnSSE(res, args, methodsDir)
+  // CNN compute device preference (auto | cpu | gpu) — read by predict3D.py
+  const device = ['auto', 'cpu', 'gpu'].includes(cnnDevice) ? cnnDevice : 'auto'
+  spawnSSE(res, args, methodsDir, { INCCSIGHT_DEVICE: device }, pythonPreflight)
 })
 
 // ── POST /api/load-last ───────────────────────────────────────────────────────
 app.post('/api/load-last', (req, res) => {
   const csvDir = path.join(methodsDir, 'csvs')
-  spawnSSE(res, ['transformInJson.py'], csvDir)
+  spawnSSE(res, ['transformInJson.py'], csvDir, {}, pythonPreflight)
 })
 
 // ── POST /api/run-demo ────────────────────────────────────────────────────────
@@ -98,7 +220,7 @@ app.post('/api/run-demo', (req, res) => {
   const groupsMap  = { [demoPath]: 'Demo' }
   try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
   catch (e) { console.warn('Could not save groups.json:', e.message) }
-  spawnSSE(res, ['run.py', '-p', demoPath], methodsDir)
+  spawnSSE(res, ['run.py', '-p', demoPath], methodsDir, {}, pythonPreflight)
 })
 
 // ── GET /api/mydata ───────────────────────────────────────────────────────────
@@ -122,14 +244,18 @@ app.get('/api/file', (req, res) => {
   if (!ALLOWED_FILE_EXTS.has(ext)) {
     return res.status(403).json({ error: `File type not allowed: ${ext}` })
   }
+  if (!isPathAllowed(filePath)) {
+    return res.status(403).json({ error: 'Access denied: path is outside the allowed folders.' })
+  }
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found.' })
   res.sendFile(filePath)
 })
 
 // ── GET /api/exists?path=<abs> — check file existence ────────────────────────
 app.get('/api/exists', (req, res) => {
-  const filePath = req.query.path
-  res.json({ exists: Boolean(filePath && fs.existsSync(filePath)) })
+  // isPathAllowed already requires the path to resolve to a real file under an
+  // allowed root, so it doubles as the existence check (no arbitrary oracle).
+  res.json({ exists: isPathAllowed(req.query.path) })
 })
 
 // ── POST /api/check-paths — verify that folders exist on disk ────────────────
@@ -325,17 +451,6 @@ app.get('/api/demograph', (req, res) => {
     res.json({ rows: allRows, presentCols })
 })
 
-// ── GET /api/tracts?path=<abs> — serve tracts.json for a subject ─────────────
-app.get('/api/tracts', (req, res) => {
-    const filePath = req.query.path
-    if (!filePath) return res.status(400).json({ error: 'Missing "path" parameter.' })
-    if (path.basename(filePath) !== 'tracts.json') {
-        return res.status(403).json({ error: 'Only tracts.json files are served by this endpoint.' })
-    }
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'tracts.json not found.' })
-    res.sendFile(filePath)
-})
-
 // ── GET /api/ping ─────────────────────────────────────────────────────────────
 app.get('/api/ping', (_req, res) => res.json({ ok: true }))
 
@@ -356,8 +471,9 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-const server = app.listen(PORT, () => {
-  console.log(`✔  inCCsight server running at http://localhost:${PORT}`)
+const server = app.listen(PORT, HOST, () => {
+  const shown = (HOST === '127.0.0.1' || HOST === '0.0.0.0' || HOST === '::') ? 'localhost' : HOST
+  console.log(`✔  inCCsight server running at http://${shown}:${PORT}  (bound to ${HOST})`)
 })
 
 server.on('error', err => {

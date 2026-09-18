@@ -47,7 +47,14 @@ RUN pip install --no-cache-dir -r methods/requirements.txt
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 
-# ── Copy source and build React ───────────────────────────────────────────────
+# ── ViT Quality-Control model (baked into the image) ──────────────────────────
+# The .pth is gitignored (too large for git); place it in methods/models/ in the
+# build context before building so it is included here. The folder always exists
+# (methods/models/.gitkeep), so this COPY succeeds even when the model is absent —
+# in that case the entrypoint can fetch it at runtime via INCCSIGHT_QC_MODEL_URL.
+COPY methods/models/ methods/models/
+
+# ── Copy source and build React (includes the guided tutorial) ────────────────
 COPY . .
 RUN npm run build
 
@@ -55,6 +62,9 @@ RUN npm run build
 ENV NODE_ENV=production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
+# server.js binds 127.0.0.1 by default; inside a container the published port
+# cannot reach loopback, so bind all interfaces (the container is the boundary).
+ENV HOST=0.0.0.0
 
 EXPOSE 3001
 

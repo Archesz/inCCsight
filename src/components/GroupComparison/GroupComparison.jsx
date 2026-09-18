@@ -1,9 +1,16 @@
 import React, { useState, useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import './GroupComparison.scss'
+import InfoTool from '../InfoTool/InfoTool'
+import { getGroupColors } from '../../settings/palettes'
+import { getSetting, buildCsv, plotTheme } from '../../settings/settings'
 
-const GROUP_COLORS  = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+const GROUP_COLORS  = getGroupColors()
 const SCALARS       = ['FA', 'MD', 'RD', 'AD']
+
+// DTI scalar physical units — FA is dimensionless, diffusivities are in mm²/s
+const SCALAR_UNITS  = { FA: '', MD: 'mm²/s', RD: 'mm²/s', AD: 'mm²/s' }
+const scalarLabel   = s => (SCALAR_UNITS[s] ? `${s} (${SCALAR_UNITS[s]})` : s)
 const METHODS_SEG   = ['ROQS_scalar', 'Watershed_scalar', 'CNN_scalar']
 const PARC_METHODS  = ['Witelson', 'Hofer', 'Chao', 'Cover', 'Freesurfer']
 const SHAPE_METRICS = [
@@ -49,27 +56,28 @@ function bandTraces(xArr, stats, color, name) {
             fill: 'toself', fillcolor: color + '25',
             line: { color: 'transparent' },
             showlegend: false, hoverinfo: 'skip', type: 'scatter',
+            // Share the group's legendgroup so hiding the group via the legend
+            // also hides its ± std shaded band.
+            legendgroup: name,
         },
         {
             x: xArr, y: means,
             type: 'scatter', mode: 'lines',
-            name, line: { color, width: 2.5 },
+            name, legendgroup: name, line: { color, width: 2.5 },
         },
     ]
 }
 
-// CSV cell escaping (RFC 4180)
-function csvCell(v) {
-    if (v == null) return ''
-    const s = String(v)
-    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
-
-const CHART_LAYOUT_BASE = {
-    margin: { t: 12, b: 48, l: 56, r: 16 },
-    paper_bgcolor: 'transparent',
-    plot_bgcolor: '#fafbff',
-    legend: { orientation: 'h', y: -0.32 },
+// Theme-aware base layout (read at render so dark mode applies).
+function chartBase() {
+    const PT = plotTheme()
+    return {
+        margin: { t: 12, b: 48, l: 56, r: 16 },
+        paper_bgcolor: PT.paper,
+        plot_bgcolor: PT.plot,
+        font: { color: PT.font },
+        legend: { orientation: 'h', y: -0.32, groupclick: 'togglegroup' },
+    }
 }
 
 // ── Distribution (box, violin, or grouped bar) ────────────────────────────
@@ -116,17 +124,17 @@ function ScalarDistribution({ allSubjects, allGroups, scalar, segMethod, chartTy
         <Plot
             data={traces}
             layout={{
-                title: { text: scalar, font: { size: 13, color: '#333' } },
+                title: { text: scalar, font: { size: 13, color: plotTheme().font } },
                 height: 260, margin: { t: 36, b: 36, l: 44, r: 10 },
                 showlegend: false,
                 barmode: chartType === 'bar' ? 'group' : undefined,
                 yaxis: {
-                    gridcolor: '#eee', zeroline: false,
+                    gridcolor: plotTheme().grid, zeroline: false,
                     ...(effectiveRange ? { range: effectiveRange } : {}),
                     ...(normalize ? { title: { text: 'normalized [0–1]', font: { size: 9, color: '#aaa' } } } : {}),
                 },
                 xaxis: { showgrid: false },
-                paper_bgcolor: 'transparent', plot_bgcolor: '#fafbff',
+                paper_bgcolor: 'transparent', plot_bgcolor: plotTheme().plot, font: { color: plotTheme().font },
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: '100%' }} useResizeHandler
@@ -159,9 +167,9 @@ function ThicknessProfile({ allSubjects, allGroups, segMethod }) {
         <Plot
             data={traces}
             layout={{
-                ...CHART_LAYOUT_BASE, height: 290,
-                xaxis: { title: 'Position along CC (posterior → anterior)', gridcolor: '#eee', zeroline: false },
-                yaxis: { title: 'Thickness (mm)', gridcolor: '#eee', zeroline: false },
+                ...chartBase(), height: 290,
+                xaxis: { title: 'Position along CC (posterior → anterior)', gridcolor: plotTheme().grid, zeroline: false },
+                yaxis: { title: 'Thickness (mm)', gridcolor: plotTheme().grid, zeroline: false },
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: '100%' }} useResizeHandler
@@ -172,7 +180,7 @@ function ThicknessProfile({ allSubjects, allGroups, segMethod }) {
 // ── Scalar along CC midline ───────────────────────────────────────────────
 
 function MidlineProfile({ allSubjects, allGroups, segMethod }) {
-    const [scalar, setScalar] = useState('FA')
+    const [scalar, setScalar] = useState(() => getSetting('defaultScalar'))
     const midlineKey = segMethod.replace('_scalar', '_midlines')
     const traces = []
 
@@ -200,9 +208,9 @@ function MidlineProfile({ allSubjects, allGroups, segMethod }) {
             <Plot
                 data={traces}
                 layout={{
-                    ...CHART_LAYOUT_BASE, height: 290,
-                    xaxis: { title: 'Position along CC', gridcolor: '#eee', zeroline: false },
-                    yaxis: { title: scalar, gridcolor: '#eee', zeroline: false },
+                    ...chartBase(), height: 290,
+                    xaxis: { title: 'Position along CC', gridcolor: plotTheme().grid, zeroline: false },
+                    yaxis: { title: scalar, gridcolor: plotTheme().grid, zeroline: false },
                     annotations: !traces.length ? [{
                         text: 'No data', xref: 'paper', yref: 'paper',
                         x: 0.5, y: 0.5, showarrow: false,
@@ -219,8 +227,8 @@ function MidlineProfile({ allSubjects, allGroups, segMethod }) {
 // ── Parcellation by CC region ─────────────────────────────────────────────
 
 function ParcellationBar({ allSubjects, allGroups, segMethod }) {
-    const [scalar,     setScalar]     = useState('FA')
-    const [parcMethod, setParcMethod] = useState('Witelson')
+    const [scalar,     setScalar]     = useState(() => getSetting('defaultScalar'))
+    const [parcMethod, setParcMethod] = useState(() => getSetting('defaultParcellation'))
     const parcKey = segMethod.replace('_scalar', '_parcellation')
     const regions = ['P1', 'P2', 'P3', 'P4', 'P5']
 
@@ -258,7 +266,7 @@ function ParcellationBar({ allSubjects, allGroups, segMethod }) {
                     {SCALARS.map(sc => (
                         <button key={sc}
                             className={`gc-pill-sm${scalar === sc ? ' active' : ''}`}
-                            onClick={() => setScalar(sc)}>{sc}</button>
+                            onClick={() => setScalar(sc)}>{scalarLabel(sc)}</button>
                     ))}
                 </div>
                 <div className='gc-picker-group'>
@@ -272,11 +280,11 @@ function ParcellationBar({ allSubjects, allGroups, segMethod }) {
             <Plot
                 data={traces}
                 layout={{
-                    ...CHART_LAYOUT_BASE,
+                    ...chartBase(),
                     barmode: 'group', height: 360,
                     margin: { t: 12, b: 52, l: 52, r: 12 },
-                    xaxis: { title: 'CC Region', gridcolor: '#eee' },
-                    yaxis: { title: scalar, gridcolor: '#eee', zeroline: false },
+                    xaxis: { title: 'CC Region', gridcolor: plotTheme().grid },
+                    yaxis: { title: scalar, gridcolor: plotTheme().grid, zeroline: false },
                     bargap: 0.25, bargroupgap: 0.08,
                 }}
                 config={{ displayModeBar: false, responsive: true }}
@@ -317,12 +325,12 @@ function ShapeMetrics({ allSubjects, allGroups, chartType }) {
                         <Plot
                             data={traces}
                             layout={{
-                                title: { text: label, font: { size: 12, color: '#333' } },
+                                title: { text: label, font: { size: 12, color: plotTheme().font } },
                                 height: 230, margin: { t: 36, b: 36, l: 44, r: 10 },
                                 showlegend: false,
-                                yaxis: { gridcolor: '#eee', zeroline: false },
+                                yaxis: { gridcolor: plotTheme().grid, zeroline: false },
                                 xaxis: { showgrid: false },
-                                paper_bgcolor: 'transparent', plot_bgcolor: '#fafbff',
+                                paper_bgcolor: 'transparent', plot_bgcolor: plotTheme().plot, font: { color: plotTheme().font },
                             }}
                             config={{ displayModeBar: false, responsive: true }}
                             style={{ width: '100%' }} useResizeHandler
@@ -358,11 +366,11 @@ function SubjectTable({ allSubjects, allGroups, segMethod }) {
             ...SCALARS.map(sc => {
                 const v = s?.[segMethod]?.[sc]
                 const n = typeof v === 'number' ? v : parseFloat(v)
-                return !isNaN(n) ? n.toFixed(6) : ''
+                return !isNaN(n) ? n.toFixed(getSetting('decimals')) : ''
             }),
-        ].map(csvCell).join(','))
+        ])
 
-        const csv = '﻿' + [cols.join(','), ...rows].join('\n')
+        const csv = buildCsv(rows, { header: cols })
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
         const url  = URL.createObjectURL(blob)
         const a    = document.createElement('a')
@@ -493,9 +501,8 @@ function MeanTable({ allSubjects, allGroups, segMethod }) {
 // ── Main ──────────────────────────────────────────────────────────────────
 
 function GroupComparison({ allSubjects, allGroups }) {
-    const [segMethod,       setSegMethod]       = useState('ROQS_scalar')
-    const [chartType,       setChartType]       = useState('box')
-    const [perSubjectOpen,  setPerSubjectOpen]  = useState(false)
+    const [segMethod,       setSegMethod]       = useState(() => getSetting('defaultSegMethod'))
+    const [chartType,       setChartType]       = useState(() => getSetting('defaultChartType'))
     const [normalize,       setNormalize]       = useState(false)
 
     // ── Per-scalar Y-axis ranges — computed across ALL methods so scale is stable when switching ──
@@ -591,7 +598,10 @@ function GroupComparison({ allSubjects, allGroups }) {
 
             {/* Scalar distributions */}
             <div className='gc-section'>
-                <span className='gc-section-title'>Scalar distributions</span>
+                <span className='gc-section-title'>
+                    Scalar distributions
+                    <InfoTool text='One chart per scalar (FA, MD, RD, AD) showing its distribution across groups. Each colour is a group (see the legend above). Use the Method, Chart and Scale controls at the top to switch segmentation method, box/violin/bar and raw vs. normalized [0–1] values.' />
+                </span>
                 <div className='gc-boxplots'>
                     {SCALARS.map(sc => (
                         <div key={sc} className='gc-box-cell'>
@@ -606,26 +616,27 @@ function GroupComparison({ allSubjects, allGroups }) {
                 </div>
             </div>
 
-            {/* Per-subject values table — collapsible */}
+            {/* Per-subject values table */}
             <div className='gc-section'>
-                <div className='gc-collapsible-header' onClick={() => setPerSubjectOpen(v => !v)}>
-                    <span className='gc-collapse-arrow'>{perSubjectOpen ? '▾' : '▸'}</span>
-                    <span className='gc-section-title'>Per-subject scalar values</span>
+                <span className='gc-section-title'>
+                    Per-subject scalar values
+                    <InfoTool text='Raw scalar values of every subject. Sort by group or by any scalar, and download the data as CSV.' />
+                </span>
+                <div className='gc-chart-card'>
+                    <SubjectTable
+                        allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
+                    />
                 </div>
-                {perSubjectOpen && (
-                    <div className='gc-chart-card'>
-                        <SubjectTable
-                            allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
-                        />
-                    </div>
-                )}
             </div>
 
             {/* CC Thickness Profile + Scalar along midline — side by side */}
             <div className='gc-section'>
                 <div className='gc-profiles-row'>
                     <div className='gc-profile-cell'>
-                        <span className='gc-section-title'>CC Thickness Profile</span>
+                        <span className='gc-section-title'>
+                            CC Thickness Profile
+                            <InfoTool text='Mean CC thickness along its length (posterior → anterior) per group; the shaded band is ±1 SD. Click the colours in the legend to hide or show each group.' />
+                        </span>
                         <div className='gc-chart-card'>
                             <ThicknessProfile
                                 allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
@@ -633,7 +644,10 @@ function GroupComparison({ allSubjects, allGroups }) {
                         </div>
                     </div>
                     <div className='gc-profile-cell'>
-                        <span className='gc-section-title'>Scalar Profile along CC Midline</span>
+                        <span className='gc-section-title'>
+                            Scalar Profile along CC Midline
+                            <InfoTool text='Mean value of the selected scalar sampled along the CC midline per group; the shaded band is ±1 SD. Pick the scalar with the buttons above. Click the colours in the legend to hide or show each group.' />
+                        </span>
                         <div className='gc-chart-card'>
                             <MidlineProfile
                                 allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
@@ -647,7 +661,10 @@ function GroupComparison({ allSubjects, allGroups }) {
             <div className='gc-section'>
                 <div className='gc-parc-stats-row'>
                     <div className='gc-parc-cell'>
-                        <span className='gc-section-title'>Mean scalar per CC Region</span>
+                        <span className='gc-section-title'>
+                            Mean scalar per CC Region
+                            <InfoTool text='Grouped bars of the mean scalar per callosal region (P1–P5) for each group; error bars are ±1 SD. Choose scalar and parcellation scheme with the buttons above. Click the colours in the legend to hide or show each group.' />
+                        </span>
                         <div className='gc-chart-card'>
                             <ParcellationBar
                                 allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
@@ -655,7 +672,10 @@ function GroupComparison({ allSubjects, allGroups }) {
                         </div>
                     </div>
                     <div className='gc-stats-cell'>
-                        <span className='gc-section-title'>CC scalar statistics per group</span>
+                        <span className='gc-section-title'>
+                            CC scalar statistics per group
+                            <InfoTool text='Mean ± standard deviation of each scalar per group, plus an overall row across all subjects. FA is dimensionless; MD, RD and AD are in mm²/s.' />
+                        </span>
                         <MeanTable
                             allSubjects={allSubjects} allGroups={allGroups} segMethod={segMethod}
                         />
@@ -668,6 +688,7 @@ function GroupComparison({ allSubjects, allGroups }) {
                 <span className='gc-section-title'>
                     Shape Metrics
                     <span className='gc-badge'>ROQS</span>
+                    <InfoTool text='Morphological metrics of the CC (area, length, max and mean thickness) per group, from the ROQS segmentation. Box/violin follows the Chart selector above.' />
                 </span>
                 <ShapeMetrics allSubjects={allSubjects} allGroups={allGroups} chartType={chartType} />
             </div>

@@ -46,22 +46,23 @@ def _progress(block_num, block_size, total_size):
         print(f"\r  {mb:.1f} MB downloaded", end="", flush=True)
 
 
-def download(dest: str):
-    if not MODEL_URL:
-        print("[ERROR] MODEL_URL is not configured.")
-        print("        Edit scripts/download_model.py and set MODEL_URL,")
-        print("        or set the INCCSIGHT_MODEL_URL environment variable.")
+def download(dest: str, url: str = ""):
+    url = url or MODEL_URL
+    if not url:
+        print("[ERROR] No download URL configured.")
+        print("        Pass --url, set INCCSIGHT_MODEL_URL (CNN checkpoint) /")
+        print("        INCCSIGHT_QC_MODEL_URL (QC model), or edit MODEL_URL.")
         sys.exit(1)
 
     os.makedirs(os.path.dirname(dest), exist_ok=True)
 
-    print(f"[inCCsight] Downloading model checkpoint...")
-    print(f"  URL:  {MODEL_URL}")
+    print(f"[inCCsight] Downloading model...")
+    print(f"  URL:  {url}")
     print(f"  Dest: {dest}")
 
     try:
-        urllib.request.urlretrieve(MODEL_URL, dest, reporthook=_progress)
-        print(f"\n[OK] Checkpoint saved to {dest}")
+        urllib.request.urlretrieve(url, dest, reporthook=_progress)
+        print(f"\n[OK] Model saved to {dest}")
     except Exception as exc:
         print(f"\n[ERROR] Download failed: {exc}")
         # Remove partial file
@@ -73,16 +74,18 @@ def download(dest: str):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Download inCCsight model checkpoint")
+    parser = argparse.ArgumentParser(description="Download an inCCsight model file")
     parser.add_argument("--dest", default=DEFAULT_DEST,
                         help=f"Destination path (default: {DEFAULT_DEST})")
+    parser.add_argument("--url", default="",
+                        help="Source URL (overrides INCCSIGHT_MODEL_URL / MODEL_URL)")
     args = parser.parse_args()
 
     if os.path.isfile(args.dest):
-        print(f"[OK] Checkpoint already present: {args.dest}")
+        print(f"[OK] Model already present: {args.dest}")
         return
 
-    download(args.dest)
+    download(args.dest, args.url)
 
 
 if __name__ == "__main__":

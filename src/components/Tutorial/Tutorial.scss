@@ -1,0 +1,163 @@
+/* ── Guided tutorial modal ──────────────────────────────────────────────────── */
+
+.tut-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 14, 35, 0.72);
+    backdrop-filter: blur(3px);
+    padding: 24px;
+    animation: tutFade 0.18s ease;
+}
+
+@keyframes tutFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.tut-modal {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.5);
+    padding: 34px 34px 22px;
+    text-align: center;
+    animation: tutPop 0.2s ease;
+}
+
+@keyframes tutPop {
+    from { transform: translateY(12px) scale(0.98); opacity: 0; }
+    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+
+.tut-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    border: none;
+    background: transparent;
+    font-size: 26px;
+    line-height: 1;
+    color: #9aa3bf;
+    cursor: pointer;
+    transition: color 0.15s;
+
+    &:hover { color: #1F2C56; }
+}
+
+.tut-icon {
+    font-size: 46px;
+    line-height: 1;
+    margin-bottom: 10px;
+}
+
+.tut-title {
+    margin: 0 0 14px;
+    font-size: 22px;
+    font-weight: 800;
+    color: #1F2C56;
+}
+
+.tut-body {
+    text-align: left;
+    color: #41496a;
+    font-size: 14.5px;
+    line-height: 1.55;
+    min-height: 120px;
+
+    p { margin: 0 0 10px; }
+    p:last-child { margin-bottom: 0; }
+}
+
+/* ── Progress dots ──────────────────────────────────────────────────────────── */
+.tut-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px 0 16px;
+    flex-wrap: wrap;
+}
+
+.tut-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    background: #d6dbec;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+
+    &:hover  { transform: scale(1.25); }
+    &.done   { background: #9fb0f5; }
+    &.active { background: #4C6EF5; transform: scale(1.3); }
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+.tut-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #eef0f7;
+    padding-top: 16px;
+}
+
+.tut-skip {
+    border: none;
+    background: transparent;
+    color: #9aa3bf;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover { color: #6b7393; text-decoration: underline; }
+}
+
+.tut-counter {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #8a93b2;
+    letter-spacing: 0.4px;
+}
+
+.tut-nav {
+    display: flex;
+    gap: 10px;
+}
+
+.tut-btn {
+    border: none;
+    border-radius: 9px;
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+
+.tut-btn--ghost {
+    background: #eef0f7;
+    color: #41496a;
+
+    &:hover:not(:disabled) { background: #e1e5f2; }
+    &:disabled { opacity: 0.45; cursor: default; }
+}
+
+.tut-btn--primary {
+    background: #4C6EF5;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(76, 110, 245, 0.35);
+
+    &:hover { background: #3b5bdb; }
+}
+
+@media (max-width: 560px) {
+    .tut-modal { padding: 28px 20px 18px; }
+    .tut-title { font-size: 19px; }
+    .tut-body  { font-size: 14px; min-height: 150px; }
+}

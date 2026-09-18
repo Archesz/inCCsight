@@ -1,0 +1,6 @@
+# This folder holds the ViT Quality-Control model checkpoint:
+#   vit_with_area_binary_best_combined_auc.pth
+#
+# The .pth file is gitignored (too large for git). Place it here before
+# building the Docker image so it gets baked in (see Dockerfile), or set
+# INCCSIGHT_QC_MODEL_URL to have it downloaded at container startup.

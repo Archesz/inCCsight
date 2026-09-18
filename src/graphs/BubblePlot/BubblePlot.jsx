@@ -14,6 +14,7 @@
 import React, { useState, useMemo, memo } from 'react'
 import Plot from 'react-plotly.js'
 import './BubblePlot.scss'
+import { plotTheme } from '../../settings/settings'
 
 const SCALARS = ['FA', 'MD', 'RD', 'AD']
 const N       = 200   // number of midline points
@@ -161,14 +162,16 @@ function GroupBubble({ subjects, groupLabel, scalar, segMethod }) {
         ]),
     }
 
+    const PT = plotTheme()
     const layout = {
         height: 300,
         margin: { t: 30, l: 60, r: 80, b: 44 },
-        plot_bgcolor: '#E5ECF6',
-        paper_bgcolor: 'transparent',
+        plot_bgcolor: PT.plot,
+        paper_bgcolor: PT.paper,
+        font: { color: PT.font },
         xaxis: {
             title: { text: 'Points Along CC Body', font: { size: 11 } },
-            gridcolor: '#fff',
+            gridcolor: PT.grid,
             range: [-2, N + 1],
             tickfont: { size: 10 },
         },
@@ -178,7 +181,7 @@ function GroupBubble({ subjects, groupLabel, scalar, segMethod }) {
                 font: { size: 10 },
                 standoff: 8,
             },
-            gridcolor: '#fff',
+            gridcolor: PT.grid,
             tickfont: { size: 10 },
         },
         annotations,
