@@ -72,7 +72,7 @@ You only need these once. Pick the path that matches how you want to run the too
 | **Git LFS** | both | any | https://git-lfs.com |
 | **Docker Desktop** | Docker option | latest | https://www.docker.com/products/docker-desktop/ |
 | **Python** | local option | **3.10 or 3.11** | https://www.python.org/downloads/ |
-| **Node.js** | local option | **18 LTS or newer** | https://nodejs.org/en/download/ |
+| **Node.js** | local option | **20 LTS or newer** | https://nodejs.org/en/download/ |
 
 > **Git LFS is required** — the Quality-Control model (`.pth`, ~340 MB) is stored
 > with [Git LFS](https://git-lfs.com). Run `git lfs install` **once** before
@@ -117,7 +117,7 @@ To point Docker at your own DTI data, set `SUBJECTS_DIR` in `.env`
 
 ### Option B — Local install (clone + scripts)
 
-Needs **Git**, **Python 3.10/3.11** and **Node.js 18+** from Step 0.
+Needs **Git**, **Python 3.10/3.11** and **Node.js 20+** from Step 0.
 
 ```bash
 git clone https://github.com/MICLab-Unicamp/inCCsight.git

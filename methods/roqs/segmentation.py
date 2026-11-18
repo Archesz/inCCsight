@@ -602,6 +602,7 @@ def get_segm(data_paths, skip_processed=False):
         "RD": meanRDList, "RD StdDev": stdRDList,
         "AD": meanADList, "AD StdDev": stdADList, "Time": times,
     })
+    os.makedirs("./data", exist_ok=True)   # not tracked in git; created on first run
     df_roqs.to_csv("./data/roqs_based.csv", sep=";")
     df_roqs.to_csv("../csvs/roqs_based.csv", sep=";")
 

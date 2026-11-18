@@ -4,6 +4,7 @@ build/
 dist/
 .env
 .env.local
+.eslintcache
 
 # Python
 __pycache__/
@@ -20,6 +21,8 @@ methods/csvs/*.csv
 methods/csvs/groups.json
 methods/csvs/mydata.json
 methods/csvs/removed_subjects.json
+methods/roqs/data/*.csv
+methods/CNNBased/data/*.csv
 
 # Large model weights — tracked via Git LFS (see .gitattributes)
 # *.pth, *.pt, *.ckpt are tracked by LFS, not ignored
@@ -29,5 +32,6 @@ methods/csvs/removed_subjects.json
 .DS_Store
 Thumbs.db
 
-# Worktrees
-.claude/worktrees/
+# Local tool / editor settings (per developer)
+.claude/
+.vscode/

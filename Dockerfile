@@ -3,7 +3,7 @@
 #
 # Builds a single production image containing:
 #   • Python 3.10 + all neuroimaging / ML dependencies
-#   • Node.js 18 + built React frontend
+#   • Node.js 20 LTS + built React frontend
 #   • Express backend (server.js)
 #
 # Build arguments:
@@ -29,8 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Node.js 18 ────────────────────────────────────────────────────────────────
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+# ── Node.js 20 LTS ────────────────────────────────────────────────────────────────
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/*
 

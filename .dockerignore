@@ -15,7 +15,8 @@ methods/CNNBased/venv
 **/*.pyo
 
 # Pipeline output (mounted as volumes)
-data/
+data/*
+!data/example/
 methods/csvs/*.csv
 methods/csvs/groups.json
 

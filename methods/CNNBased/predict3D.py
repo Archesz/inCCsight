@@ -221,6 +221,7 @@ def test_predict(model, data_paths, skip_processed=False):
 					"Time": times, "img_path": imgPathList}
 
 		df = pd.DataFrame(subjects)
+		os.makedirs("./data", exist_ok=True)   # not tracked in git; created on first run
 		df.to_csv("./data/cnn_based.csv", sep=";")
 		df.to_csv("../csvs/cnn_based.csv", sep=";")
 
