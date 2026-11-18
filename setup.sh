@@ -28,6 +28,12 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 9 ]; };
     echo -e "${RED}ERROR: Python 3.9+ required (found $PY_VER).${NC}"
     exit 1
 fi
+if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -ge 13 ]; then
+    echo -e "${RED}ERROR: Python $PY_VER is not supported.${NC}"
+    echo "       inCCsight needs Python 3.10, 3.11 or 3.12 (PyTorch 2.4 and the"
+    echo "       pinned scientific packages have no builds for Python 3.13+)."
+    exit 1
+fi
 echo -e "${GREEN}  Python $PY_VER${NC}"
 
 # ── Create Python venv ────────────────────────────────────────────────────────
@@ -60,7 +66,7 @@ else
     echo -e "${YELLOW}  No NVIDIA GPU detected — installing CPU-only PyTorch.${NC}"
 fi
 
-pip install "torch>=2.0.0" --index-url "$TORCH_URL" --quiet
+pip install torch==2.4.1 torchvision==0.19.1 --index-url "$TORCH_URL" --quiet
 echo -e "${GREEN}  PyTorch installed ($TORCH_URL)${NC}"
 
 # ── Install Python requirements ───────────────────────────────────────────────

@@ -35,8 +35,10 @@ services:
       - ./methods/csvs:/app/methods/csvs
       # Model checkpoint — keeps download across rebuilds
       - ./methods/CNNBased/peso:/app/methods/CNNBased/peso
-      # User's DTI subject data (configure SUBJECTS_DIR in .env)
-      - ${SUBJECTS_DIR:-./subjects}:/mnt/subjects:ro
+      # User's DTI subject data (configure SUBJECTS_DIR in .env).
+      # Must be read-write: the pipeline saves each subject's results (masks,
+      # midsagittal PNGs) into an inCCsight/ sub-folder next to its DTI files.
+      - ${SUBJECTS_DIR:-./subjects}:/mnt/subjects
     environment:
       - NODE_ENV=production
       - PYTHONUNBUFFERED=1

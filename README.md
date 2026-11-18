@@ -164,7 +164,7 @@ python -m venv venv
 #   Linux / macOS:  source venv/bin/activate
 
 # PyTorch (CPU shown; for NVIDIA use cu118 or cu121 instead of cpu)
-pip install "torch>=2.0.0" --index-url https://download.pytorch.org/whl/cpu
+pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cpu
 
 # Remaining Python packages
 pip install -r requirements.txt
@@ -348,7 +348,7 @@ serves both.
 |---|---|
 | Frontend | React 18, React Router 6, Plotly.js, Three.js, SASS |
 | Backend | Node.js, Express 4 |
-| Python pipeline | Python 3.10/3.11, PyTorch 2+, MONAI, DIPY, Nibabel, scikit-image, OpenCV, NumPy, Pandas |
+| Python pipeline | Python 3.10/3.11, PyTorch 2.4, MONAI, DIPY, Nibabel, scikit-image, OpenCV, NumPy, Pandas |
 | Packaging | Docker / Docker Compose (CPU + NVIDIA GPU profiles) |
 
 ---

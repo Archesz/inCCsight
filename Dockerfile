@@ -38,7 +38,7 @@ WORKDIR /app
 
 # ── Python dependencies (cached layer) ───────────────────────────────────────
 # Install PyTorch first (index varies by CUDA version)
-RUN pip install --no-cache-dir "torch>=2.0.0" --index-url "${TORCH_INDEX}"
+RUN pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 --index-url "${TORCH_INDEX}"
 
 COPY methods/requirements.txt methods/requirements.txt
 RUN pip install --no-cache-dir -r methods/requirements.txt

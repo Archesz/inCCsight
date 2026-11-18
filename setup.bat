@@ -20,20 +20,21 @@ if errorlevel 1 (
 for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PY_VER=%%v
 echo   Python %PY_VER% found.
 
-:: Warn on Python 3.13+ — numpy/numba may lack pre-built wheels for very new versions
+:: Block Python 3.13+ — the pinned stack (torch 2.4.1, scipy 1.11, pandas 2.1)
+:: has no pre-built wheels for it, so the install would fail midway.
 for /f %%m in ('python -c "import sys; print(sys.version_info.minor)"') do set PY_MINOR=%%m
 for /f %%M in ('python -c "import sys; print(sys.version_info.major)"') do set PY_MAJOR=%%M
 if %PY_MAJOR% EQU 3 (
     if %PY_MINOR% GEQ 13 (
         echo.
-        echo   WARNING: Python %PY_VER% detected.
-        echo   Some packages ^(numpy, numba^) may not have pre-built wheels for
-        echo   Python 3.13+ and require a C compiler to build from source.
-        echo   Recommended: Python 3.10, 3.11, or 3.12.
-        echo   Download: https://www.python.org/downloads/
+        echo   ERROR: Python %PY_VER% is not supported.
+        echo   inCCsight needs Python 3.10, 3.11 or 3.12 ^(PyTorch 2.4 and the
+        echo   pinned scientific packages have no builds for Python 3.13+^).
+        echo   Install Python 3.11 from https://www.python.org/downloads/
+        echo   and run setup.bat again.
         echo.
-        set /p CONT="   Continue anyway? [y/N]: "
-        if /i not "!CONT!"=="y" ( echo Aborted. & pause & exit /b 1 )
+        pause
+        exit /b 1
     )
 )
 
@@ -64,7 +65,7 @@ if not errorlevel 1 (
     echo   No NVIDIA GPU detected -- installing CPU-only PyTorch.
 )
 
-pip install "torch>=2.0.0" --index-url %TORCH_URL% --quiet
+pip install torch==2.4.1 torchvision==0.19.1 --index-url %TORCH_URL% --quiet
 if errorlevel 1 ( echo ERROR installing PyTorch. & pause & exit /b 1 )
 echo   PyTorch installed.
 

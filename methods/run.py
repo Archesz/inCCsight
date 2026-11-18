@@ -154,6 +154,29 @@ for f in parent_folders:
 print(f"  Estimated subjects: {total_subjects}", flush=True)
 print(f"PROGRESS:0:{total_subjects}:Starting pipeline", flush=True)
 
+# ── Clear the previous analysis' results ─────────────────────────────────────
+# methods/csvs/ is shared by every analysis. Without this, a method that is
+# skipped (e.g. a CNN-only run) or that fails would leave the previous
+# analysis' CSVs in place, and transformInJson.py would silently merge them —
+# possibly from a different group of subjects — into the new dashboard.
+# The QC "removed subjects" list belongs to the previous analysis too.
+if not (args.skip_roqs and args.skip_cnn):
+    _stale = glob.glob(os.path.join(CSVS_DIR, "*.csv"))
+    _stale.append(os.path.join(CSVS_DIR, "removed_subjects.json"))
+    _cleared = 0
+    for _f in _stale:
+        try:
+            os.remove(_f)
+            _cleared += 1
+        except FileNotFoundError:
+            pass
+        except OSError as _e:
+            print(f"[ERROR] Could not remove previous result {_f}: {_e}", flush=True)
+            print("        Close any program that has it open and run again.", flush=True)
+            sys.exit(1)
+    if _cleared:
+        print(f"  Cleared {_cleared} result file(s) from the previous analysis.", flush=True)
+
 # ── Step 1 — ROQS ─────────────────────────────────────────────────────────────
 
 if not args.skip_roqs:

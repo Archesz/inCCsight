@@ -20,6 +20,7 @@ import json
 import math
 import os
 import re
+import sys
 
 import numpy as np
 import pandas as pd
@@ -282,6 +283,13 @@ def _read_named_csv(filename: str, required: bool = True) -> pd.DataFrame:
     return _drop_unnamed(df)
 
 
+def _by_name_column(df: pd.DataFrame) -> dict:
+    """Map subject name → row for a CSV whose subject column is "Name"."""
+    if df.empty or "Name" not in df.columns:
+        return {}
+    return {str(row["Name"]): row for _, row in df.iterrows()}
+
+
 # ── Metadata builder ──────────────────────────────────────────────────────────
 
 def _build_metadata() -> dict:
@@ -360,12 +368,17 @@ def main():
     except Exception as exc:
         print(f"[WARNING] Could not read vit_qc_scores.csv: {exc}", flush=True)
 
-    # ── Read required CSVs ────────────────────────────────────────────────────
+    # ── Read per-method CSVs ──────────────────────────────────────────────────
+    # Every method's CSVs are optional: run.py clears methods/csvs/ at the
+    # start of each analysis, so a method that was skipped (e.g. a CNN-only
+    # run) or that failed simply has no files here — never stale files from a
+    # previous analysis. The subject list is the union of ROQS and CNN names.
+    #
     # Read by subject name (see _read_named_csv) rather than by row position:
     # a subject can be present in ROQS's output but missing from Watershed's
     # (or vice versa) if segmentation failed for just one method, which used
     # to desync positional row indices across files and crash the export.
-    roqs_scalar_raw = _read_named_csv("ROQS_scalar_statistics.csv")
+    roqs_scalar_raw = _read_named_csv("ROQS_scalar_statistics.csv", required=False)
     img_path_by_name     = (roqs_scalar_raw["img_path"].to_dict()
                             if "img_path" in roqs_scalar_raw.columns else {})
     roqs_qc_flag_by_name = (roqs_scalar_raw["qc_flag"].to_dict()
@@ -392,7 +405,7 @@ def main():
     )
     roqs_scalar_by_name = {str(subj_name): row for subj_name, row in roqs_scalar.iterrows()}
 
-    watershed_scalar_raw = _read_named_csv("Watershed_scalar_statistics.csv")
+    watershed_scalar_raw = _read_named_csv("Watershed_scalar_statistics.csv", required=False)
     water_qc_flag_by_name = (watershed_scalar_raw["qc_flag"].to_dict()
                              if "qc_flag" in watershed_scalar_raw.columns else {})
     water_qc_prob_by_name = (watershed_scalar_raw["qc_prob"].to_dict()
@@ -404,6 +417,7 @@ def main():
 
     # CNN scalar lookup
     _cnn_scalar_by_name: dict = {}
+    _cnn_img_path_by_name: dict = {}
     cnn_base_file = os.path.join(_HERE, "cnn_based.csv")
     try:
         cnn_base_raw = _drop_unnamed(pd.read_csv(cnn_base_file, sep=";"))
@@ -412,29 +426,31 @@ def main():
                 key = str(row["Names"])
                 _cnn_scalar_by_name[key] = {
                     k: v for k, v in row.items()
-                    if k not in ("Names", "Time") and pd.notna(v)
+                    if k not in ("Names", "Time", "img_path") and pd.notna(v)
                 }
+                if "img_path" in row and isinstance(row["img_path"], str):
+                    _cnn_img_path_by_name[key] = row["img_path"]
     except FileNotFoundError:
         pass
 
     # Midlines
-    roqs_midlines      = _df_parse_lists(_read_named_csv("ROQS_scalar_midlines.csv"))
-    watershed_midlines = _df_parse_lists(_read_named_csv("Watershed_scalar_midlines.csv"))
+    roqs_midlines      = _df_parse_lists(_read_named_csv("ROQS_scalar_midlines.csv", required=False))
+    watershed_midlines = _df_parse_lists(_read_named_csv("Watershed_scalar_midlines.csv", required=False))
     roqs_midlines_by_name      = {str(subj_name): row for subj_name, row in roqs_midlines.iterrows()}
     watershed_midlines_by_name = {str(subj_name): row for subj_name, row in watershed_midlines.iterrows()}
 
     # Thickness
-    roqs_thickness      = _read_named_csv("ROQS_dict_thickness.csv")
-    watershed_thickness = _read_named_csv("Watershed_dict_thickness.csv")
+    roqs_thickness      = _read_named_csv("ROQS_dict_thickness.csv", required=False)
+    watershed_thickness = _read_named_csv("Watershed_dict_thickness.csv", required=False)
     roqs_thickness_by_name      = {str(subj_name): row for subj_name, row in roqs_thickness.iterrows()}
     watershed_thickness_by_name = {str(subj_name): row for subj_name, row in watershed_thickness.iterrows()}
 
     # Parcellations
-    roqs_parcellation_df      = _read_csv("ROQS_parcellation_statistics.csv")
-    watershed_parcellation_df = _read_csv("Watershed_parcellation_statistics.csv")
+    roqs_parcellation_df      = _read_csv("ROQS_parcellation_statistics.csv", required=False)
+    watershed_parcellation_df = _read_csv("Watershed_parcellation_statistics.csv", required=False)
     cnn_parcellation_df       = _read_csv("CNN_parcellation_statistics.csv", required=False)
-    roqs_parcellation_by_name = {str(row["Name"]): row for _, row in roqs_parcellation_df.iterrows()}
-    watershed_parcellation_by_name = {str(row["Name"]): row for _, row in watershed_parcellation_df.iterrows()}
+    roqs_parcellation_by_name = _by_name_column(roqs_parcellation_df)
+    watershed_parcellation_by_name = _by_name_column(watershed_parcellation_df)
 
     # CNN midlines (index_col=0 preserves subject names as index)
     cnn_mid_file = os.path.join(_HERE, "CNN_scalar_midlines.csv")
@@ -456,14 +472,24 @@ def main():
         for idx, row in cnn_midlines_df.iterrows():
             _cnn_mid_by_name[str(idx)] = row.to_dict()
 
-    names = list(roqs_parcellation_df["Name"])
+    # Master subject list: ROQS subjects first (in their original order), then
+    # any subject only CNN produced (ROQS skipped or failed for it).
+    names = list(roqs_parcellation_by_name.keys())
+    for cnn_name in list(_cnn_scalar_by_name.keys()) + list(_cnn_parc_by_name.keys()):
+        if cnn_name not in names:
+            names.append(cnn_name)
+
+    if not names:
+        print("\n[ERROR] No segmentation results found in methods/csvs/.")
+        print("        Every method was skipped or failed for every subject —")
+        print("        check the pipeline log above for the first error.")
+        sys.exit(1)
 
     # ── Build subjects ────────────────────────────────────────────────────────
-    # ROQS_parcellation_statistics.csv's "Name" column is the master subject
-    # list (ROQS is the required baseline method); every other CSV is looked
-    # up by name below, so a subject missing from Watershed's or CNN's output
-    # (that method failed for just that subject) just gets empty/default
-    # values for that method instead of crashing or shifting other subjects.
+    # Every CSV is looked up by name below, so a subject missing from one
+    # method's output (that method failed or was skipped for it) just gets
+    # empty/default values for that method instead of crashing or shifting
+    # other subjects.
     subjects_list = []
     for name in names:
         key = str(name)
@@ -500,7 +526,7 @@ def main():
             roqs_thickness_by_name.get(key, []),
             watershed_parcellation_by_name.get(key, {}),
             roqs_parcellation_by_name.get(key, {}),
-            img_path          = img_path_by_name.get(key, ""),
+            img_path          = img_path_by_name.get(key) or _cnn_img_path_by_name.get(key, ""),
             roqs_qc_flag      = roqs_flag,
             roqs_qc_prob      = roqs_prob,
             watershed_qc_flag = water_flag,

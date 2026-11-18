@@ -50,7 +50,8 @@ function fmt(v, decimals) {
 function imgPathForMethod(subject, method) {
     if (!subject.img_path) return null
     const dir = dirname(subject.img_path)
-    if (method === 'ROQS')      return subject.img_path
+    // img_path may be the CNN PNG when ROQS was skipped, so build it by name
+    if (method === 'ROQS')      return dir + '/midsagittal_roqs.png'
     if (method === 'Watershed') return dir + '/midsagittal_watershed.png'
     if (method === 'CNN')       return dir + '/cnnBased_midsagittal.png'
     return subject.img_path

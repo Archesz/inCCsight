@@ -8,10 +8,13 @@
 # resolved automatically by pip from the packages below, so they no longer
 # need to be pinned by hand.
 #
-# PyTorch must be installed separately (see README for CUDA variants):
-#   CPU:       pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
-#   CUDA 11.8: pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu118
-#   CUDA 12.1: pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121
+# PyTorch must be installed separately, BEFORE this file, from the index that
+# matches your hardware (see README). Keep these exact versions: torchvision
+# 0.19.1 below requires torch 2.4.1, and any other torch makes pip replace it
+# with a generic PyPI build, losing the CPU/CUDA choice.
+#   CPU:       pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cpu
+#   CUDA 11.8: pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu118
+#   CUDA 12.1: pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu121
 
 # --- Core scientific stack ---
 numpy>=1.26.4

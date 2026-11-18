@@ -120,8 +120,16 @@ function View({ type }) {
 
     // ── SSE streaming ──────────────────────────────────────────────────────
 
+    // Closing or reloading the tab cancels the running analysis on the server,
+    // so ask the browser to confirm first while one is in progress.
+    function warnBeforeUnload(e) {
+        e.preventDefault()
+        e.returnValue = ''
+    }
+
     async function streamPipeline(endpoint, body) {
         showLoading()
+        window.addEventListener('beforeunload', warnBeforeUnload)
         try {
             const response = await fetch(`${API}${endpoint}`, {
                 method:  'POST',
@@ -129,6 +137,13 @@ function View({ type }) {
                 body:    body ? JSON.stringify(body) : undefined,
             })
 
+            if (response.status === 409) {
+                // Another analysis is already running (e.g. in another tab).
+                const data = await response.json().catch(() => ({}))
+                hideLoading()
+                setError(data.error || 'Another analysis is already running.')
+                return
+            }
             if (!response.ok) {
                 const text = await response.text().catch(() => '')
                 throw new Error(`Server returned ${response.status}.\n${text}`)
@@ -185,6 +200,8 @@ function View({ type }) {
         } catch (err) {
             hideLoading()
             setError(`Could not connect to the server: ${err.message}`)
+        } finally {
+            window.removeEventListener('beforeunload', warnBeforeUnload)
         }
     }
 

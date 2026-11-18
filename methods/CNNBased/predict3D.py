@@ -56,6 +56,7 @@ def test_predict(model, data_paths, skip_processed=False):
 		parcellationsList = {"CNN": {}}
 		cnn_parcellationStatsList = []
 		cnn_midlinesList = []
+		imgPathList = []
 		times = []
 
 		
@@ -184,6 +185,9 @@ def test_predict(model, data_paths, skip_processed=False):
 				cnn_midlinesList.append(cnn_midlines)
 
 				names.append(sub)
+				# Midsagittal PNG path — lets transformInJson resolve the subject's
+				# folder/group even when ROQS was skipped or failed for it.
+				imgPathList.append(os.path.join(data_path, 'inCCsight', 'cnnBased_midsagittal.png'))
 				meanFAList.append(scalar_statistics[0])
 				stdFAList.append(scalar_statistics[1])
 				meanMDList.append(scalar_statistics[2])
@@ -214,7 +218,7 @@ def test_predict(model, data_paths, skip_processed=False):
 
 		subjects = {"Names": names, "FA": meanFAList, "FA StdDev": stdFAList, "MD": meanMDList, "MD StdDev": stdMDList,
               		"RD": meanRDList, "RD StdDev": stdRDList, "AD": meanADList, "AD StdDev": stdADList,
-					"Time": times}
+					"Time": times, "img_path": imgPathList}
 
 		df = pd.DataFrame(subjects)
 		df.to_csv("./data/cnn_based.csv", sep=";")

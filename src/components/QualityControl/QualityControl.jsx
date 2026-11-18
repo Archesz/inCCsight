@@ -16,7 +16,8 @@ function dirname(p) {
 function imgPathForMethod(subject, method) {
     if (!subject.img_path) return null
     const dir = dirname(subject.img_path)
-    if (method === 'ROQS')      return subject.img_path
+    // img_path may be the CNN PNG when ROQS was skipped, so build it by name
+    if (method === 'ROQS')      return dir + '/midsagittal_roqs.png'
     if (method === 'Watershed') return dir + '/midsagittal_watershed.png'
     if (method === 'CNN')       return dir + '/cnnBased_midsagittal.png'
     return subject.img_path
@@ -357,11 +358,17 @@ export default function QualityControl({ allSubjects, onReload }) {
     async function _post(endpoint, ids) {
         setLoading(true)
         try {
-            await fetch(`${API}${endpoint}`, {
+            const res = await fetch(`${API}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ids }),
             })
+            if (!res.ok) {
+                // 409 = an analysis is running; 500 = rebuild failed (server rolled back)
+                const data = await res.json().catch(() => ({}))
+                alert([data.error || `Server returned ${res.status}.`, data.detail].filter(Boolean).join('\n\n'))
+                return
+            }
             onReload?.()
             setSelected(new Set())
         } catch (e) {

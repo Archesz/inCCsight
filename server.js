@@ -153,41 +153,127 @@ function pythonPreflight(send) {
   })
 }
 
+// ── Job lock + process-tree kill ─────────────────────────────────────────────
+// Every Python job (pipeline, demo, load-last, remove/restore) reads and writes
+// the same methods/csvs/ and data/mydata.json, so only one may run at a time.
+let activeJob = null   // { label, proc } while a job is running
+
+function busyResponse(res) {
+  return res.status(409).json({
+    error: `Another analysis is already running (${activeJob.label}). ` +
+           'Wait for it to finish, or close its tab to cancel it, and try again.',
+  })
+}
+
+// Kill a job and everything it started. run.py launches ROQS, CNN and QC as
+// child processes; a plain proc.kill() only stops run.py itself and leaves
+// those children running (and writing files) — on Windows in particular.
+function killTree(proc) {
+  if (!proc || proc.exitCode !== null || proc.killed) return
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true })
+    } else {
+      process.kill(-proc.pid, 'SIGTERM')   // whole process group (spawned detached)
+    }
+  } catch (_) {
+    try { proc.kill() } catch (__) {}
+  }
+}
+
+function spawnPython(args, cwd, extraEnv = {}) {
+  // PYTHONUNBUFFERED=1 + -u flag ensure real-time output through pipes
+  // PYTHONIOENCODING=utf-8 prevents UnicodeEncodeError on Windows (pipe defaults to cp1252)
+  const env = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', ...extraEnv }
+  return spawn(python, ['-u', ...args], {
+    cwd, env, windowsHide: true,
+    // Own process group on POSIX so killTree can stop the children too.
+    detached: process.platform !== 'win32',
+  })
+}
+
+// Stop a running job if the server itself is shut down (Ctrl+C, docker stop).
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { if (activeJob) killTree(activeJob.proc); process.exit(0) })
+}
+
 // ── SSE utility: stream a Python subprocess to the client ────────────────────
-// If `preflight` is provided it runs first (after headers flush); when it
-// returns an error string the subprocess is never spawned.
-function spawnSSE(res, args, cwd, extraEnv = {}, preflight = null) {
+// Takes the job lock (answers 409 if another job is running). If `preflight`
+// is provided it runs first (after headers flush); when it returns an error
+// string the subprocess is never spawned. `beforeRun` runs once the lock is
+// held, right before spawning. Closing the client connection cancels the job
+// and all its child processes.
+function spawnSSE(res, label, args, cwd, extraEnv = {}, preflight = null, beforeRun = null) {
+  if (activeJob) return busyResponse(res)
+  const job = { label, proc: null }
+  activeJob = job
+  let finished = false
+  const release = () => { if (activeJob === job) activeJob = null }
+
   res.setHeader('Content-Type',      'text/event-stream')
   res.setHeader('Cache-Control',     'no-cache')
   res.setHeader('Connection',        'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')   // disable buffering in proxies (nginx/CRA)
   res.flushHeaders()
 
-  const send = data => res.write(`data: ${JSON.stringify(data)}\n\n`)
+  const send = data => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`) }
+  const finish = code => {
+    if (finished) return
+    finished = true
+    release()
+    send({ done: true, code })
+    res.end()
+  }
+
+  // Client went away (tab closed / reloaded) before the job finished → cancel.
+  res.on('close', () => {
+    if (finished) return
+    finished = true
+    console.warn(`[inCCsight] Client disconnected — cancelling "${label}".`)
+    killTree(job.proc)
+    release()
+  })
 
   const run = () => {
-    // PYTHONUNBUFFERED=1 + -u flag ensure real-time output through pipes
-    // PYTHONIOENCODING=utf-8 prevents UnicodeEncodeError on Windows (pipe defaults to cp1252)
-    const env  = { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', ...extraEnv }
-    const proc = spawn(python, ['-u', ...args], { cwd, env })
-
+    if (finished) return   // cancelled during preflight
+    if (beforeRun) beforeRun()
+    const proc = spawnPython(args, cwd, extraEnv)
+    job.proc = proc
     proc.stdout.on('data', d => send({ text: d.toString() }))
     proc.stderr.on('data', d => send({ text: d.toString() }))
-    proc.on('close', code => { send({ done: true, code }); res.end() })
-    proc.on('error', err  => { send({ text: `[ERROR] ${err.message}\n`, done: true, code: 1 }); res.end() })
-
-    // Kill process if client disconnects
-    res.on('close', () => proc.kill())
+    proc.on('close', code => finish(code ?? 1))
+    proc.on('error', err  => { send({ text: `[ERROR] ${err.message}\n` }); finish(1) })
   }
 
   if (preflight) {
     Promise.resolve(preflight(send)).then(errMsg => {
-      if (errMsg) { send({ text: errMsg }); send({ done: true, code: 1 }); res.end() }
+      if (errMsg) { send({ text: errMsg }); finish(1) }
       else run()
     })
   } else {
     run()
   }
+}
+
+// Run transformInJson.py without streaming (remove/restore subjects).
+// Resolves { ok, output }.
+function runTransform(job) {
+  return new Promise(resolve => {
+    const proc = spawnPython(['transformInJson.py'], path.join(methodsDir, 'csvs'))
+    if (job) job.proc = proc
+    let output = ''
+    proc.stdout.on('data', d => { output += d })
+    proc.stderr.on('data', d => { output += d })
+    const timer = setTimeout(() => { killTree(proc); output += '\n[ERROR] Timed out after 5 minutes.' }, 5 * 60 * 1000)
+    proc.on('close', code => { clearTimeout(timer); resolve({ ok: code === 0, output }) })
+    proc.on('error', err  => { clearTimeout(timer); resolve({ ok: false, output: err.message }) })
+  })
+}
+
+function writeGroups(groupsMap) {
+  const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
+  try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
+  catch (e) { console.warn('Could not save groups.json:', e.message) }
 }
 
 // ── POST /api/run-pipeline ────────────────────────────────────────────────────
@@ -197,10 +283,6 @@ app.post('/api/run-pipeline', (req, res) => {
     skipProcessed = false, cnnDevice = 'auto',
   } = req.body
 
-  const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
-  try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
-  catch (e) { console.warn('Could not save groups.json:', e.message) }
-
   const args = ['run.py', '-p', ...paths]
   if (skipCnn)       args.push('--skip-cnn')
   if (skipRoqs)      args.push('--skip-roqs')
@@ -208,23 +290,23 @@ app.post('/api/run-pipeline', (req, res) => {
 
   // CNN compute device preference (auto | cpu | gpu) — read by predict3D.py
   const device = ['auto', 'cpu', 'gpu'].includes(cnnDevice) ? cnnDevice : 'auto'
-  spawnSSE(res, args, methodsDir, { INCCSIGHT_DEVICE: device }, pythonPreflight)
+  // groups.json is written only once the job lock is held, so a refused
+  // second request can't overwrite the running analysis' group mapping.
+  spawnSSE(res, 'analysis', args, methodsDir, { INCCSIGHT_DEVICE: device }, pythonPreflight,
+           () => writeGroups(groupsMap))
 })
 
 // ── POST /api/load-last ───────────────────────────────────────────────────────
 app.post('/api/load-last', (req, res) => {
   const csvDir = path.join(methodsDir, 'csvs')
-  spawnSSE(res, ['transformInJson.py'], csvDir, {}, pythonPreflight)
+  spawnSSE(res, 'load last analysis', ['transformInJson.py'], csvDir, {}, pythonPreflight)
 })
 
 // ── POST /api/run-demo ────────────────────────────────────────────────────────
 app.post('/api/run-demo', (req, res) => {
-  const demoPath   = path.join(projectRoot, 'data', 'example')
-  const groupsFile = path.join(methodsDir, 'csvs', 'groups.json')
-  const groupsMap  = { [demoPath]: 'Demo' }
-  try { fs.writeFileSync(groupsFile, JSON.stringify(groupsMap, null, 2), 'utf-8') }
-  catch (e) { console.warn('Could not save groups.json:', e.message) }
-  spawnSSE(res, ['run.py', '-p', demoPath], methodsDir, {}, pythonPreflight)
+  const demoPath = path.join(projectRoot, 'data', 'example')
+  spawnSSE(res, 'demo analysis', ['run.py', '-p', demoPath], methodsDir, {}, pythonPreflight,
+           () => writeGroups({ [demoPath]: 'Demo' }))
 })
 
 // ── GET /api/mydata ───────────────────────────────────────────────────────────
@@ -480,63 +562,49 @@ app.get('/api/removed-subjects', (_req, res) => {
   }
 })
 
-// ── POST /api/remove-subjects — add IDs to removed list + re-run transform ───
-app.post('/api/remove-subjects', (req, res) => {
-  const { execSync } = require('child_process')
-  const { ids = [] } = req.body
-  const rmFile = path.join(methodsDir, 'csvs', 'removed_subjects.json')
-
-  let current = { ids: [] }
-  try { current = JSON.parse(fs.readFileSync(rmFile, 'utf8')) } catch (_) {}
-
-  const newIds = [...new Set([...current.ids, ...ids])]
+// ── POST /api/remove-subjects / restore-subjects ─────────────────────────────
+// Update removed_subjects.json and rebuild mydata.json. Refused while another
+// job runs; on a failed rebuild the list is rolled back and an error returned,
+// so the UI never shows a removal that the dashboard data doesn't reflect.
+async function updateRemoved(req, res, label, compute) {
+  if (activeJob) return busyResponse(res)
+  const job = { label, proc: null }
+  activeJob = job
   try {
-    fs.writeFileSync(rmFile, JSON.stringify({ ids: newIds }, null, 2), 'utf-8')
-  } catch (e) {
-    return res.status(500).json({ error: 'Could not write removed_subjects.json: ' + e.message })
+    const { ids = [] } = req.body
+    const rmFile = path.join(methodsDir, 'csvs', 'removed_subjects.json')
+
+    let current = { ids: [] }
+    try { current = JSON.parse(fs.readFileSync(rmFile, 'utf8')) } catch (_) {}
+    const previous = Array.isArray(current.ids) ? current.ids : []
+    const newIds   = compute(previous, ids)
+
+    try {
+      fs.writeFileSync(rmFile, JSON.stringify({ ids: newIds }, null, 2), 'utf-8')
+    } catch (e) {
+      return res.status(500).json({ error: 'Could not write removed_subjects.json: ' + e.message })
+    }
+
+    const { ok, output } = await runTransform(job)
+    if (!ok) {
+      try { fs.writeFileSync(rmFile, JSON.stringify({ ids: previous }, null, 2), 'utf-8') } catch (_) {}
+      console.warn(`[WARN] transformInJson.py failed after ${label}:\n${output}`)
+      return res.status(500).json({
+        error: 'Could not rebuild the dashboard data. No subjects were changed.',
+        detail: output.trim().split('\n').slice(-5).join('\n'),
+      })
+    }
+    res.json({ ids: newIds })
+  } finally {
+    if (activeJob === job) activeJob = null
   }
+}
 
-  try {
-    execSync(`"${python}" -u transformInJson.py`, {
-      cwd: path.join(methodsDir, 'csvs'),
-      timeout: 30000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
-    })
-  } catch (e) {
-    console.warn('[WARN] transformInJson.py failed after remove:', e.message)
-  }
+app.post('/api/remove-subjects', (req, res) =>
+  updateRemoved(req, res, 'remove subjects', (prev, ids) => [...new Set([...prev, ...ids])]))
 
-  res.json({ ids: newIds })
-})
-
-// ── POST /api/restore-subjects — remove IDs from removed list + re-run ────────
-app.post('/api/restore-subjects', (req, res) => {
-  const { execSync } = require('child_process')
-  const { ids = [] } = req.body
-  const rmFile = path.join(methodsDir, 'csvs', 'removed_subjects.json')
-
-  let current = { ids: [] }
-  try { current = JSON.parse(fs.readFileSync(rmFile, 'utf8')) } catch (_) {}
-
-  const newIds = current.ids.filter(id => !ids.includes(id))
-  try {
-    fs.writeFileSync(rmFile, JSON.stringify({ ids: newIds }, null, 2), 'utf-8')
-  } catch (e) {
-    return res.status(500).json({ error: 'Could not write removed_subjects.json: ' + e.message })
-  }
-
-  try {
-    execSync(`"${python}" -u transformInJson.py`, {
-      cwd: path.join(methodsDir, 'csvs'),
-      timeout: 30000,
-      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
-    })
-  } catch (e) {
-    console.warn('[WARN] transformInJson.py failed after restore:', e.message)
-  }
-
-  res.json({ ids: newIds })
-})
+app.post('/api/restore-subjects', (req, res) =>
+  updateRemoved(req, res, 'restore subjects', (prev, ids) => prev.filter(id => !ids.includes(id))))
 
 // ── CSV parser (BOM-safe, comma or semicolon, quoted fields) ─────────────────
 function parseCsv(text) {
